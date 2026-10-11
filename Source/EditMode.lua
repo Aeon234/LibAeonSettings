@@ -117,7 +117,44 @@ function lib:IsEditing()
 	return self.session.open
 end
 
----Opens edit mode from an addon that registered placement. Refused in combat.
+-- Blizzard panels edit mode must not draw over. Closing them from addon code is avoided: the Settings panel commits
+-- its changes as it closes, which addon code should not trigger, so edit mode waits for them to close instead.
+local BLOCKING_PANELS = { "SettingsPanel", "GameMenuFrame" }
+
+local function BlockingPanelShown()
+	for _, name in ipairs(BLOCKING_PANELS) do
+		local panel = _G[name]
+		if panel and panel:IsShown() then
+			return true
+		end
+	end
+
+	return false
+end
+
+function lib:OnBlockingPanelHidden()
+	local waiting = self.session.waitingOpener
+	if waiting and not BlockingPanelShown() then
+		self.session.waitingOpener = nil
+		C_Timer.After(0, function() self:OpenEditMode(waiting) end)
+	end
+end
+
+local function WaitForBlockingPanels(addonName)
+	lib.session.waitingOpener = addonName
+	lib.hookedPanels = lib.hookedPanels or {}
+	for _, name in ipairs(BLOCKING_PANELS) do
+		local panel = _G[name]
+		if panel and not lib.hookedPanels[name] then
+			lib.hookedPanels[name] = true
+			panel:HookScript("OnHide", function() lib:OnBlockingPanelHidden() end)
+		end
+	end
+	UIErrorsFrame:AddMessage(L.WAITING_FOR_PANELS, 1, 0.82, 0)
+end
+
+---Opens edit mode from an addon that registered placement. Refused in combat; while the game menu or Blizzard's
+---settings are open, it opens once they close.
 ---@param addonName string
 function lib:OpenEditMode(addonName)
 	local session = self.session
@@ -129,10 +166,16 @@ function lib:OpenEditMode(addonName)
 		return
 	end
 	if InCombatLockdown() then
+		session.waitingOpener = nil
 		UIErrorsFrame:AddMessage(L.COMBAT_REFUSED, 1, 0.1, 0.1)
 		return
 	end
+	if BlockingPanelShown() then
+		WaitForBlockingPanels(addonName)
+		return
+	end
 
+	session.waitingOpener = nil
 	session.open = true
 	session.paused = false
 	session.opener = addonName
@@ -140,6 +183,7 @@ function lib:OpenEditMode(addonName)
 	session.pending = {}
 	session.hidden = {}
 	session.selected, session.hovered, session.drag = nil, nil, nil
+	session.expanded, session.pick, session.snapTargets, session.sizeOriginals = nil, nil, nil, nil
 	ShowSamples(session, true)
 	self:ShowEditUI()
 	self.editEvents:RegisterEvent("PLAYER_REGEN_DISABLED")
@@ -159,6 +203,11 @@ function lib:CloseEditMode(save)
 	session.pending = {}
 	self.editEvents:UnregisterEvent("PLAYER_REGEN_DISABLED")
 	self.editEvents:UnregisterEvent("PLAYER_REGEN_ENABLED")
+	self:CloseMenus()
+	if session.pick then
+		self:EndPick()
+	end
+	self:RestoreSizes(save)
 	self:HideEditUI()
 	ShowSamples(session, false)
 	session.selected, session.hovered, session.drag = nil, nil, nil
@@ -207,6 +256,10 @@ lib.editEvents:SetScript("OnEvent", function(_, event)
 	end
 	if event == "PLAYER_REGEN_DISABLED" then
 		session.paused = true
+		lib:CloseMenus()
+		if session.pick then
+			lib:EndPick()
+		end
 		StaticPopup_Hide("LIBAEONSETTINGS_EDIT_EXIT")
 		lib:HideEditUI()
 	elseif event == "PLAYER_REGEN_ENABLED" then
