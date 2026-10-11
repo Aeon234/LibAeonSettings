@@ -172,7 +172,7 @@ function COMMANDS.bad()
 			{ key = "two", frame = scratch, default = { point = "CENTER", x = 0, y = 0 }, colour = true },
 		},
 	})
-	Print("registered a declaration with three problems (unknown field "mystery", a bad default, unknown field "colour"); each should appear as a reported error")
+	Print('registered a declaration with three problems (unknown field "mystery", a bad default, unknown field "colour"); each should appear as a reported error')
 end
 
 function COMMANDS.help()
