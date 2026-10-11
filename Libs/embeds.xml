@@ -1,0 +1,4 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/">
+	<Script file="LibStub\LibStub.lua" />
+	<Include file="CallbackHandler-1.0\CallbackHandler-1.0.xml" />
+</Ui>

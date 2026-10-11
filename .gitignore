@@ -1,0 +1,31 @@
+# Operating system
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editors and tooling
+.vscode/
+*.code-workspace
+
+# Packaging output
+/.release/
+*.zip
+*.7z
+
+# Libraries: fetched at release by .pkgmeta; embeds.xml is ours. Excluding the contents rather than the
+# folder is what lets the negation apply.
+/Libs/*
+!/Libs/embeds.xml
+
+# AI assistant files — never published to GitHub
+AGENTS.md
+CLAUDE.md
+GEMINI.md
+.claude/
+.codex/
+.cursor/
+.github/copilot-instructions.md
+
+# Local scratch
+todo.txt
+*.local.*
