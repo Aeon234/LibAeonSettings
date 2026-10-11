@@ -1,0 +1,195 @@
+-- The edit session: opening and closing, pending positions, combat pause and the account preferences.
+
+local lib = LibStub("LibAeonSettings-1.0")
+if not lib.loading then
+	return
+end
+
+local L = lib.L
+
+---@class LibAeonSettingsSession
+---@field open boolean
+---@field paused boolean true while combat hides an open session
+---@field opener string the addon edit mode was opened from
+---@field shown table<string, boolean> addons whose movers are shown
+---@field pending table<string, table<string, LibAeonSettingsPosition>> addon -> key -> position, not yet saved
+lib.session = lib.session or { open = false, paused = false, shown = {}, pending = {} }
+
+local PREFERENCE_DEFAULTS = { grid = "DIMMED" }
+
+-- Edit mode preferences are account-wide and live in each adopting addon's `account` table, kept identical in all
+-- of them; the library itself has no saved variables.
+local function AccountTables()
+	local tables = {}
+	for _, addonName in ipairs(lib.order) do
+		local account = lib.registrations[addonName].declaration.account
+		if type(account) == "function" then
+			account = account()
+		end
+		if type(account) == "table" then
+			table.insert(tables, account)
+		end
+	end
+
+	return tables
+end
+
+---@return any
+function lib:GetPreference(name)
+	local opener = self.session.opener and self.registrations[self.session.opener]
+	local first = { opener and opener.declaration.account }
+	for _, account in ipairs(AccountTables()) do
+		table.insert(first, account)
+	end
+	for _, account in ipairs(first) do
+		if type(account) == "function" then
+			account = account()
+		end
+		local saved = type(account) == "table" and account.editMode
+		if saved and saved[name] ~= nil then
+			return saved[name]
+		end
+	end
+
+	return PREFERENCE_DEFAULTS[name]
+end
+
+function lib:SetPreference(name, value)
+	for _, account in ipairs(AccountTables()) do
+		account.editMode = account.editMode or {}
+		account.editMode[name] = value
+	end
+end
+
+---@return LibAeonSettingsPosition?
+function lib:GetPending(addonName, key)
+	local pending = self.session.pending[addonName]
+
+	return pending and pending[key]
+end
+
+---Records an unsaved position and draws the frame there.
+---@param position LibAeonSettingsPosition?
+function lib:SetPending(addonName, key, position)
+	local registration = self.registrations[addonName]
+	local target = registration and registration:Target(key)
+	if not target or not self.session.open then
+		return
+	end
+	self.session.pending[addonName] = self.session.pending[addonName] or {}
+	self.session.pending[addonName][key] = position
+	registration:ApplyTarget(target)
+end
+
+---@return boolean
+function lib:IsDirty()
+	for _, keys in pairs(self.session.pending) do
+		if next(keys) then
+			return true
+		end
+	end
+
+	return false
+end
+
+---@return boolean
+function lib:IsEditing()
+	return self.session.open
+end
+
+---Opens edit mode from an addon that registered placement. Refused in combat.
+---@param addonName string
+function lib:OpenEditMode(addonName)
+	local session = self.session
+	if session.open then
+		return
+	end
+	if not self.registrations[addonName] then
+		self:Report(addonName, "OpenEditMode: the addon has not registered placement")
+		return
+	end
+	if InCombatLockdown() then
+		UIErrorsFrame:AddMessage(L.COMBAT_REFUSED, 1, 0.1, 0.1)
+		return
+	end
+
+	session.open = true
+	session.paused = false
+	session.opener = addonName
+	session.shown = { [addonName] = true }
+	session.pending = {}
+	self:ShowEditUI()
+	self.editEvents:RegisterEvent("PLAYER_REGEN_DISABLED")
+	self.editEvents:RegisterEvent("PLAYER_REGEN_ENABLED")
+end
+
+---Leaves edit mode, saving every pending position first when `save` is true; otherwise they are dropped.
+---@param save boolean
+function lib:CloseEditMode(save)
+	local session = self.session
+	if not session.open then
+		return
+	end
+	local pending = session.pending
+	session.open = false
+	session.paused = false
+	session.pending = {}
+	self.editEvents:UnregisterEvent("PLAYER_REGEN_DISABLED")
+	self.editEvents:UnregisterEvent("PLAYER_REGEN_ENABLED")
+	self:HideEditUI()
+
+	for addonName, keys in pairs(pending) do
+		local registration = self.registrations[addonName]
+		if registration then
+			if save then
+				for key, position in pairs(keys) do
+					registration:Write(key, position)
+				end
+			end
+			registration:Apply()
+		end
+	end
+end
+
+---Exit and Escape: closes at once when nothing changed, otherwise asks whether to save.
+function lib:RequestClose(save)
+	if save or not self:IsDirty() then
+		self:CloseEditMode(save)
+		return
+	end
+	StaticPopup_Show("LIBAEONSETTINGS_EDIT_EXIT")
+end
+
+StaticPopupDialogs.LIBAEONSETTINGS_EDIT_EXIT = {
+	text = L.UNSAVED_CHANGES,
+	button1 = L.SAVE_AND_EXIT,
+	button2 = L.EXIT_WITHOUT_SAVING,
+	OnAccept = function() lib:CloseEditMode(true) end,
+	OnCancel = function() lib:CloseEditMode(false) end,
+	noCancelOnEscape = true,
+	hideOnEscape = true,
+	whileDead = true,
+	timeout = 0,
+	preferredIndex = 3,
+}
+
+-- Combat hides an open session and keeps its pending positions; it returns half a second after combat ends.
+lib.editEvents = lib.editEvents or CreateFrame("Frame")
+lib.editEvents:SetScript("OnEvent", function(_, event)
+	local session = lib.session
+	if not session.open then
+		return
+	end
+	if event == "PLAYER_REGEN_DISABLED" then
+		session.paused = true
+		StaticPopup_Hide("LIBAEONSETTINGS_EDIT_EXIT")
+		lib:HideEditUI()
+	elseif event == "PLAYER_REGEN_ENABLED" then
+		C_Timer.After(0.5, function()
+			if session.open and session.paused and not InCombatLockdown() then
+				session.paused = false
+				lib:ShowEditUI()
+			end
+		end)
+	end
+end)

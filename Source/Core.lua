@@ -19,6 +19,19 @@ lib.order = lib.order or {}
 lib.deferred = lib.deferred or {}
 lib.eventFrame = lib.eventFrame or CreateFrame("Frame")
 
+-- Media lives beside this copy's files, wherever the embedding addon put them.
+local function FindMediaPath()
+	local trace = debugstack(1, 1, 0) or ""
+	local folder = trace:match("([^\"%[%]@]-)[/\\]Source[/\\]Core%.lua")
+	if not folder then
+		return
+	end
+	folder = folder:gsub("^.*[/\\][Aa]dd[Oo]ns[/\\]", ""):gsub("^[Ii]nterface[/\\][Aa]dd[Oo]ns[/\\]", "")
+
+	return "Interface\\AddOns\\" .. folder:gsub("/", "\\") .. "\\Media\\"
+end
+lib.mediaPath = FindMediaPath() or "Interface\\AddOns\\LibAeonSettings\\Media\\"
+
 ---Reports a problem in an adopting addon's call without stopping the caller.
 ---@param addonName string
 ---@param message string

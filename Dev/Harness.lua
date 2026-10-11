@@ -56,6 +56,7 @@ function Harness:Register()
 	self.registration = lib:Placement(ADDON_NAME, {
 		title = "LibAeonSettings Harness",
 		store = function() return Harness:Profile() end,
+		account = function() return LibAeonSettingsDevDB end,
 		targets = self.targets,
 	})
 end
@@ -175,8 +176,34 @@ function COMMANDS.bad()
 	Print('registered a declaration with three problems (unknown field "mystery", a bad default, unknown field "colour"); each should appear as a reported error')
 end
 
+function COMMANDS.edit()
+	lib:OpenEditMode(ADDON_NAME)
+end
+
+-- Stands in for dragging until movers exist: shifts a frame by a pending (unsaved) offset during edit mode.
+function COMMANDS.pend(key, dx, dy)
+	local target = Harness.registration:Target(key or "")
+	dx, dy = tonumber(dx), tonumber(dy)
+	if not target or not dx or not dy then
+		Print("usage: /lasdev pend <bar|unit|icon> <dx> <dy> (during edit mode)")
+		return
+	end
+	if not lib:IsEditing() then
+		Print("open edit mode first: /lasdev edit")
+		return
+	end
+	local position = Harness.registration:Measure(target)
+	position.x, position.y = position.x + dx, position.y + dy
+	lib:SetPending(ADDON_NAME, key, position)
+	Print("%s pending %s %.1f %.1f (unsaved: %s)", key, position.point, position.x, position.y, tostring(lib:IsDirty()))
+end
+
+function COMMANDS.media()
+	Print("media path: %s", lib.mediaPath)
+end
+
 function COMMANDS.help()
-	Print("/lasdev move | show | set <key> <POINT> <x> <y> | reset [key] | profile <name> | off <key> | scale <key> <n> | bad")
+	Print("/lasdev edit | pend <key> <dx> <dy> | move | show | set <key> <POINT> <x> <y> | reset [key] | profile <name> | off <key> | scale <key> <n> | bad | media")
 end
 
 SLASH_LIBAEONSETTINGSDEV1 = "/lasdev"

@@ -19,7 +19,7 @@ local Geometry = lib.Geometry
 ---@field default LibAeonSettingsPosition
 ---@field fixedEdge string? "TOP", "BOTTOM", "LEFT" or "RIGHT"
 
-local DECLARATION_FIELDS = { title = true, store = true, get = true, set = true, targets = true }
+local DECLARATION_FIELDS = { title = true, store = true, get = true, set = true, targets = true, account = true }
 local TARGET_FIELDS = {
 	key = true, label = true, subtitle = true, frame = true, default = true, fixedEdge = true, sample = true,
 	settings = true, size = true, attach = true, match = true, grow = true,
@@ -73,7 +73,7 @@ end
 
 ---Registers what an addon can move. Calling it again for the same addon replaces the earlier registration.
 ---@param addonName string the adopting addon's folder name
----@param declaration table { title, targets, store or get and set }
+---@param declaration table { title, targets, store or get and set, account? (account-wide table for edit mode preferences) }
 ---@return table? registration
 function lib:Placement(addonName, declaration)
 	if type(addonName) ~= "string" or type(declaration) ~= "table" then
@@ -201,7 +201,7 @@ local function ScaleOf(frame)
 	return frame:GetEffectiveScale() / UIParent:GetEffectiveScale()
 end
 
----Anchors a target's frame to its stored or default position. A frame that would lie wholly off-screen is drawn
+---Anchors a target's frame to its pending, stored or default position. A frame that would lie wholly off-screen is drawn
 ---in view instead, without changing what is stored. A protected frame waits until combat ends.
 ---@param target LibAeonSettingsTarget
 function lib.Registration:ApplyTarget(target)
@@ -211,7 +211,7 @@ function lib.Registration:ApplyTarget(target)
 		return
 	end
 
-	local position = self:Read(target.key) or target.default
+	local position = lib:GetPending(self.addonName, target.key) or self:Read(target.key) or target.default
 	local scale = ScaleOf(frame)
 	local width, height = frame:GetWidth() * scale, frame:GetHeight() * scale
 	local parentWidth, parentHeight = UIParent:GetWidth(), UIParent:GetHeight()
@@ -234,14 +234,10 @@ function lib.Registration:Apply()
 	end
 end
 
----Stores a target's current on-screen position in the stored form and re-anchors the frame to it.
+---Measures a target's current on-screen position in the stored form, offsets rounded to physical pixels.
+---@param target LibAeonSettingsTarget
 ---@return LibAeonSettingsPosition?
-function lib.Registration:Capture(key)
-	local target = self:Target(key)
-	if not target then
-		lib:Report(self.addonName, ("Capture: no target %s"):format(tostring(key)))
-		return
-	end
+function lib.Registration:Measure(target)
 	local frame = target.frame
 	local left, bottom = frame:GetLeft(), frame:GetBottom()
 	if not left or not bottom then
@@ -252,13 +248,27 @@ function lib.Registration:Capture(key)
 	local point, x, y = Geometry.ToStored(left * scale, bottom * scale, frame:GetWidth() * scale,
 		frame:GetHeight() * scale, UIParent:GetWidth(), UIParent:GetHeight(), target.fixedEdge)
 	local layoutScale = UIParent:GetEffectiveScale()
-	local position = {
+
+	return {
 		point = point,
 		x = PixelUtil.GetNearestPixelSize(x, layoutScale),
 		y = PixelUtil.GetNearestPixelSize(y, layoutScale),
 	}
-	self:Write(key, position)
-	self:ApplyTarget(target)
+end
+
+---Stores a target's current on-screen position and re-anchors the frame to it.
+---@return LibAeonSettingsPosition?
+function lib.Registration:Capture(key)
+	local target = self:Target(key)
+	if not target then
+		lib:Report(self.addonName, ("Capture: no target %s"):format(tostring(key)))
+		return
+	end
+	local position = self:Measure(target)
+	if position then
+		self:Write(key, position)
+		self:ApplyTarget(target)
+	end
 
 	return position
 end
