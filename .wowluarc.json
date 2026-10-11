@@ -6,7 +6,7 @@
 
   "globals": {
     "read": ["LibStub", "SlashCmdList", "StaticPopupDialogs", "WOW_PROJECT_CAMELOT"],
-    "write": ["SlashCmdList", "SLASH_LIBAEONSETTINGSDEV1"]
+    "write": ["SlashCmdList", "SLASH_LIBAEONSETTINGSDEV1", "LibAeonSettingsDev*"]
   },
 
   "diagnostics": {

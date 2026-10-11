@@ -1,0 +1,27 @@
+-- LibAeonSettings-1.0: library object, upgrade guard and shared state.
+
+local MAJOR, MINOR = "LibAeonSettings-1.0", 1
+
+local lib = LibStub:NewLibrary(MAJOR, MINOR)
+if not lib then
+	return
+end
+
+---@class LibAeonSettings
+---@field MINOR number
+---@field loading boolean? true while this copy's files load; every other file returns at once when it is not set
+lib.MINOR = MINOR
+lib.loading = true
+
+-- State that outlives an in-place upgrade: a newer copy keeps the tables an older copy filled.
+lib.registrations = lib.registrations or {}
+lib.order = lib.order or {}
+lib.deferred = lib.deferred or {}
+lib.eventFrame = lib.eventFrame or CreateFrame("Frame")
+
+---Reports a problem in an adopting addon's call without stopping the caller.
+---@param addonName string
+---@param message string
+function lib:Report(addonName, message)
+	geterrorhandler()(("%s: %s: %s"):format(MAJOR, tostring(addonName), message))
+end
