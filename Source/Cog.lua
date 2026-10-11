@@ -11,31 +11,17 @@ local Geometry = lib.Geometry
 local SNAP_TARGET_COLOR = { 0.31, 0.82, 0.42 }
 local PICK_DIM = 0.5
 
----Moves a target, as a pending position, to a rectangle in UIParent units (clamped to the screen).
+---Moves a target, as a pending position, to a rectangle in UIParent units (clamped to the screen). An anchored
+---target stays anchored, with its offsets measured again.
 function lib:MoveTargetTo(addonName, target, left, bottom, width, height)
-	local parentWidth, parentHeight = UIParent:GetWidth(), UIParent:GetHeight()
-	left, bottom = Geometry.ClampInto(left, bottom, width, height, parentWidth, parentHeight)
-	local point, x, y = Geometry.ToStored(left, bottom, width, height, parentWidth, parentHeight, target.fixedEdge)
-	local layoutScale = UIParent:GetEffectiveScale()
-	self:SetPending(addonName, target.key, {
-		point = point,
-		x = PixelUtil.GetNearestPixelSize(x, layoutScale),
-		y = PixelUtil.GetNearestPixelSize(y, layoutScale),
-	})
+	left, bottom = Geometry.ClampInto(left, bottom, width, height, UIParent:GetWidth(), UIParent:GetHeight())
+	self:SetPending(addonName, target.key, self:PositionForRect(addonName, target, left, bottom, width, height))
 end
 
 -- Size changes are applied live through the target's `size.set` and undone with the first size seen in the session
--- when edit mode closes without saving.
+-- when edit mode closes without saving (lib:SetTargetSize).
 local function SetSize(mover, width, height)
-	local size = mover.target.size
-	local session = lib.session
-	session.sizeOriginals = session.sizeOriginals or {}
-	if not session.sizeOriginals[mover.id] then
-		local originalWidth, originalHeight = size.get()
-		session.sizeOriginals[mover.id] = { addonName = mover.addonName, key = mover.key, width = originalWidth, height = originalHeight }
-	end
-	local minimum = size.min or 1
-	size.set(math.max(minimum, width), math.max(minimum, height))
+	lib:SetTargetSize(mover.addonName, mover.target, width, height)
 	lib.registrations[mover.addonName]:ApplyTarget(mover.target)
 	lib:RefreshMovers()
 end
@@ -119,8 +105,28 @@ function lib:ToggleCogMenu(mover)
 
 		if type(target.size) == "table" and type(target.size.get) == "function" and type(target.size.set) == "function" then
 			local width, height = target.size.get()
-			menu:Number(L.WIDTH, Round(width), function(value) SetSize(mover, value, height) lib:RefreshMenu() end)
-			menu:Number(L.HEIGHT, Round(height), function(value) SetSize(mover, width, value) lib:RefreshMenu() end)
+			local position = self.registrations[mover.addonName]:Current(target)
+			local function MatchedReason(match, text)
+				local other = match and self:ResolveTarget(match.addon, match.key)
+
+				return match and text:format(other and (other.label or other.key) or match.key) or nil
+			end
+			menu:Number(L.WIDTH, Round(width), function(value) SetSize(mover, value, height) lib:RefreshMenu() end,
+				MatchedReason(position.matchWidth, L.WIDTH_MATCHED_REASON))
+			menu:Number(L.HEIGHT, Round(height), function(value) SetSize(mover, width, value) lib:RefreshMenu() end,
+				MatchedReason(position.matchHeight, L.HEIGHT_MATCHED_REASON))
+			if position.matchWidth then
+				menu:Number(L.EXTRA_WIDTH, position.matchWidth.extra or 0, function(value)
+					self:SetMatchExtra(mover.id, "matchWidth", value)
+					self:RefreshMenu()
+				end)
+			end
+			if position.matchHeight then
+				menu:Number(L.EXTRA_HEIGHT, position.matchHeight.extra or 0, function(value)
+					self:SetMatchExtra(mover.id, "matchHeight", value)
+					self:RefreshMenu()
+				end)
+			end
 		end
 
 		local left, bottom, frameWidth, frameHeight = self:FrameRect(target.frame)
@@ -133,6 +139,21 @@ function lib:ToggleCogMenu(mover)
 			end)
 			menu:Number(L.Y_POSITION, Round(centerY), function(value)
 				self:MoveTargetTo(mover.addonName, target, left, UIParent:GetHeight() / 2 + value - frameHeight / 2, frameWidth, frameHeight)
+				self:RefreshMenu()
+			end)
+		end
+
+		local anchor = self.registrations[mover.addonName]:Current(target).anchor
+		if anchor then
+			local other = self:ResolveTarget(anchor.addon, anchor.key)
+			menu:Separator()
+			menu:Action(L.ANCHORED_TO:format(other and (other.label or other.key) or anchor.key))
+			menu:Number(L.OFFSET_X, Round(anchor.x), function(value)
+				self:SetAnchorOffset(mover.id, value, anchor.y)
+				self:RefreshMenu()
+			end)
+			menu:Number(L.OFFSET_Y, Round(anchor.y), function(value)
+				self:SetAnchorOffset(mover.id, anchor.x, value)
 				self:RefreshMenu()
 			end)
 		end
@@ -192,6 +213,9 @@ end
 function lib:PickMover(id)
 	local pick = self.session.pick
 	if not pick then
+		return
+	end
+	if self:CompleteLinkPick(pick, id) then
 		return
 	end
 	if id ~= pick.source and pick.kind == "snap" then

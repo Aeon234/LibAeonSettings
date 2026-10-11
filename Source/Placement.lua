@@ -7,10 +7,27 @@ end
 
 local Geometry = lib.Geometry
 
+---@class LibAeonSettingsLink
+---@field addon string the other target's addon
+---@field key string the other target's key
+
+---@class LibAeonSettingsAnchor : LibAeonSettingsLink
+---@field side string "TOP", "BOTTOM", "LEFT" or "RIGHT" of the other target's frame
+---@field x number offset in UIParent units
+---@field y number offset in UIParent units
+
+---@class LibAeonSettingsMatch : LibAeonSettingsLink
+---@field extra number added to the other target's size, in UIParent units
+
 ---@class LibAeonSettingsPosition
 ---@field point string
 ---@field x number parent units, measured at scale 1
 ---@field y number parent units, measured at scale 1
+---@field anchor LibAeonSettingsAnchor? attached to another target; point, x and y keep the last place, used while
+---the other target is missing
+---@field matchWidth LibAeonSettingsMatch?
+---@field matchHeight LibAeonSettingsMatch?
+---@field grow string? "LEFT", "RIGHT", "CENTER", "UP" or "DOWN"
 
 ---@class LibAeonSettingsTarget
 ---@field key string stable identifier, unique within the addon
@@ -201,8 +218,15 @@ local function ScaleOf(frame)
 	return frame:GetEffectiveScale() / UIParent:GetEffectiveScale()
 end
 
----Anchors a target's frame to its pending, stored or default position. A frame that would lie wholly off-screen is drawn
----in view instead, without changing what is stored. A protected frame waits until combat ends.
+---The position in force for a target: pending, else stored, else its default.
+---@return LibAeonSettingsPosition
+function lib.Registration:Current(target)
+	return lib:GetPending(self.addonName, target.key) or self:Read(target.key) or target.default
+end
+
+---Anchors a target's frame to its position in force: attached to another target's frame when the position says so
+---and that frame exists, else to the screen. A frame that would lie wholly off-screen is drawn in view instead,
+---without changing what is stored. Matched sizes are applied first. A protected frame waits until combat ends.
 ---@param target LibAeonSettingsTarget
 function lib.Registration:ApplyTarget(target)
 	local frame = target.frame
@@ -211,8 +235,26 @@ function lib.Registration:ApplyTarget(target)
 		return
 	end
 
-	local position = lib:GetPending(self.addonName, target.key) or self:Read(target.key) or target.default
+	local position = self:Current(target)
+	if lib.ApplyMatches then
+		lib:ApplyMatches(self.addonName, target, position)
+	end
 	local scale = ScaleOf(frame)
+
+	local anchor = position.anchor
+	local parent = anchor and lib.ResolveTarget and lib:ResolveTarget(anchor.addon, anchor.key)
+	if parent and parent.frame ~= frame then
+		local childPoint, parentPoint = Geometry.SidePoints(anchor.side)
+		if childPoint then
+			frame:ClearAllPoints()
+			frame:SetPoint(childPoint, parent.frame, parentPoint, anchor.x / scale, anchor.y / scale)
+			if lib.WatchParent then
+				lib:WatchParent(parent.frame)
+			end
+			return
+		end
+	end
+
 	local width, height = frame:GetWidth() * scale, frame:GetHeight() * scale
 	local parentWidth, parentHeight = UIParent:GetWidth(), UIParent:GetHeight()
 	local point, x, y = position.point, position.x, position.y
@@ -220,7 +262,8 @@ function lib.Registration:ApplyTarget(target)
 	local left, bottom = Geometry.FromStored(point, x, y, width, height, parentWidth, parentHeight)
 	if Geometry.IsOffScreen(left, bottom, width, height, parentWidth, parentHeight) then
 		left, bottom = Geometry.ClampInto(left, bottom, width, height, parentWidth, parentHeight)
-		point, x, y = Geometry.ToStored(left, bottom, width, height, parentWidth, parentHeight, target.fixedEdge)
+		point, x, y = Geometry.ToStored(left, bottom, width, height, parentWidth, parentHeight, target.fixedEdge,
+			position.grow)
 	end
 
 	frame:ClearAllPoints()
@@ -234,7 +277,8 @@ function lib.Registration:Apply()
 	end
 end
 
----Measures a target's current on-screen position in the stored form, offsets rounded to physical pixels.
+---Measures a target's current on-screen position in the stored form, offsets rounded to physical pixels. The
+---position in force keeps its anchor, matches and growth; an anchor's offsets are measured again.
 ---@param target LibAeonSettingsTarget
 ---@return LibAeonSettingsPosition?
 function lib.Registration:Measure(target)
@@ -243,17 +287,39 @@ function lib.Registration:Measure(target)
 	if not left or not bottom then
 		return
 	end
-
 	local scale = ScaleOf(frame)
-	local point, x, y = Geometry.ToStored(left * scale, bottom * scale, frame:GetWidth() * scale,
-		frame:GetHeight() * scale, UIParent:GetWidth(), UIParent:GetHeight(), target.fixedEdge)
-	local layoutScale = UIParent:GetEffectiveScale()
 
-	return {
-		point = point,
-		x = PixelUtil.GetNearestPixelSize(x, layoutScale),
-		y = PixelUtil.GetNearestPixelSize(y, layoutScale),
-	}
+	return lib:PositionForRect(self.addonName, target, left * scale, bottom * scale, frame:GetWidth() * scale,
+		frame:GetHeight() * scale)
+end
+
+---The stored form of a target placed at a rectangle (UIParent units), keeping the anchor, matches and growth of
+---its position in force and measuring the anchor's offsets from the rectangle.
+---@return LibAeonSettingsPosition
+function lib:PositionForRect(addonName, target, left, bottom, width, height)
+	local registration = self.registrations[addonName]
+	local current = registration:Current(target)
+	local point, x, y = Geometry.ToStored(left, bottom, width, height, UIParent:GetWidth(), UIParent:GetHeight(),
+		target.fixedEdge, current.grow)
+	local layoutScale = UIParent:GetEffectiveScale()
+	local position = CopyTable(current)
+	position.point = point
+	position.x = PixelUtil.GetNearestPixelSize(x, layoutScale)
+	position.y = PixelUtil.GetNearestPixelSize(y, layoutScale)
+
+	local anchor = position.anchor
+	local parent = anchor and self.ResolveTarget and self:ResolveTarget(anchor.addon, anchor.key)
+	if parent then
+		local parentLeft, parentBottom, parentWidth, parentHeight = self:FrameRect(parent.frame)
+		if parentLeft then
+			local offsetX, offsetY = Geometry.AnchorOffset(anchor.side, left, bottom, width, height, parentLeft,
+				parentBottom, parentWidth, parentHeight)
+			anchor.x = PixelUtil.GetNearestPixelSize(offsetX, layoutScale)
+			anchor.y = PixelUtil.GetNearestPixelSize(offsetY, layoutScale)
+		end
+	end
+
+	return position
 end
 
 ---Stores a target's current on-screen position and re-anchors the frame to it.

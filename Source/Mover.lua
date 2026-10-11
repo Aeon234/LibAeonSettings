@@ -9,6 +9,12 @@ local Geometry = lib.Geometry
 
 local MIN_SIZE = 18         -- smallest mover side
 local EXPANDED_WIDTH, EXPANDED_HEIGHT = 64, 40 -- smallest mover while hovered, with room for the cog
+local LINKS_HEIGHT = 16     -- extra height an expanded mover takes for its link row
+local ANCHORED_NAME = { 1, 0.7, 0.3 }
+local TEXT_PLATE_ALPHA = 0.7
+local TEXT_PLATE_PADDING_X, TEXT_PLATE_PADDING_Y = 8, 3
+local TEXT_INSET_X, TEXT_INSET_Y = 10, 6 -- the label's offset from the mover's top left
+local REFUSED = { 1, 0.25, 0.2 }
 local HOVER_INTENT = 0.12   -- seconds the cursor rests on a mover before it expands
 local COG_SIZE = 22
 local COG_ALPHA = 0.9
@@ -43,7 +49,16 @@ local PIECES = {
 local Handlers = {}
 lib.MoverHandlers = Handlers
 
-local function MoverId(addonName, key)
+---Gives a font string its font object's face and size with a thin outline, for text drawn over any background.
+function lib:OutlineText(fontString)
+	local face, size = fontString:GetFont()
+	if face then
+		fontString:SetFont(face, size, "OUTLINE")
+	end
+	fontString:SetShadowOffset(0, 0)
+end
+
+local function MoverId(addonName, key)  -- also lib:MoverId
 	return addonName .. "\0" .. key
 end
 
@@ -84,12 +99,19 @@ local function CreateMover(parent)
 	mover.text = CreateFrame("Frame", nil, mover)
 	mover.text:SetAllPoints()
 	mover.text:SetFrameLevel(mover:GetFrameLevel() + 5)
+	-- A dark plate behind the label (and the link row when expanded) keeps the text readable over the selection
+	-- art and whatever the frame itself draws.
+	mover.plate = mover.text:CreateTexture(nil, "BACKGROUND")
+	mover.plate:SetColorTexture(0, 0, 0, TEXT_PLATE_ALPHA)
 	mover.name = mover.text:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-	mover.name:SetPoint("CENTER")
-	mover.name:SetShadowOffset(1, -1)
+	lib:OutlineText(mover.name)
+	mover.name:SetPoint("TOPLEFT", mover, "TOPLEFT", TEXT_INSET_X, -TEXT_INSET_Y)
+	mover.name:SetJustifyH("LEFT")
 	mover.subtitle = mover.text:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-	mover.subtitle:SetPoint("TOP", mover.name, "BOTTOM", 0, -2)
+	lib:OutlineText(mover.subtitle)
+	mover.subtitle:SetPoint("TOPLEFT", mover.name, "BOTTOMLEFT", 0, -2)
 	mover.coordinates = mover.text:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	lib:OutlineText(mover.coordinates)
 	mover.coordinates:SetPoint("BOTTOMLEFT", mover, "TOPLEFT", 3, 4)
 
 	local cog = CreateFrame("Button", nil, mover.text)
@@ -118,6 +140,7 @@ local function CreateMover(parent)
 	Handlers.PaintCog(cog)
 	cog:Hide()
 	mover.cog = cog
+	lib:CreateLinks(mover)
 
 	-- Runs only while the mover grows or shrinks.
 	mover.animator = CreateFrame("Frame", nil, mover)
@@ -147,12 +170,21 @@ function lib:SelectMover(id)
 	self:RefreshMovers()
 end
 
-local function PaintMover(mover, state, hovered, fill, showCoordinates, snapTarget, expanded)
-	local kit = (state == "selected" or state == "dragging") and KIT_SELECTED or KIT_HIGHLIGHT
+local function PaintMover(mover, state, hovered, fill, showCoordinates, snapTarget, expanded, refused, anchored)
+	local kit = (state == "selected" or state == "dragging" or refused) and KIT_SELECTED or KIT_HIGHLIGHT
 	if mover.kit ~= kit then
 		NineSliceUtil.ApplyLayout(mover.selection, SELECTION_LAYOUT, kit)
 		mover.kit = kit
 	end
+	-- A refused pick flashes the selection art red.
+	local r, g, b = 1, 1, 1
+	if refused then
+		r, g, b = REFUSED[1], REFUSED[2], REFUSED[3]
+	end
+	for _, piece in ipairs(PIECES) do
+		mover.selection[piece]:SetVertexColor(r, g, b)
+	end
+	mover.name:SetTextColor(unpack(anchored and ANCHORED_NAME or { 1, 1, 1 }))
 	-- The snap target shows Blizzard's hover art, pulsed while the drag lasts.
 	mover.hover:SetShown((hovered and state ~= "dragging") or snapTarget)
 	if not snapTarget then
@@ -186,7 +218,7 @@ end
 
 ---Centers a mover on its target's frame and sizes it, growing or shrinking over EXPAND_DURATION when its
 ---expansion changes; any other change applies at once.
-local function LayoutMover(mover, target, expanded)
+local function LayoutMover(mover, target, expanded, linksWidth)
 	local left, bottom, width, height = FrameRect(target.frame)
 	if not left then
 		mover:Hide()
@@ -194,7 +226,11 @@ local function LayoutMover(mover, target, expanded)
 	end
 	local moverWidth, moverHeight = math.max(width, MIN_SIZE), math.max(height, MIN_SIZE)
 	if expanded then
-		moverWidth, moverHeight = math.max(moverWidth, EXPANDED_WIDTH), math.max(moverHeight, EXPANDED_HEIGHT)
+		local expandedHeight = EXPANDED_HEIGHT + (linksWidth > 0 and LINKS_HEIGHT or 0)
+		-- Room for the label or link row from the left inset, and for the cog on the right.
+		local textWidth = math.max(linksWidth, mover.name:GetStringWidth())
+		moverWidth = math.max(moverWidth, EXPANDED_WIDTH, TEXT_INSET_X + textWidth + COG_SIZE + 10)
+		moverHeight = math.max(moverHeight, expandedHeight)
 	end
 	mover:ClearAllPoints()
 	mover:SetPoint("CENTER", UIParent, "BOTTOMLEFT", left + width / 2, bottom + height / 2)
@@ -251,7 +287,17 @@ function lib:RefreshMovers()
 							mover.name:SetText(target.label or target.key)
 						end
 						mover.subtitle:SetText(target.subtitle or "")
-						LayoutMover(mover, target, expanded)
+						local position = registration:Current(target)
+						local linksWidth = lib:LayoutLinks(mover, target, position, expanded)
+						-- The name moves up to make room for the link row.
+						local showLinks = expanded and linksWidth > 0
+						local textWidth = math.max(mover.name:GetStringWidth(), showLinks and linksWidth or 0)
+						local textHeight = mover.name:GetStringHeight() + (showLinks and 17 or 0)
+						mover.plate:ClearAllPoints()
+						mover.plate:SetPoint("TOPLEFT", mover.name, "TOPLEFT", -TEXT_PLATE_PADDING_X, TEXT_PLATE_PADDING_Y)
+						mover.plate:SetSize(textWidth + 2 * TEXT_PLATE_PADDING_X, textHeight + 2 * TEXT_PLATE_PADDING_Y)
+						mover.subtitle:SetShown(not showLinks)
+						LayoutMover(mover, target, expanded, linksWidth)
 
 						local state = "idle"
 						if session.drag and session.drag.id == id and session.drag.started then
@@ -260,7 +306,8 @@ function lib:RefreshMovers()
 							state = "selected"
 						end
 						local snapTarget = session.drag and session.drag.started and session.drag.snapFrom == id
-						PaintMover(mover, state, session.hovered == id, fill, showCoordinates, snapTarget, expanded)
+						PaintMover(mover, state, session.hovered == id, fill, showCoordinates, snapTarget, expanded,
+							session.refused == id, position.anchor ~= nil)
 						mover:Show()
 						used[id] = true
 					end
@@ -282,6 +329,7 @@ function lib:RefreshMovers()
 	if session.expanded and not used[session.expanded] then
 		session.expanded = nil
 	end
+	self:RefreshLines()
 end
 
 -- Input ----------------------------------------------------------------------------------------------------------
@@ -299,7 +347,9 @@ local function TargetOf(mover)
 	return registration, registration and registration:Target(mover.key)
 end
 
-function Handlers.MouseDown(mover, button)
+---Starts a press on a mover. A press on one of its links passes `linkAction`: it runs on release, or the press
+---becomes a drag after 1 unit of movement.
+function Handlers.MouseDown(mover, button, linkAction)
 	if button ~= "LeftButton" or InCombatLockdown() then
 		return
 	end
@@ -317,6 +367,7 @@ function Handlers.MouseDown(mover, button)
 	lib.session.drag = {
 		id = mover.id, registration = registration, target = target, started = false,
 		cursorX = cursorX, cursorY = cursorY, left = left, bottom = bottom, width = width, height = height,
+		link = linkAction, threshold = linkAction and 1 or DRAG_THRESHOLD,
 	}
 	mover:SetScript("OnUpdate", function(self) Handlers.DragUpdate(self) end)
 end
@@ -334,7 +385,7 @@ function Handlers.DragUpdate(mover)
 	local cursorX, cursorY = CursorPosition()
 	local dx, dy = cursorX - drag.cursorX, cursorY - drag.cursorY
 	if not drag.started then
-		if math.abs(dx) < DRAG_THRESHOLD and math.abs(dy) < DRAG_THRESHOLD then
+		if math.abs(dx) < drag.threshold and math.abs(dy) < drag.threshold then
 			return
 		end
 		drag.started = true
@@ -388,6 +439,11 @@ function Handlers.EndDrag(mover)
 	lib.session.drag = nil
 	lib:ShowGuides(nil, nil)
 	if drag and not drag.started and drag.id == mover.id then
+		if drag.link then
+			lib:RefreshMovers()
+			drag.link()
+			return
+		end
 		lib.session.selected = lib.session.selected ~= mover.id and mover.id or nil
 	end
 	lib:RefreshMovers()

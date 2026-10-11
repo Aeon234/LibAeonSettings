@@ -8,6 +8,7 @@
 	<Script file="Source\Snap.lua" />
 	<Script file="Source\Menu.lua" />
 	<Script file="Source\Cog.lua" />
+	<Script file="Source\Anchor.lua" />
 	<Script file="Source\Mover.lua" />
 	<Script file="Source\Finish.lua" />
 </Ui>

@@ -30,10 +30,12 @@ end
 ---@param parentWidth number
 ---@param parentHeight number
 ---@param fixedEdge string? "TOP", "BOTTOM", "LEFT" or "RIGHT"
+---@param grow string? "LEFT", "RIGHT", "CENTER", "UP" or "DOWN": the direction a resize grows, which fixes the
+---opposite edge (CENTER keeps the horizontal middle); it overrides `fixedEdge` on its axis
 ---@return string point
 ---@return number x
 ---@return number y
-function Geometry.ToStored(left, bottom, width, height, parentWidth, parentHeight, fixedEdge)
+function Geometry.ToStored(left, bottom, width, height, parentWidth, parentHeight, fixedEdge, grow)
 	local centerX, centerY = left + width / 2, bottom + height / 2
 
 	local column = centerX < parentWidth / 3 and "LEFT" or centerX > parentWidth * 2 / 3 and "RIGHT" or ""
@@ -42,6 +44,17 @@ function Geometry.ToStored(left, bottom, width, height, parentWidth, parentHeigh
 		row = fixedEdge
 	elseif fixedEdge == "LEFT" or fixedEdge == "RIGHT" then
 		column = fixedEdge
+	end
+	if grow == "LEFT" then
+		column = "RIGHT"
+	elseif grow == "RIGHT" then
+		column = "LEFT"
+	elseif grow == "CENTER" then
+		column = ""
+	elseif grow == "UP" then
+		row = "BOTTOM"
+	elseif grow == "DOWN" then
+		row = "TOP"
 	end
 
 	local x
@@ -139,4 +152,45 @@ function Geometry.NearestSnap(edges, candidates, threshold)
 	end
 
 	return best
+end
+
+---The position of one of a rectangle's nine points.
+---@return number x
+---@return number y
+function Geometry.PointPosition(left, bottom, width, height, point)
+	local x = point:find("LEFT", 1, true) and left or point:find("RIGHT", 1, true) and left + width or left + width / 2
+	local y = point:find("BOTTOM", 1, true) and bottom or point:find("TOP", 1, true) and bottom + height
+		or bottom + height / 2
+
+	return x, y
+end
+
+-- Anchoring to a side of another frame: the attached frame's point, and the point of the frame it attaches to.
+local SIDE_POINTS = {
+	TOP = { "BOTTOM", "TOP" },
+	BOTTOM = { "TOP", "BOTTOM" },
+	LEFT = { "RIGHT", "LEFT" },
+	RIGHT = { "LEFT", "RIGHT" },
+}
+
+---@param side string "TOP", "BOTTOM", "LEFT" or "RIGHT"
+---@return string? childPoint
+---@return string? parentPoint
+function Geometry.SidePoints(side)
+	local points = SIDE_POINTS[side]
+	if points then
+		return points[1], points[2]
+	end
+end
+
+---Offset from the parent's side point to the child's matching point, for rectangles in the same units.
+---@return number x
+---@return number y
+function Geometry.AnchorOffset(side, childLeft, childBottom, childWidth, childHeight, parentLeft, parentBottom,
+	parentWidth, parentHeight)
+	local childPoint, parentPoint = Geometry.SidePoints(side)
+	local childX, childY = Geometry.PointPosition(childLeft, childBottom, childWidth, childHeight, childPoint)
+	local parentX, parentY = Geometry.PointPosition(parentLeft, parentBottom, parentWidth, parentHeight, parentPoint)
+
+	return childX - parentX, childY - parentY
 end

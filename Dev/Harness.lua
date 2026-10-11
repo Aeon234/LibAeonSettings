@@ -24,6 +24,25 @@ local function SampleFrame(name, width, height, label, r, g, b)
 	return frame
 end
 
+-- A size the harness keeps in the active profile, as an adopter would.
+local function StoredSize(frame, name, minimum)
+	return {
+		min = minimum,
+		get = function() return frame:GetSize() end,
+		set = function(width, height)
+			frame:SetSize(width, height)
+			Harness:Profile()[name] = { width, height }
+		end,
+	}
+end
+
+local function RestoreSize(frame, name)
+	local size = Harness:Profile()[name]
+	if size then
+		frame:SetSize(size[1], size[2])
+	end
+end
+
 function Harness:CreateFrames()
 	self.frames = {
 		bar = SampleFrame("Bar", 600, 26, "Harness Bar (fixed edge: BOTTOM)", 0.08, 0.08, 0.1),
@@ -31,27 +50,19 @@ function Harness:CreateFrames()
 		icon = SampleFrame("Icon", 40, 40, "Icon", 0.45, 0.3, 0.1),
 	}
 	self.frames.icon:SetScale(1.5)
-	local unitSize = self:Profile().unitSize
-	if unitSize then
-		self.frames.unit:SetSize(unitSize[1], unitSize[2])
-	end
+	RestoreSize(self.frames.bar, "barSize")
+	RestoreSize(self.frames.unit, "unitSize")
 	self.targets = {
 		{ key = "bar", label = "Harness Bar", frame = self.frames.bar, default = { point = "BOTTOM", x = 0, y = 120 },
-			fixedEdge = "BOTTOM" },
+			fixedEdge = "BOTTOM", size = StoredSize(self.frames.bar, "barSize", 40), attach = true, match = "width",
+			grow = { "CENTER", "LEFT", "RIGHT" } },
 		{ key = "unit", label = "Harness Unit", subtitle = "Sample while editing", frame = self.frames.unit,
 			default = { point = "CENTER", x = -280, y = -120 },
 			sample = function(shown) self.frames.unit.text:SetText(shown and "Harness Unit (sample)" or "Harness Unit") end,
-			size = {
-				min = 20,
-				get = function() return self.frames.unit:GetSize() end,
-				set = function(width, height)
-					self.frames.unit:SetSize(width, height)
-					local db = Harness:Profile()
-					db.unitSize = { width, height }
-				end,
-			},
+			size = StoredSize(self.frames.unit, "unitSize", 20), attach = true, match = "both",
 			settings = function(target) Print("Element Options for %s: the adopter would open its settings page here", target.key) end },
-		{ key = "icon", label = "Harness Icon", frame = self.frames.icon, default = { point = "TOPRIGHT", x = -240, y = -200 } },
+		{ key = "icon", label = "Harness Icon", frame = self.frames.icon, default = { point = "TOPRIGHT", x = -240, y = -200 },
+			attach = true },
 	}
 end
 
