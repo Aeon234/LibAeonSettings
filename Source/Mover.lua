@@ -11,6 +11,7 @@ local MIN_SIZE = 18         -- smallest mover side
 local DRAG_THRESHOLD = 3    -- UI units the cursor moves before a press becomes a drag
 local NUDGE, NUDGE_SHIFT = 1, 10 -- physical pixels per arrow key press
 local HOVER_ALPHA = 0.4
+local SNAP_PULSE_LOW, SNAP_PULSE_HIGH, SNAP_PULSE_HZ = 0.35, 0.85, 1.5
 
 -- Blizzard's Edit Mode selection art, drawn from the client's atlases the way its own systems draw it.
 local KIT_HIGHLIGHT, KIT_SELECTED = "editmode-actionbar-highlight", "editmode-actionbar-selected"
@@ -93,13 +94,17 @@ function lib:SelectMover(id)
 	self:RefreshMovers()
 end
 
-local function PaintMover(mover, state, hovered, fill, showCoordinates)
+local function PaintMover(mover, state, hovered, fill, showCoordinates, snapTarget)
 	local kit = (state == "selected" or state == "dragging") and KIT_SELECTED or KIT_HIGHLIGHT
 	if mover.kit ~= kit then
 		NineSliceUtil.ApplyLayout(mover.selection, SELECTION_LAYOUT, kit)
 		mover.kit = kit
 	end
-	mover.hover:SetShown(hovered and state ~= "dragging")
+	-- The snap target shows Blizzard's hover art, pulsed while the drag lasts.
+	mover.hover:SetShown((hovered and state ~= "dragging") or snapTarget)
+	if not snapTarget then
+		mover.hover:SetAlpha(HOVER_ALPHA)
+	end
 	-- Without the fill only the outline is drawn, so the frame being moved stays visible.
 	mover.selection.Center:SetShown(fill)
 	mover.hover.Center:SetShown(fill)
@@ -143,7 +148,7 @@ function lib:RefreshMovers()
 					if not session.hidden[id] and target.frame:IsShown() then
 						local mover = ui.movers[id] or CreateMover(ui.moverLayer)
 						ui.movers[id] = mover
-						mover.addonName, mover.key, mover.id = addonName, target.key, id
+						mover.addonName, mover.key, mover.id, mover.target = addonName, target.key, id, target
 						mover.name:SetText(target.label or target.key)
 						mover.subtitle:SetText(target.subtitle or "")
 						LayoutMover(mover, target)
@@ -154,7 +159,8 @@ function lib:RefreshMovers()
 						elseif session.selected == id then
 							state = "selected"
 						end
-						PaintMover(mover, state, session.hovered == id, fill, showCoordinates)
+						local snapTarget = session.drag and session.drag.started and session.drag.snapFrom == id
+						PaintMover(mover, state, session.hovered == id, fill, showCoordinates, snapTarget)
 						mover:Show()
 						used[id] = true
 					end
@@ -236,18 +242,53 @@ function Handlers.DragUpdate(mover)
 		end
 		drag.started = true
 		lib.session.selected = drag.id
+		-- Shift held as the drag starts locks it to the axis of that first movement.
+		if IsShiftKeyDown() then
+			drag.axis = math.abs(dx) >= math.abs(dy) and "x" or "y"
+		end
+		drag.xs, drag.ys = lib:SnapCandidates(drag.id, FrameRect)
+		drag.threshold = lib:SnapThreshold()
 	end
-	if dx == drag.lastDx and dy == drag.lastDy then
+
+	local snapMover = drag.snapFrom and lib.ui.movers[drag.snapFrom]
+	if snapMover then
+		local wave = (math.sin(GetTime() * SNAP_PULSE_HZ * 2 * math.pi) + 1) / 2
+		snapMover.hover:SetAlpha(SNAP_PULSE_LOW + (SNAP_PULSE_HIGH - SNAP_PULSE_LOW) * wave)
+	end
+
+	local altDown = IsAltKeyDown()
+	if dx == drag.lastDx and dy == drag.lastDy and altDown == drag.lastAlt then
 		return
 	end
-	drag.lastDx, drag.lastDy = dx, dy
-	MoveTo(drag.registration, drag.target, drag.left + dx, drag.bottom + dy, drag.width, drag.height)
+	drag.lastDx, drag.lastDy, drag.lastAlt = dx, dy, altDown
+
+	if drag.axis == "x" then
+		dy = 0
+	elseif drag.axis == "y" then
+		dx = 0
+	end
+	local left, bottom, width, height = drag.left + dx, drag.bottom + dy, drag.width, drag.height
+	local snapX, snapY
+	if lib:GetPreference("snap") and not altDown then
+		if drag.axis ~= "y" then
+			snapX = Geometry.NearestSnap({ left, left + width / 2, left + width }, drag.xs, drag.threshold)
+		end
+		if drag.axis ~= "x" then
+			snapY = Geometry.NearestSnap({ bottom, bottom + height / 2, bottom + height }, drag.ys, drag.threshold)
+		end
+	end
+	left = left + (snapX and snapX.delta or 0)
+	bottom = bottom + (snapY and snapY.delta or 0)
+	drag.snapFrom = (snapX and snapX.from) or (snapY and snapY.from)
+	lib:ShowGuides(snapX and snapX.value, snapY and snapY.value)
+	MoveTo(drag.registration, drag.target, left, bottom, width, height)
 end
 
 function Handlers.EndDrag(mover)
 	mover:SetScript("OnUpdate", nil)
 	local drag = lib.session.drag
 	lib.session.drag = nil
+	lib:ShowGuides(nil, nil)
 	if drag and not drag.started and drag.id == mover.id then
 		lib.session.selected = lib.session.selected ~= mover.id and mover.id or nil
 	end

@@ -19,7 +19,7 @@ local L = lib.L
 ---@field drag table? the drag in progress
 lib.session = lib.session or { open = false, paused = false, shown = {}, pending = {}, hidden = {} }
 
-local PREFERENCE_DEFAULTS = { grid = "DIMMED", fill = false, coordinates = false }
+local PREFERENCE_DEFAULTS = { grid = "DIMMED", fill = false, snap = true, coordinates = false }
 
 -- Edit mode preferences are account-wide and live in each adopting addon's `account` table, kept identical in all
 -- of them; the library itself has no saved variables.

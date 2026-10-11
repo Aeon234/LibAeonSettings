@@ -161,11 +161,14 @@ local function CreateToolbar()
 		lib:SetPreference("fill", not lib:GetPreference("fill"))
 		lib:RefreshMovers()
 	end)
+	toolbar.snap = CreateToggle(toolbar, L.SNAP_ELEMENTS, "snap", function()
+		lib:SetPreference("snap", not lib:GetPreference("snap"))
+	end)
 	toolbar.coordinates = CreateToggle(toolbar, L.COORDINATES, "coordinates", function()
 		lib:SetPreference("coordinates", not lib:GetPreference("coordinates"))
 		lib:RefreshMovers()
 	end)
-	toolbar.toggles = { toolbar.grid, toolbar.fill, toolbar.coordinates }
+	toolbar.toggles = { toolbar.grid, toolbar.fill, toolbar.snap, toolbar.coordinates }
 
 	return toolbar
 end
@@ -179,6 +182,8 @@ function lib:RefreshToolbar()
 	PaintToggle(toolbar.grid, mode ~= "OFF", GRID_LABELS[mode] or L.DIMMED, toolbar.grid.hovered)
 	local fill = self:GetPreference("fill")
 	PaintToggle(toolbar.fill, fill, fill and L.ON or L.OFF, toolbar.fill.hovered)
+	local snap = self:GetPreference("snap")
+	PaintToggle(toolbar.snap, snap, snap and L.ON or L.OFF, toolbar.snap.hovered)
 	local coordinates = self:GetPreference("coordinates")
 	PaintToggle(toolbar.coordinates, coordinates, coordinates and L.ON or L.OFF, toolbar.coordinates.hovered)
 
@@ -232,6 +237,10 @@ local function BuildEditUI()
 	ui.grid = CreateFrame("Frame", nil, ui.screen)
 	ui.grid:SetAllPoints()
 	ui.grid.lines = {}
+
+	ui.guideLayer = CreateFrame("Frame", nil, ui.screen)
+	ui.guideLayer:SetAllPoints()
+	ui.guideLayer:SetFrameLevel(ui.screen:GetFrameLevel() + 5)
 
 	ui.moverLayer = CreateFrame("Frame", nil, ui.screen)
 	ui.moverLayer:SetAllPoints()

@@ -116,3 +116,27 @@ function Geometry.ClampInto(left, bottom, width, height, parentWidth, parentHeig
 
 	return left, bottom
 end
+
+---Finds the snap that moves a rectangle the least on one axis: each of `edges` (the rectangle's start, middle and
+---end) against each candidate line within `threshold`. A tie prefers a line that belongs to another frame.
+---@param edges number[]
+---@param candidates { value: number, from: string? }[]
+---@param threshold number
+---@return { delta: number, value: number, from: string? }?
+function Geometry.NearestSnap(edges, candidates, threshold)
+	local best
+	for _, edge in ipairs(edges) do
+		for _, candidate in ipairs(candidates) do
+			local delta = candidate.value - edge
+			local distance = math.abs(delta)
+			if distance <= threshold then
+				local bestDistance = best and math.abs(best.delta)
+				if not best or distance < bestDistance or (distance == bestDistance and candidate.from and not best.from) then
+					best = { delta = delta, value = candidate.value, from = candidate.from }
+				end
+			end
+		end
+	end
+
+	return best
+end
