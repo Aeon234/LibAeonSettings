@@ -5,5 +5,6 @@
 	<Script file="Source\Placement.lua" />
 	<Script file="Source\EditMode.lua" />
 	<Script file="Source\EditUI.lua" />
+	<Script file="Source\Mover.lua" />
 	<Script file="Source\Finish.lua" />
 </Ui>

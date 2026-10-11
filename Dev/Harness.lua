@@ -34,7 +34,9 @@ function Harness:CreateFrames()
 	self.targets = {
 		{ key = "bar", label = "Harness Bar", frame = self.frames.bar, default = { point = "BOTTOM", x = 0, y = 120 },
 			fixedEdge = "BOTTOM" },
-		{ key = "unit", label = "Harness Unit", frame = self.frames.unit, default = { point = "CENTER", x = -280, y = -120 } },
+		{ key = "unit", label = "Harness Unit", subtitle = "Sample while editing", frame = self.frames.unit,
+			default = { point = "CENTER", x = -280, y = -120 },
+			sample = function(shown) self.frames.unit.text:SetText(shown and "Harness Unit (sample)" or "Harness Unit") end },
 		{ key = "icon", label = "Harness Icon", frame = self.frames.icon, default = { point = "TOPRIGHT", x = -240, y = -200 } },
 	}
 end
@@ -198,12 +200,25 @@ function COMMANDS.pend(key, dx, dy)
 	Print("%s pending %s %.1f %.1f (unsaved: %s)", key, position.point, position.x, position.y, tostring(lib:IsDirty()))
 end
 
+function COMMANDS.hide(key)
+	local target = Harness.registration:Target(key or "")
+	if not target then
+		Print("usage: /lasdev hide <bar|unit|icon> (toggles the frame; hidden frames get no mover)")
+		return
+	end
+	target.frame:SetShown(not target.frame:IsShown())
+	if lib.RefreshMovers then
+		lib:RefreshMovers()
+	end
+	Print("%s %s", key, target.frame:IsShown() and "shown" or "hidden")
+end
+
 function COMMANDS.media()
 	Print("media path: %s", lib.mediaPath)
 end
 
 function COMMANDS.help()
-	Print("/lasdev edit | pend <key> <dx> <dy> | move | show | set <key> <POINT> <x> <y> | reset [key] | profile <name> | off <key> | scale <key> <n> | bad | media")
+	Print("/lasdev edit | hide <key> | pend <key> <dx> <dy> | move | show | set <key> <POINT> <x> <y> | reset [key] | profile <name> | off <key> | scale <key> <n> | bad | media")
 end
 
 SLASH_LIBAEONSETTINGSDEV1 = "/lasdev"

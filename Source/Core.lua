@@ -18,6 +18,7 @@ lib.registrations = lib.registrations or {}
 lib.order = lib.order or {}
 lib.deferred = lib.deferred or {}
 lib.eventFrame = lib.eventFrame or CreateFrame("Frame")
+lib.reported = lib.reported or {}
 
 -- Media lives beside this copy's files, wherever the embedding addon put them.
 local function FindMediaPath()
@@ -32,9 +33,14 @@ local function FindMediaPath()
 end
 lib.mediaPath = FindMediaPath() or "Interface\\AddOns\\LibAeonSettings\\Media\\"
 
----Reports a problem in an adopting addon's call without stopping the caller.
+---Reports a problem in an adopting addon's call once, without stopping the caller.
 ---@param addonName string
 ---@param message string
 function lib:Report(addonName, message)
-	geterrorhandler()(("%s: %s: %s"):format(MAJOR, tostring(addonName), message))
+	local text = ("%s: %s: %s"):format(MAJOR, tostring(addonName), message)
+	if self.reported[text] then
+		return
+	end
+	self.reported[text] = true
+	geterrorhandler()(text)
 end

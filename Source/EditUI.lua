@@ -157,6 +157,15 @@ local function CreateToolbar()
 		lib:SetPreference("grid", GRID_MODES[lib:GetPreference("grid")] or "DIMMED")
 		lib:RefreshGrid()
 	end)
+	toolbar.fill = CreateToggle(toolbar, L.MOVER_FILL, "dark-overlays", function()
+		lib:SetPreference("fill", not lib:GetPreference("fill"))
+		lib:RefreshMovers()
+	end)
+	toolbar.coordinates = CreateToggle(toolbar, L.COORDINATES, "coordinates", function()
+		lib:SetPreference("coordinates", not lib:GetPreference("coordinates"))
+		lib:RefreshMovers()
+	end)
+	toolbar.toggles = { toolbar.grid, toolbar.fill, toolbar.coordinates }
 
 	return toolbar
 end
@@ -168,22 +177,25 @@ function lib:RefreshToolbar()
 	end
 	local mode = self:GetPreference("grid")
 	PaintToggle(toolbar.grid, mode ~= "OFF", GRID_LABELS[mode] or L.DIMMED, toolbar.grid.hovered)
-	toolbar.grid:SetWidth(6 + 28 + 8 + math.max(toolbar.grid.name:GetStringWidth(), toolbar.grid.state:GetStringWidth()) + 10)
+	local fill = self:GetPreference("fill")
+	PaintToggle(toolbar.fill, fill, fill and L.ON or L.OFF, toolbar.fill.hovered)
+	local coordinates = self:GetPreference("coordinates")
+	PaintToggle(toolbar.coordinates, coordinates, coordinates and L.ON or L.OFF, toolbar.coordinates.hovered)
 
 	local x = 14
-	toolbar.exit:ClearAllPoints()
-	toolbar.exit:SetPoint("LEFT", toolbar, "LEFT", x, 0)
-	x = x + toolbar.exit:GetWidth() + 6
-	toolbar.save:ClearAllPoints()
-	toolbar.save:SetPoint("LEFT", toolbar, "LEFT", x, 0)
-	x = x + toolbar.save:GetWidth() + 12
-	toolbar.separator:ClearAllPoints()
-	toolbar.separator:SetPoint("LEFT", toolbar, "LEFT", x, 0)
-	x = x + 1 + 8
-	toolbar.grid:ClearAllPoints()
-	toolbar.grid:SetPoint("LEFT", toolbar, "LEFT", x, 0)
-	x = x + toolbar.grid:GetWidth() + 14
-	toolbar:SetWidth(x)
+	local function Place(region, width, gap)
+		region:ClearAllPoints()
+		region:SetPoint("LEFT", toolbar, "LEFT", x, 0)
+		x = x + width + gap
+	end
+	Place(toolbar.exit, toolbar.exit:GetWidth(), 6)
+	Place(toolbar.save, toolbar.save:GetWidth(), 12)
+	Place(toolbar.separator, 1, 8)
+	for _, toggle in ipairs(toolbar.toggles) do
+		toggle:SetWidth(6 + 28 + 8 + math.max(toggle.name:GetStringWidth(), toggle.state:GetStringWidth()) + 10)
+		Place(toggle, toggle:GetWidth(), 4)
+	end
+	toolbar:SetWidth(x + 10)
 end
 
 -- Screen -------------------------------------------------------------------------------------------------------
@@ -193,7 +205,7 @@ function Handlers.KeyDown(frame, key)
 		return
 	end
 	if key ~= "ESCAPE" then
-		frame:SetPropagateKeyboardInput(true)
+		frame:SetPropagateKeyboardInput(not lib:NudgeSelected(key))
 		return
 	end
 	frame:SetPropagateKeyboardInput(false)
@@ -221,6 +233,10 @@ local function BuildEditUI()
 	ui.grid:SetAllPoints()
 	ui.grid.lines = {}
 
+	ui.moverLayer = CreateFrame("Frame", nil, ui.screen)
+	ui.moverLayer:SetAllPoints()
+	ui.moverLayer:SetFrameLevel(ui.screen:GetFrameLevel() + 10)
+
 	ui.toolbar = CreateToolbar()
 
 	return ui
@@ -232,6 +248,7 @@ function lib:ShowEditUI()
 	self.ui.toolbar:Show()
 	self:RefreshGrid()
 	self:RefreshToolbar()
+	self:RefreshMovers()
 end
 
 function lib:HideEditUI()
@@ -240,6 +257,7 @@ function lib:HideEditUI()
 	end
 	self.ui.screen:Hide()
 	self.ui.toolbar:Hide()
+	self:RefreshMovers()
 end
 
 -- The grid follows UI scale and resolution changes while edit mode is open.
@@ -250,5 +268,6 @@ layoutEvents:RegisterEvent("DISPLAY_SIZE_CHANGED")
 layoutEvents:SetScript("OnEvent", function()
 	if lib.session.open and not lib.session.paused then
 		lib:RefreshGrid()
+		lib:RefreshMovers()
 	end
 end)

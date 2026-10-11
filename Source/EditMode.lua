@@ -13,9 +13,13 @@ local L = lib.L
 ---@field opener string the addon edit mode was opened from
 ---@field shown table<string, boolean> addons whose movers are shown
 ---@field pending table<string, table<string, LibAeonSettingsPosition>> addon -> key -> position, not yet saved
-lib.session = lib.session or { open = false, paused = false, shown = {}, pending = {} }
+---@field hidden table<string, boolean> movers hidden for this session
+---@field selected string? the selected mover's id
+---@field hovered string? the hovered mover's id
+---@field drag table? the drag in progress
+lib.session = lib.session or { open = false, paused = false, shown = {}, pending = {}, hidden = {} }
 
-local PREFERENCE_DEFAULTS = { grid = "DIMMED" }
+local PREFERENCE_DEFAULTS = { grid = "DIMMED", fill = false, coordinates = false }
 
 -- Edit mode preferences are account-wide and live in each adopting addon's `account` table, kept identical in all
 -- of them; the library itself has no saved variables.
@@ -79,6 +83,22 @@ function lib:SetPending(addonName, key, position)
 	self.session.pending[addonName] = self.session.pending[addonName] or {}
 	self.session.pending[addonName][key] = position
 	registration:ApplyTarget(target)
+	self:RefreshMovers()
+end
+
+---Shows or hides each shown addon's sample content.
+local function ShowSamples(session, shown)
+	for addonName in pairs(session.shown) do
+		local registration = lib.registrations[addonName]
+		for _, target in ipairs(registration and registration:Targets() or {}) do
+			if type(target.sample) == "function" then
+				local ok, err = pcall(target.sample, shown)
+				if not ok then
+					lib:Report(addonName, ("sample for %s failed: %s"):format(target.key, tostring(err)))
+				end
+			end
+		end
+	end
 end
 
 ---@return boolean
@@ -118,6 +138,9 @@ function lib:OpenEditMode(addonName)
 	session.opener = addonName
 	session.shown = { [addonName] = true }
 	session.pending = {}
+	session.hidden = {}
+	session.selected, session.hovered, session.drag = nil, nil, nil
+	ShowSamples(session, true)
 	self:ShowEditUI()
 	self.editEvents:RegisterEvent("PLAYER_REGEN_DISABLED")
 	self.editEvents:RegisterEvent("PLAYER_REGEN_ENABLED")
@@ -137,6 +160,8 @@ function lib:CloseEditMode(save)
 	self.editEvents:UnregisterEvent("PLAYER_REGEN_DISABLED")
 	self.editEvents:UnregisterEvent("PLAYER_REGEN_ENABLED")
 	self:HideEditUI()
+	ShowSamples(session, false)
+	session.selected, session.hovered, session.drag = nil, nil, nil
 
 	for addonName, keys in pairs(pending) do
 		local registration = self.registrations[addonName]
