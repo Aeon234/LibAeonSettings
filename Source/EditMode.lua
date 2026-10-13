@@ -19,7 +19,10 @@ local L = lib.L
 ---@field drag table? the drag in progress
 lib.session = lib.session or { open = false, paused = false, shown = {}, pending = {}, hidden = {} }
 
-local PREFERENCE_DEFAULTS = { grid = "DIMMED", fill = false, snap = true, coordinates = false }
+local PREFERENCE_DEFAULTS = {
+	grid = "DIMMED", fill = false, snap = true, coordinates = false, hoverBar = false,
+	toolbarScale = 1, tipSeen = false,
+}
 
 -- Edit mode preferences are account-wide and live in each adopting addon's `account` table, kept identical in all
 -- of them; the library itself has no saved variables.
@@ -190,7 +193,7 @@ function lib:OpenEditMode(addonName)
 	session.selected, session.hovered, session.drag = nil, nil, nil
 	session.expanded, session.pick, session.snapTargets, session.sizeOriginals = nil, nil, nil, nil
 	ShowSamples(session, true)
-	self:ShowEditUI()
+	self:ShowEditUI(true)
 	self.editEvents:RegisterEvent("PLAYER_REGEN_DISABLED")
 	self.editEvents:RegisterEvent("PLAYER_REGEN_ENABLED")
 end

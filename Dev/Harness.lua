@@ -274,12 +274,20 @@ function COMMANDS.hide(key)
 	Print("%s %s", key, target.frame:IsShown() and "shown" or "hidden")
 end
 
+function COMMANDS.tip()
+	local editMode = LibAeonSettingsDevDB.editMode
+	if editMode then
+		editMode.tipSeen = nil
+	end
+	Print("the first-time tip will show the next time edit mode opens")
+end
+
 function COMMANDS.media()
 	Print("media path: %s", lib.mediaPath)
 end
 
 function COMMANDS.help()
-	Print("/lasdev edit [second] | hide <key> | pend <key> <dx> <dy> | move | show | set <key> <POINT> <x> <y> | reset [key] | profile <name> | off <key> | scale <key> <n> | bad | media")
+	Print("/lasdev edit [second] | hide <key> | pend <key> <dx> <dy> | move | show | set <key> <POINT> <x> <y> | reset [key] | profile <name> | off <key> | scale <key> <n> | bad | media | tip")
 end
 
 SLASH_LIBAEONSETTINGSDEV1 = "/lasdev"
