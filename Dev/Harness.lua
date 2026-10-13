@@ -109,6 +109,35 @@ function Harness:Register()
 		account = function() return LibAeonSettingsDevDB end,
 		footer = "|cffffd100Changes|r apply immediately",
 	})
+	self:DeclarePages()
+end
+
+-- Navigation shaped like Hearthline's, long enough to scroll: top-level pages, a header with groups of pages (some
+-- with icons), a page directly under the header, dividers and pages after them.
+function Harness:DeclarePages()
+	local window = self.settings
+	window:Page("general", { title = "General" })
+	window:Page("bar", { title = "Bar" })
+	window:Divider()
+	window:Header("modules", "Modules")
+	local groups = {
+		{ "status", "Status", { "Clock", "System", "Durability & Item Level" } },
+		{ "economy", "Economy", { "Gold & Bags", "Currencies" } },
+		{ "character", "Character", { "Professions", "Specialization", "Great Vault" } },
+		{ "shortcuts", "Shortcuts", { "Micro-Menu & Social", "Volume" } },
+		{ "extra", "Extra (to scroll)", { "Test One", "Test Two", "Test Three", "Test Four", "Test Five" } },
+	}
+	for _, group in ipairs(groups) do
+		window:Group(group[1], group[2], "modules")
+		for index, title in ipairs(group[3]) do
+			window:Page(group[1] .. index, { title = title, under = group[1],
+				icon = index == 1 and "Interface\\Icons\\INV_Misc_PocketWatch_01" or nil, slot = true })
+		end
+	end
+	window:Page("travel", { title = "Travel", under = "modules", icon = "Interface\\Icons\\INV_Misc_Rune_01" })
+	window:Divider()
+	window:Page("databroker", { title = "DataBroker" })
+	window:Page("profiles", { title = "Profiles" })
 end
 
 -- A second registration under its own name stands in for another adopting addon: its own frames, its own saved

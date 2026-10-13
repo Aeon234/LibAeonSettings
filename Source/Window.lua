@@ -17,6 +17,18 @@ local TEXT_FADE_OUT, TEXT_FADE_IN = 0.15, 0.25 -- the footer text's crossfade wh
 local GOLD = { 1, 0.82, 0 }
 local VERSION_GRAY = { 0.62, 0.62, 0.62 }
 
+-- Layout inside the window (from its top left): the inner frame, the sidebar column and the content fill.
+local INNER_LEFT, INNER_TOP, INNER_RIGHT, INNER_BOTTOM = 10, 30, 10, 46
+local SIDEBAR_WIDTH = 230
+local SIDEBAR_LEFT, SIDEBAR_TOP, SIDEBAR_BOTTOM = 22, 92, 12 -- the list starts below the search box's place
+local CONTENT_FILL = { 0, 0, 0, 0.45 }
+
+-- Options_InnerFrame is drawn in pieces so its divider and corners keep their size: columns and rows as
+-- { source start, source size, drawn size } in the art's 886 by 618 pixels; a drawn size of false stretches.
+local INNER_ART_WIDTH, INNER_ART_HEIGHT = 886, 618
+local INNER_COLUMNS = { { 0, 12, 12 }, { 12, 184, SIDEBAR_WIDTH }, { 196, 8, 8 }, { 204, 670, false }, { 874, 12, 12 } }
+local INNER_ROWS = { { 0, 60, 60 }, { 60, 480, false }, { 540, 78, 78 } }
+
 local DECLARATION_FIELDS = { title = true, version = true, store = true, account = true, width = true, height = true,
 	footer = true, frameName = true }
 
@@ -51,7 +63,8 @@ function lib:Settings(addonName, declaration)
 
 	local window = self.windows[addonName]
 	if not window then
-		window = setmetatable({ addonName = addonName, pages = {}, pageOrder = {} }, windowMeta)
+		window = setmetatable({ addonName = addonName, pages = {}, pageOrder = {}, nodes = {}, nav = {}, collapsed = {} },
+			windowMeta)
 		self.windows[addonName] = window
 	end
 	window.declaration = declaration
@@ -95,6 +108,43 @@ local function BuildFooter(window, frame)
 	return footer
 end
 
+-- Draws Blizzard's settings inner frame across `width` by `height` from (left, top) of `frame`, piece by piece.
+local function DrawInnerFrame(frame, left, top, width, height)
+	local info = C_Texture.GetAtlasInfo("Options_InnerFrame")
+	if not info then
+		return
+	end
+	local function Fixed(list, total)
+		local fixed = 0
+		for _, entry in ipairs(list) do
+			fixed = fixed + (entry[3] or 0)
+		end
+
+		return total - fixed
+	end
+	local stretchWidth, stretchHeight = Fixed(INNER_COLUMNS, width), Fixed(INNER_ROWS, height)
+	local u0, u1 = info.leftTexCoord, info.rightTexCoord
+	local v0, v1 = info.topTexCoord, info.bottomTexCoord
+	local y = top
+	for _, rowInfo in ipairs(INNER_ROWS) do
+		local rowHeight = rowInfo[3] or stretchHeight
+		local x = left
+		for _, column in ipairs(INNER_COLUMNS) do
+			local columnWidth = column[3] or stretchWidth
+			local piece = frame:CreateTexture(nil, "BORDER")
+			piece:SetTexture(info.file)
+			piece:SetTexCoord(u0 + (u1 - u0) * column[1] / INNER_ART_WIDTH,
+				u0 + (u1 - u0) * (column[1] + column[2]) / INNER_ART_WIDTH,
+				v0 + (v1 - v0) * rowInfo[1] / INNER_ART_HEIGHT,
+				v0 + (v1 - v0) * (rowInfo[1] + rowInfo[2]) / INNER_ART_HEIGHT)
+			piece:SetPoint("TOPLEFT", frame, "TOPLEFT", x, -y)
+			piece:SetSize(columnWidth, rowHeight)
+			x = x + columnWidth
+		end
+		y = y + rowHeight
+	end
+end
+
 local function Build(window)
 	local declaration = window.declaration
 	local name = FrameName(window)
@@ -133,10 +183,31 @@ local function Build(window)
 
 	frame.footer = BuildFooter(window, frame)
 
+	local width, height = frame:GetSize()
+	local innerWidth, innerHeight = width - INNER_LEFT - INNER_RIGHT, height - INNER_TOP - INNER_BOTTOM
+	DrawInnerFrame(frame, INNER_LEFT, INNER_TOP, innerWidth, innerHeight)
+	local contentLeft = INNER_LEFT + 12 + SIDEBAR_WIDTH + 8
+	local fill = frame:CreateTexture(nil, "BACKGROUND", nil, 2)
+	fill:SetColorTexture(unpack(CONTENT_FILL))
+	fill:SetPoint("TOPLEFT", frame, "TOPLEFT", contentLeft - 2, -(INNER_TOP + 3))
+	fill:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -(INNER_RIGHT + 3), INNER_BOTTOM + 3)
+
+	local sidebarRegion = CreateFrame("Frame", nil, frame)
+	sidebarRegion:SetPoint("TOPLEFT", frame, "TOPLEFT", SIDEBAR_LEFT, -SIDEBAR_TOP)
+	sidebarRegion:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", SIDEBAR_LEFT, INNER_BOTTOM + SIDEBAR_BOTTOM)
+	sidebarRegion:SetWidth(SIDEBAR_WIDTH)
+	frame.sidebarRegion = sidebarRegion
+
+	local content = CreateFrame("Frame", nil, frame)
+	content:SetPoint("TOPLEFT", frame, "TOPLEFT", contentLeft + 20, -(INNER_TOP + 14))
+	content:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -(INNER_RIGHT + 20), INNER_BOTTOM + 12)
+	frame.content = content
+
 	-- Escape closes the window, as it does Blizzard's panels.
 	tinsert(UISpecialFrames, name)
 
 	window.frame = frame
+	window:BuildSidebar(sidebarRegion)
 	window:RefreshShell()
 
 	return frame
@@ -178,7 +249,16 @@ function lib.Window:Open()
 		frame:SetPoint("CENTER")
 	end
 	self:RefreshShell()
+	if self.navChanged then
+		self:RefreshSidebar()
+	end
+	if not self.page and self.pageOrder[1] then
+		self.page = self.pageOrder[1].id
+	end
 	frame:Show()
+	if self.page then
+		self:SelectPage(self.page)
+	end
 	lib.combatWatch:RegisterEvent("PLAYER_REGEN_DISABLED")
 end
 
@@ -291,3 +371,19 @@ lib.combatWatch:SetScript("OnEvent", function()
 		window:Close()
 	end
 end)
+
+-- Until pages draw their own content, the content area shows the page's title.
+function lib.Window:ShowPage()
+	local frame = self.frame
+	local page = self.pages[self.page]
+	if not frame or not page then
+		return
+	end
+	if not frame.placeholder then
+		frame.placeholder = frame.content:CreateFontString(nil, "OVERLAY")
+		lib:SetFont(frame.placeholder, "header", 32)
+		frame.placeholder:SetTextColor(unpack(GOLD))
+		frame.placeholder:SetPoint("TOPLEFT")
+	end
+	frame.placeholder:SetText(page.title)
+end

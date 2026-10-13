@@ -14,5 +14,7 @@
 	<Script file="Source\Effects.lua" />
 	<Script file="Source\Mover.lua" />
 	<Script file="Source\Window.lua" />
+	<Script file="Source\Scroll.lua" />
+	<Script file="Source\Sidebar.lua" />
 	<Script file="Source\Finish.lua" />
 </Ui>

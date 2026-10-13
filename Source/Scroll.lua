@@ -1,0 +1,191 @@
+-- Smooth scrolling lists: a scroll frame that glides to its target (exponential ease, pixel-rounded), with Blizzard's
+-- minimal scroll bar beside it. The glide's OnUpdate runs only while it moves.
+
+local lib = LibStub("LibAeonSettings-1.0")
+if not lib.loading then
+	return
+end
+
+local EASE_RATE = 14        -- the glide closes 1 - e^(-14 dt) of the distance each frame
+local SNAP_DISTANCE = 0.5   -- the glide stops within this many units
+local BAR_GAP = 6           -- between the list and its scroll bar
+local THUMB_REST, THUMB_LIT = 0.45, 1
+local SLIM_TRACK_ALPHA = 0.35
+
+local Handlers = {}
+lib.ScrollHandlers = Handlers
+
+---@class LibAeonSettingsScroll
+lib.Scroll = {}
+local scrollMeta = { __index = function(_, name) return lib.Scroll[name] end }
+
+---Creates a smooth scrolling list in `parent`, filling it except for the scroll bar's room on the right.
+---@param parent Frame
+---@param options table { step: units per wheel notch, row?: snap targets to multiples of this, slim?: a bar with no
+---arrows whose track spans the list, inside?: the bar sits inside the list's right edge }
+---@return table scroll with `.child`, the frame to fill
+function lib:CreateScroll(parent, options)
+	local scroll = setmetatable({ options = options, offset = 0, target = 0, contentHeight = 0 }, scrollMeta)
+
+	local frame = CreateFrame("ScrollFrame", nil, parent)
+	frame:SetPoint("TOPLEFT")
+	frame:SetPoint("BOTTOMRIGHT", options.inside and -10 or 0, 0)
+	frame:EnableMouseWheel(true)
+	frame:SetScript("OnMouseWheel", function(_, delta) scroll:ScrollBy(-delta) end)
+	frame:SetScript("OnSizeChanged", function() scroll:Layout() end)
+	frame:SetScript("OnEnter", function() scroll:UpdateLit() end)
+	frame:SetScript("OnLeave", function() scroll:UpdateLit() end)
+	local child = CreateFrame("Frame", nil, frame)
+	child:SetSize(1, 1)
+	frame:SetScrollChild(child)
+
+	local bar = CreateFrame("EventFrame", nil, parent, "MinimalScrollBar")
+	if options.inside then
+		bar:SetPoint("TOPRIGHT", parent, "TOPRIGHT", 0, 0)
+		bar:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", 0, 0)
+	else
+		bar:SetPoint("TOPLEFT", frame, "TOPRIGHT", BAR_GAP, 0)
+		bar:SetPoint("BOTTOMLEFT", frame, "BOTTOMRIGHT", BAR_GAP, 0)
+	end
+	if options.slim then
+		bar.Back:Hide()
+		bar.Forward:Hide()
+		local track = bar:GetTrack()
+		track:ClearAllPoints()
+		track:SetPoint("TOP")
+		track:SetPoint("BOTTOM")
+		track.Begin:SetAlpha(SLIM_TRACK_ALPHA)
+		track.Middle:SetAlpha(SLIM_TRACK_ALPHA)
+		track.End:SetAlpha(SLIM_TRACK_ALPHA)
+	end
+	bar:RegisterCallback(ScrollBarMixin.Event.OnScroll, function(_, percentage)
+		Handlers.BarScrolled(scroll, percentage)
+	end, scroll)
+	bar:HookScript("OnEnter", function() scroll:UpdateLit() end)
+	bar:HookScript("OnLeave", function() scroll:UpdateLit() end)
+
+	local driver = CreateFrame("Frame", nil, frame)
+	driver:Hide()
+	driver:SetScript("OnUpdate", function(_, elapsed) Handlers.Glide(scroll, elapsed) end)
+
+	scroll.frame, scroll.child, scroll.bar, scroll.driver = frame, child, bar, driver
+	scroll:Layout()
+	scroll:UpdateLit()
+
+	return scroll
+end
+
+---@return number how far the list can scroll
+function lib.Scroll:Range()
+	return math.max(0, self.contentHeight - self.frame:GetHeight())
+end
+
+---Sets the height of what the list holds, and lays out the list and its bar.
+function lib.Scroll:SetContentHeight(height)
+	self.contentHeight = height
+	self:Layout()
+end
+
+function lib.Scroll:Layout()
+	local frame, child = self.frame, self.child
+	child:SetWidth(math.max(1, frame:GetWidth()))
+	child:SetHeight(math.max(1, self.contentHeight))
+	local viewHeight = frame:GetHeight()
+	local range = self:Range()
+	local overflows = range > 0 and viewHeight > 0
+	self.bar:SetShown(overflows)
+	if overflows then
+		self.bar:SetVisibleExtentPercentage(viewHeight / self.contentHeight)
+		self.bar:SetPanExtentPercentage(math.min(1, (self.options.step or 60) / range))
+	end
+	self.target = math.min(self.target, range)
+	self:SetOffset(math.min(self.offset, range))
+end
+
+---Draws the list at an offset and moves the bar to match.
+function lib.Scroll:SetOffset(offset)
+	self.offset = offset
+	self.frame:SetVerticalScroll(offset)
+	local range = self:Range()
+	if range > 0 then
+		self.updatingBar = true
+		self.bar:SetScrollPercentage(offset / range, true)
+		self.updatingBar = nil
+	end
+end
+
+---Glides by wheel notches, snapping the target to whole rows when the list has a row height.
+function lib.Scroll:ScrollBy(notches)
+	local range = self:Range()
+	if range <= 0 then
+		return
+	end
+	local target = self.target + notches * (self.options.step or 60)
+	local row = self.options.row
+	if row then
+		target = math.floor(target / row + 0.5) * row
+	end
+	self.target = math.max(0, math.min(range, target))
+	self.driver:Show()
+	self:UpdateLit()
+end
+
+---Moves at once to an offset, stopping any glide.
+function lib.Scroll:JumpTo(offset)
+	self.target = math.max(0, math.min(self:Range(), offset))
+	self.driver:Hide()
+	self:SetOffset(self.target)
+	self:UpdateLit()
+end
+
+---Keeps a band (top and height in list units) in view, gliding the least distance needed.
+function lib.Scroll:Reveal(top, height)
+	local viewHeight = self.frame:GetHeight()
+	if top < self.target then
+		self.target = top
+	elseif top + height > self.target + viewHeight then
+		self.target = top + height - viewHeight
+	else
+		return
+	end
+	self.target = math.max(0, math.min(self:Range(), self.target))
+	self.driver:Show()
+end
+
+-- The thumb rests dim and lights up while the pointer is over the list or its bar, or the list moves.
+function lib.Scroll:UpdateLit()
+	local lit = self.frame:IsMouseOver() or self.bar:IsMouseOver() or self.driver:IsShown()
+	self.bar:GetThumb():SetAlpha(lit and THUMB_LIT or THUMB_REST)
+	if not self.options.slim then
+		self.bar.Back:SetAlpha(lit and 1 or THUMB_REST)
+		self.bar.Forward:SetAlpha(lit and 1 or THUMB_REST)
+	end
+end
+
+function Handlers.Glide(scroll, elapsed)
+	local distance = scroll.target - scroll.offset
+	if math.abs(distance) <= SNAP_DISTANCE then
+		scroll:SetOffset(scroll.target)
+		scroll.driver:Hide()
+		scroll:UpdateLit()
+		return
+	end
+	local nextOffset = scroll.offset + distance * (1 - math.exp(-EASE_RATE * math.min(elapsed, 0.1)))
+	if distance > 0 then
+		nextOffset = math.min(scroll.target, math.ceil(nextOffset))
+	else
+		nextOffset = math.max(scroll.target, math.floor(nextOffset))
+	end
+	scroll:SetOffset(nextOffset)
+end
+
+-- The thumb, track and arrows move the list at once.
+function Handlers.BarScrolled(scroll, percentage)
+	if scroll.updatingBar then
+		return
+	end
+	scroll.target = percentage * scroll:Range()
+	scroll.driver:Hide()
+	scroll.offset = scroll.target
+	scroll.frame:SetVerticalScroll(scroll.offset)
+end
