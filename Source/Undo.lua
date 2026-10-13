@@ -66,7 +66,7 @@ end
 ---Records a saved value for Undo (Setting:Request calls it). A slider or swatch saved again within moments joins
 ---the step before; a step that ends where it began is dropped.
 function lib.Window:RecordUndo(setting, before, after)
-	if Same(before, after) then
+	if setting.noUndo or Same(before, after) then
 		return
 	end
 	local history = History(self)

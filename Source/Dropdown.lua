@@ -125,7 +125,7 @@ function Handlers.Generate(view, root)
 		root:SetMaximumWidth(width)
 	end
 	local share = width - MENU_INSETS - ENTRY_PADDING - RADIO_MARK - (scrolls and SCROLL_BAR or 0)
-	local isPicker = setting.picker ~= nil
+	local isPicker = setting.picker ~= nil or setting.titleCase == false
 	view.selectedIndex = nil
 	for index, choice in ipairs(choices) do
 		local text = isPicker and choice.text or lib.TitleCase(tostring(choice.text or choice.value))
@@ -189,7 +189,8 @@ end
 local function ChoiceText(setting, value)
 	for _, choice in ipairs(Choices(setting)) do
 		if not choice.title and choice.value == value then
-			return setting.picker and choice.text or lib.TitleCase(tostring(choice.text or choice.value))
+			return (setting.picker or setting.titleCase == false) and choice.text
+				or lib.TitleCase(tostring(choice.text or choice.value))
 		end
 	end
 
@@ -231,7 +232,7 @@ function lib.Dropdown:GetWidth()
 end
 
 lib:RegisterControl("Dropdown", {
-	fields = { options = true, picker = true, placeholder = true },
+	fields = { options = true, picker = true, placeholder = true, titleCase = true },
 	Format = ChoiceText,
 	Create = function(half) return lib:CreateDropdown(half) end,
 })

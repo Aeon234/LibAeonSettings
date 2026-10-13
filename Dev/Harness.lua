@@ -145,7 +145,113 @@ function Harness:DeclarePages()
 	window:Page("travel", { title = "Travel", under = "modules", icon = "Interface\\Icons\\INV_Misc_Rune_01" })
 	window:Divider()
 	window:Page("databroker", { title = "DataBroker" })
-	window:Page("profiles", { title = "Profiles" })
+	self:DeclareProfiles(window)
+end
+
+-- W9: the Profiles page over the harness's own profiles, exported as CBOR, compressed and in base64.
+local EXPORT_PREFIX, EXPORT_FORMAT = "!LAS", 1
+local REPORT_ADDONS = { "Broker_Everything", "SavedInstances" } -- named in every export, for the import report
+
+local function CharacterProfile()
+	return ("%s - %s"):format(UnitName("player"), GetRealmName())
+end
+
+function Harness:UseProfile(name)
+	LibAeonSettingsDevDB.profile = name
+	self:Profile()
+	self.registration:Apply()
+end
+
+function Harness:ProfileAdapter()
+	local db = LibAeonSettingsDevDB
+	local adapter = {}
+	function adapter.List()
+		Harness:Profile()
+		local names = {}
+		for name in pairs(db.profiles) do
+			names[#names + 1] = name
+		end
+		return names
+	end
+	function adapter.Active() return db.profile end
+	function adapter.Switch(name) Harness:UseProfile(name) end
+	function adapter.New(name)
+		db.profiles[name] = {}
+		Harness:UseProfile(name)
+	end
+	function adapter.Copy(name)
+		db.profiles[name] = CopyTable(Harness:Profile())
+		Harness:UseProfile(name)
+	end
+	function adapter.Rename(name)
+		db.profiles[name], db.profiles[db.profile] = db.profiles[db.profile], nil
+		Harness:UseProfile(name)
+	end
+	function adapter.Delete(name, replacement)
+		db.profiles[name] = nil
+		Harness:UseProfile(replacement)
+	end
+	function adapter.Reset()
+		wipe(Harness:Profile())
+		Harness.registration:Apply()
+	end
+	function adapter.Export()
+		local payload = { name = db.profile, profile = Harness:Profile(), addons = REPORT_ADDONS }
+		local packed = C_EncodingUtil.CompressString(C_EncodingUtil.SerializeCBOR(payload))
+		return ("%s%d!%s"):format(EXPORT_PREFIX, EXPORT_FORMAT, C_EncodingUtil.EncodeBase64(packed))
+	end
+	function adapter.Decode(text)
+		local format, body = text:match("^" .. EXPORT_PREFIX .. "(%d+)!(.+)$")
+		if not format then
+			return nil, "This isn't a profile string."
+		end
+		if tonumber(format) > EXPORT_FORMAT then
+			return nil, "This profile was made by a newer version of the harness."
+		end
+		local ok, payload = pcall(function()
+			return C_EncodingUtil.DeserializeCBOR(C_EncodingUtil.DecompressString(C_EncodingUtil.DecodeBase64(body)))
+		end)
+		if not ok or type(payload) ~= "table" or type(payload.profile) ~= "table" then
+			return nil, "This profile string is damaged."
+		end
+		local missing = {}
+		for _, addon in ipairs(type(payload.addons) == "table" and payload.addons or {}) do
+			if not C_AddOns.IsAddOnLoaded(addon) then
+				missing[#missing + 1] = tostring(addon)
+			end
+		end
+		local report
+		if #missing > 0 then
+			local names = #missing == 1 and missing[1]
+				or table.concat(missing, ", ", 1, #missing - 1) .. " and " .. missing[#missing]
+			report = { ("%s %s installed or enabled here. %s settings come with the profile and work once %s enabled."):format(
+				names, #missing == 1 and "isn't" or "aren't", #missing == 1 and "Its" or "Their",
+				#missing == 1 and "it is" or "they are") }
+		end
+		return { name = tostring(payload.name or "Imported"), profile = payload.profile, report = report,
+			summary = ("Harness profile \"%s\", format %s."):format(tostring(payload.name or ""), format) }
+	end
+	function adapter.Import(info, name)
+		db.profiles[name] = CopyTable(info.profile)
+		Harness:UseProfile(name)
+	end
+	function adapter.IsEditing() return Harness.layoutLock end
+	function adapter.UsesCharacterProfile() return db.profile == CharacterProfile() end
+	function adapter.SetUseCharacterProfile(on)
+		Harness:UseProfile(on and CharacterProfile() or lib.DEFAULT_PROFILE)
+	end
+	return adapter
+end
+
+function Harness:DeclareProfiles(window)
+	local page = window:ProfilesPage("profiles", { adapter = self:ProfileAdapter(),
+		description = "W9: the harness's profiles. /lasdev lock stands in for editing the layout.",
+		sections = function(profiles)
+			profiles:Section("extra", "Harness Section"):Note("The addon's own sections sit between Active Profile and Manage.")
+		end })
+	local holds = page:Section("holds", "What a Profile Holds")
+	holds:Note("In the profile, and in its export: every page's settings and the sample frames' positions.",
+		"Not in profiles: the edit mode's grid and toolbar preferences, saved for the account.")
 end
 
 -- W2 test page: notes, hidden halves, a custom row and a long section for the content scroll.
@@ -624,6 +730,12 @@ function COMMANDS.combat(key, dx, dy)
 		tostring(InCombatLockdown()), lib:DeferredCount())
 end
 
+function COMMANDS.lock()
+	Harness.layoutLock = not Harness.layoutLock
+	Print("the Profiles page's layout lock is now %s", Harness.layoutLock and "on" or "off")
+	Harness.settings:Refresh()
+end
+
 function COMMANDS.block()
 	Harness.blocked = not Harness.blocked
 	Print("blocked() now returns %s", Harness.blocked and "a reason" or "nothing")
@@ -652,7 +764,7 @@ function COMMANDS.media()
 end
 
 function COMMANDS.help()
-	Print("/lasdev edit [second] | hide <key> | pend <key> <dx> <dy> | move | show | set <key> <POINT> <x> <y> | reset [key] | profile <name> | off <key> | scale <key> <n> | bad | media | tip | combat [key] [dx] [dy] | settings | status [text] | block")
+	Print("/lasdev edit [second] | hide <key> | pend <key> <dx> <dy> | move | show | set <key> <POINT> <x> <y> | reset [key] | profile <name> | off <key> | scale <key> <n> | bad | media | tip | combat [key] [dx] [dy] | settings | status [text] | block | lock")
 end
 
 SLASH_LIBAEONSETTINGSDEV1 = "/lasdev"
