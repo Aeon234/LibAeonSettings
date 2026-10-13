@@ -317,6 +317,9 @@ function lib.Window:ShowPage()
 	for _, section in ipairs(sections) do
 		local header = Acquire(view.sectionHeaders)
 		header.title:SetText(section.title or "")
+		header.section = section
+		section.boundHeader = header
+		self:RefreshSectionLink(header, section)
 		view.items[#view.items + 1] = { header = header }
 		for _, line in ipairs(section.lines) do
 			if line.note then
@@ -455,9 +458,15 @@ function lib.Window:LayoutPage()
 	local leftWidth = math.floor(width / 2)
 	ReleaseAll(view.lines)
 	local y, previousLine = 0, false
+	local open -- the section header whose rows are being laid out, so each section knows where it ends
 	for _, item in ipairs(view.items) do
 		if item.header then
+			if open then
+				open.bottom = y
+			end
+			open = item.header
 			y = y + SECTION_GAP
+			item.header.top = y
 			item.header:SetPoint("TOPLEFT", child, "TOPLEFT", 0, -y)
 			item.header:SetSize(width, SECTION_TITLE_HEIGHT + 1)
 			y = y + SECTION_TITLE_HEIGHT + 1
@@ -512,6 +521,9 @@ function lib.Window:LayoutPage()
 				previousLine = true
 			end
 		end
+	end
+	if open then
+		open.bottom = y
 	end
 	view.scroll:SetContentHeight(y + BOTTOM_PADDING)
 end

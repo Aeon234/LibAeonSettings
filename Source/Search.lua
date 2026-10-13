@@ -675,8 +675,9 @@ local function FlashEdge(flash, first, second, horizontal)
 	end
 end
 
----Flashes a row half: a gold outline and wash, held, then fading out.
-function lib.Window:Flash(half)
+---Flashes a row half (or, with `top` and `height`, a band of the page from `top`, such as a section): a gold outline
+---and wash, held, then fading out. The flash stops if `region` leaves the page.
+function lib.Window:Flash(half, top, height)
 	local view = self.pageView
 	local flash = view.flash
 	if not flash then
@@ -692,7 +693,12 @@ function lib.Window:Flash(half)
 		view.flash = flash
 	end
 	flash:ClearAllPoints()
-	flash:SetAllPoints(half)
+	if top then
+		flash:SetPoint("TOPLEFT", view.scroll.child, "TOPLEFT", 0, -top)
+		flash:SetSize(half:GetWidth(), height)
+	else
+		flash:SetAllPoints(half)
+	end
 	flash:SetFrameLevel(half:GetFrameLevel() + 20)
 	flash.half, flash.elapsed = half, 0
 	flash:SetAlpha(1)

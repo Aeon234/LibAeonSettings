@@ -68,16 +68,17 @@ function Harness:CreateFrames()
 	self.targets = {
 		{ key = "bar", label = "Harness Bar", frame = self.frames.bar, default = { point = "BOTTOM", x = 0, y = 120 },
 			fixedEdge = "BOTTOM", size = StoredSize(self.frames.bar, "barSize", 40), attach = true, match = "width",
-			grow = { "CENTER", "LEFT", "RIGHT" } },
+			grow = { "CENTER", "LEFT", "RIGHT" }, settings = { page = "bar" } },
 		{ key = "unit", label = "Harness Unit", subtitle = "Sample while editing", frame = self.frames.unit,
 			default = { point = "CENTER", x = -280, y = -120 },
 			sample = function(shown) self.frames.unit.text:SetText(shown and "Harness Unit (sample)" or "Harness Unit") end,
 			size = StoredSize(self.frames.unit, "unitSize", 20), attach = true, match = "both",
-			settings = function(target) Print("Element Options for %s: the adopter would open its settings page here", target.key) end },
+			settings = { page = "controls", section = "sliders" } },
 		{ key = "icon", label = "Harness Icon", frame = self.frames.icon, default = { point = "TOPRIGHT", x = -240, y = -200 },
-			attach = true },
+			attach = true, settings = { page = "appearance", section = "look" } },
 		{ key = "secure", label = "Secure Button", subtitle = "Protected", frame = self.frames.secure,
-			default = { point = "LEFT", x = 240, y = -60 }, attach = true },
+			default = { point = "LEFT", x = 240, y = -60 }, attach = true,
+			settings = function(target) Print("Element Options for %s: an addon's own function runs instead", target.key) end },
 	}
 end
 

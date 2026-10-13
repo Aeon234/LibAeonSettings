@@ -42,6 +42,8 @@ local TARGET_FIELDS = {
 	settings = true, size = true, attach = true, match = true, grow = true,
 }
 local FIXED_EDGES = { TOP = true, BOTTOM = true, LEFT = true, RIGHT = true }
+-- `settings` is a function, or where the target's settings are: { page, section?, setting?, select? }.
+local LINK_FIELDS = { page = true, section = true, setting = true, select = true }
 
 -- Registration methods are looked up on the library at call time, so registrations made through an older copy
 -- use the newest code after an upgrade.
@@ -79,6 +81,21 @@ local function CheckTarget(addonName, target, seen)
 	if not ValidPosition(target.default) then
 		lib:Report(addonName, ("target %s: default must be { point, x, y }"):format(target.key))
 		return false
+	end
+	local settings = target.settings
+	if type(settings) == "table" then
+		for field in pairs(settings) do
+			if not LINK_FIELDS[field] then
+				lib:Report(addonName, ("target %s: unknown settings field %q"):format(target.key, tostring(field)))
+			end
+		end
+		if type(settings.page) ~= "string" then
+			lib:Report(addonName, ("target %s: settings needs a page"):format(target.key))
+			target.settings = nil
+		end
+	elseif settings ~= nil and type(settings) ~= "function" then
+		lib:Report(addonName, ("target %s: settings must be a function or { page, section? }"):format(target.key))
+		target.settings = nil
 	end
 	if target.fixedEdge ~= nil and not FIXED_EDGES[target.fixedEdge] then
 		lib:Report(addonName, ("target %s: fixedEdge must be TOP, BOTTOM, LEFT or RIGHT"):format(target.key))

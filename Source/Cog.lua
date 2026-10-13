@@ -41,10 +41,24 @@ function lib:RestoreSizes(save)
 	end
 end
 
+-- Element Options (Q136): saves, leaves edit mode and opens the settings: the addon's window on the target's page
+-- and section with it pulsing, or the addon's own function.
 local function ElementOptions(mover)
 	local settings = mover.target.settings
 	local addonName = mover.addonName
 	local target = mover.target
+	if type(settings) == "table" then
+		-- The window opens here, on the section, rather than where edit mode was opened from.
+		lib.session.returnTo = nil
+		lib:CloseEditMode(true)
+		local window = lib.windows and lib.windows[addonName]
+		if not window then
+			lib:Report(addonName, ("settings for %s: the addon has no settings window"):format(target.key))
+			return
+		end
+		window:OpenAt(settings, target)
+		return
+	end
 	lib:CloseEditMode(true)
 	if type(settings) == "function" then
 		local ok, err = pcall(settings, target)
