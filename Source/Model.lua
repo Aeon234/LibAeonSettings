@@ -262,6 +262,7 @@ local function Write(setting, value)
 
 	return true
 end
+lib.WriteSetting = Write
 
 -- Title Case for the refusal message (C-01): every word's first letter capitalized, the rest as written.
 local function TitleCase(text)
@@ -283,11 +284,15 @@ function lib.Setting:SetValue(value)
 	return ok, reason
 end
 
----Saves a value the user chose. A refusal shows "Couldn't save <label>: <reason>" at the top of the screen.
+---Saves a value the user chose, recorded for Undo. A refusal shows "Couldn't save <label>: <reason>" at the top of
+---the screen.
 ---@return boolean ok
 function lib.Setting:Request(value)
+	local before = self:StoredValue()
 	local ok, reason = Write(self, value)
-	if not ok then
+	if ok then
+		self.window:RecordUndo(self, before, value)
+	else
 		self:ShowRefusal(reason)
 	end
 	self.window:SettingChanged(self, false, not ok)
@@ -408,17 +413,20 @@ function lib.Window:CountOverrides(pageId)
 end
 
 ---Returns every overridden setting on a page (or the whole window) to the shared value, for an adopter's Clear
----Overrides action. Settings whose `set` refuses keep their value.
+---Overrides action; one Undo puts them all back. Settings whose `set` refuses keep their value.
 ---@return integer cleared
 function lib.Window:ClearOverrides(pageId)
-	local cleared = 0
+	local cleared, changes = 0, {}
 	for _, page in ipairs(EachPage(self, pageId)) do
 		for _, setting in pairs(page.settings or {}) do
+			local before = setting:StoredValue()
 			if setting:IsOverridden() and Write(setting, nil) then
 				cleared = cleared + 1
+				changes[#changes + 1] = { setting = setting, before = before }
 			end
 		end
 	end
+	self:RecordUndoGroup(changes)
 	self:Refresh()
 
 	return cleared

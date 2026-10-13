@@ -155,10 +155,13 @@ function lib.Color:EndPick(cancel)
 	if not pick then
 		return
 	end
-	self.picking, self.previewOnly = nil, nil
 	self.frame:SetScript("OnUpdate", nil)
+	-- Still picking while the earlier color is asked for, so Undo keeps the whole pick as one step.
 	if cancel and self.setting then
 		Request(self, pick.r, pick.g, pick.b, pick.a)
+	end
+	self.picking, self.previewOnly = nil, nil
+	if cancel and self.setting then
 		self:ShowValue()
 	end
 	if ColorPickerFrame:IsShown() and ColorPickerFrame.extraInfo == pick then
@@ -203,12 +206,11 @@ function Handlers.PickerHidden()
 	if ColorPickerFrame.extraInfo == pick then
 		local r, g, b = ColorPickerFrame:GetColorRGB()
 		local a = view.setting.hasOpacity and ColorPickerFrame:GetColorAlpha() or 1
-		view.picking = nil
 		view.frame:SetScript("OnUpdate", nil)
 		if not view.previewOnly then
-			Request(view, r, g, b, a)
+			Request(view, r, g, b, a) -- still picking, so it joins the pick's Undo step
 		end
-		view.previewOnly = nil
+		view.picking, view.previewOnly = nil, nil
 		view:ShowValue()
 	else
 		view.picking, view.previewOnly = nil, nil

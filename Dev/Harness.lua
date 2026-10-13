@@ -526,6 +526,9 @@ function COMMANDS.profile(name)
 	end
 	LibAeonSettingsDevDB.profile = name
 	Harness.registration:Apply()
+	-- A profile switch is not undoable and empties the settings window's Undo history.
+	Harness.settings:ClearUndo()
+	Harness.settings:Refresh()
 	Harness:Show()
 end
 

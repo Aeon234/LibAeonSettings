@@ -11,6 +11,7 @@ local L = lib.L
 local WINDOW_WIDTH, WINDOW_HEIGHT = 1331, 900
 local TITLE_SIZE, VERSION_SIZE = 14, 12
 local FOOTER_HEIGHT = 35
+local FOOTER_BOTTOM = 11 -- centers the band between the inner frame's bottom (46) and the frame's inner edge (11)
 local FOOTER_TEXT_SIZE = 14
 local STATUS_SECONDS = 6
 local TEXT_FADE_OUT, TEXT_FADE_IN = 0.15, 0.25 -- the footer text's crossfade when it changes
@@ -90,8 +91,8 @@ end
 
 local function BuildFooter(window, frame)
 	local footer = CreateFrame("Frame", nil, frame)
-	footer:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 8, 4)
-	footer:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -4, 4)
+	footer:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 8, FOOTER_BOTTOM)
+	footer:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -4, FOOTER_BOTTOM)
 	footer:SetHeight(FOOTER_HEIGHT)
 
 	footer.text = footer:CreateFontString(nil, "OVERLAY")
@@ -204,6 +205,7 @@ local function Build(window)
 	window.frame = frame
 	window:BuildSidebar(sidebarRegion)
 	window:BuildSearch()
+	window:BuildUndo()
 	window:RefreshShell()
 
 	return frame
@@ -220,6 +222,7 @@ function lib.Window:RefreshShell()
 	frame.version:SetShown(declaration.version ~= nil)
 	self:SetFooterText(self.statusText or declaration.footer or "", false)
 	frame.footer.editMode:SetShown(lib.registrations[self.addonName] ~= nil)
+	self:PlaceUndo()
 end
 
 -- Opening and closing ----------------------------------------------------------------------------------------

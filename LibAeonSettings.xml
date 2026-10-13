@@ -29,5 +29,6 @@
 	<Script file="Source\Page.lua" />
 	<Script file="Source\Preview.lua" />
 	<Script file="Source\Search.lua" />
+	<Script file="Source\Undo.lua" />
 	<Script file="Source\Finish.lua" />
 </Ui>
