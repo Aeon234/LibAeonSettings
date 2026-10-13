@@ -50,6 +50,19 @@ function Harness:CreateFrames()
 		icon = SampleFrame("Icon", 40, 40, "Icon", 0.45, 0.3, 0.1),
 	}
 	self.frames.icon:SetScale(1.5)
+	-- A protected frame: a secure action button that targets the player when clicked.
+	local secure = CreateFrame("Button", "LibAeonSettingsDevSecure", UIParent, "SecureActionButtonTemplate")
+	secure:SetSize(140, 32)
+	secure:RegisterForClicks("AnyUp", "AnyDown")
+	secure:SetAttribute("type", "target")
+	secure:SetAttribute("unit", "player")
+	local secureBackground = secure:CreateTexture(nil, "BACKGROUND")
+	secureBackground:SetAllPoints()
+	secureBackground:SetColorTexture(0.45, 0.1, 0.1, 0.8)
+	secure.text = secure:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+	secure.text:SetPoint("CENTER")
+	secure.text:SetText("Secure: target self")
+	self.frames.secure = secure
 	RestoreSize(self.frames.bar, "barSize")
 	RestoreSize(self.frames.unit, "unitSize")
 	self.targets = {
@@ -63,6 +76,8 @@ function Harness:CreateFrames()
 			settings = function(target) Print("Element Options for %s: the adopter would open its settings page here", target.key) end },
 		{ key = "icon", label = "Harness Icon", frame = self.frames.icon, default = { point = "TOPRIGHT", x = -240, y = -200 },
 			attach = true },
+		{ key = "secure", label = "Secure Button", subtitle = "Protected", frame = self.frames.secure,
+			default = { point = "LEFT", x = 240, y = -60 }, attach = true },
 	}
 end
 
@@ -274,6 +289,24 @@ function COMMANDS.hide(key)
 	Print("%s %s", key, target.frame:IsShown() and "shown" or "hidden")
 end
 
+-- Protected-frame checks: in combat a change to the secure button (or to a frame attached to it) waits, and
+-- lands when combat ends.
+function COMMANDS.combat(key, dx, dy)
+	key = key or "secure"
+	local target = Harness.registration:Target(key)
+	dx, dy = tonumber(dx) or 40, tonumber(dy) or 0
+	if not target then
+		Print("usage: /lasdev combat [key] [dx] [dy] (default: secure 40 0)")
+		return
+	end
+	local position = Harness.registration:Measure(target)
+	position.x, position.y = position.x + dx, position.y + dy
+	Harness.registration:Write(key, position)
+	Harness.registration:Apply()
+	Print("%s moved by %d, %d; in combat: %s; waiting for the end of combat: %d", key, dx, dy,
+		tostring(InCombatLockdown()), lib:DeferredCount())
+end
+
 function COMMANDS.tip()
 	local editMode = LibAeonSettingsDevDB.editMode
 	if editMode then
@@ -287,7 +320,7 @@ function COMMANDS.media()
 end
 
 function COMMANDS.help()
-	Print("/lasdev edit [second] | hide <key> | pend <key> <dx> <dy> | move | show | set <key> <POINT> <x> <y> | reset [key] | profile <name> | off <key> | scale <key> <n> | bad | media | tip")
+	Print("/lasdev edit [second] | hide <key> | pend <key> <dx> <dy> | move | show | set <key> <POINT> <x> <y> | reset [key] | profile <name> | off <key> | scale <key> <n> | bad | media | tip | combat [key] [dx] [dy]")
 end
 
 SLASH_LIBAEONSETTINGSDEV1 = "/lasdev"

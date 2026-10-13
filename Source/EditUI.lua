@@ -501,11 +501,6 @@ function lib:ShowEditUI(opening)
 	self:WatchShift(true)
 	if opening then
 		self:PlayOpening()
-		C_Timer.After(1.3, function()
-			if lib.session.open and not lib.session.paused then
-				lib:ShowFirstTip()
-			end
-		end)
 	end
 end
 

@@ -230,12 +230,18 @@ end
 ---@param target LibAeonSettingsTarget
 function lib.Registration:ApplyTarget(target)
 	local frame = target.frame
-	if InCombatLockdown() and frame:IsProtected() then
-		lib:Defer(self, target.key)
-		return
+	local position = self:Current(target)
+	-- In combat a protected frame cannot be moved or sized, and a frame is not attached to a protected one either:
+	-- both wait for the end of combat.
+	if InCombatLockdown() then
+		local anchor = position.anchor
+		local parent = anchor and lib.ResolveTarget and lib:ResolveTarget(anchor.addon, anchor.key)
+		if frame:IsProtected() or (parent and parent.frame:IsProtected()) then
+			lib:Defer(self, target.key)
+			return
+		end
 	end
 
-	local position = self:Current(target)
 	if lib.ApplyMatches then
 		lib:ApplyMatches(self.addonName, target, position)
 	end
@@ -352,6 +358,16 @@ end
 function lib:Defer(registration, key)
 	self.deferred[registration.addonName .. "\0" .. key] = { registration = registration, key = key }
 	self.eventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
+end
+
+---@return number count of applies waiting for the end of combat
+function lib:DeferredCount()
+	local count = 0
+	for _ in pairs(self.deferred) do
+		count = count + 1
+	end
+
+	return count
 end
 
 function lib:RunDeferred()

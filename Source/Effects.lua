@@ -14,6 +14,9 @@ local CORNER_SPREAD = 11
 local HOVER_BAR_ZONE = 60    -- UI units around the toolbar within which Hover Top Bar shows it
 local HOVER_BAR_SPEED = 4    -- alpha per second
 local SHIFT_FADE = 0.15
+local TIP_GAP, TIP_DROP = 16, 12  -- the tip's distance below the toolbar, and how far above that it starts
+local TIP_FADE_IN, TIP_FADE_OUT = 0.45, 0.2
+local TIP_DELAY = 0.7            -- seconds into the opening sequence, as the toolbar settles
 
 local Handlers = {}
 lib.EffectHandlers = Handlers
@@ -163,6 +166,11 @@ end
 ---the emblem opens and the movers fade in.
 function lib:PlayOpening()
 	local ui = self.ui
+	C_Timer.After(TIP_DELAY, function()
+		if lib.session.open and not lib.session.paused then
+			lib:ShowFirstTip()
+		end
+	end)
 	self:PrepareOpening()
 	if not ui.openingDriver then
 		ui.openingDriver = CreateFrame("Frame", nil, ui.screen)
@@ -315,6 +323,11 @@ end
 
 -- First-time tip -----------------------------------------------------------------------------------------------
 
+local function StartTipTween(tip, showing, duration)
+	tip.tween = { elapsed = 0, duration = duration, showing = showing }
+	tip:SetScript("OnUpdate", function(self, elapsed) Handlers.TipUpdate(self, elapsed) end)
+end
+
 local function BuildTip(ui)
 	local tip = CreateFrame("Frame", nil, UIParent)
 	tip:SetFrameStrata("FULLSCREEN_DIALOG")
@@ -333,13 +346,36 @@ local function BuildTip(ui)
 	tip.close = CreateFrame("Button", nil, tip, "UIPanelCloseButton")
 	tip.close:SetSize(24, 24)
 	tip.close:SetPoint("TOPRIGHT", -5, -5)
-	tip.close:SetScript("OnClick", function() tip:Hide() end)
+	tip.close:SetScript("OnClick", function() lib:HideFirstTip(true) end)
 	tip:SetHeight(12 + tip.title:GetStringHeight() + 8 + tip.text:GetStringHeight() + 14)
 	tip:SetClampedToScreen(true)
-	tip:SetPoint("TOP", ui.toolbar, "BOTTOM", 0, -16)
+	tip:SetPoint("TOP", ui.toolbar, "BOTTOM", 0, -TIP_GAP)
 	tip:Hide()
 
 	return tip
+end
+
+-- The tip eases in, fading in as it drops into place below the toolbar, and fades out when closed.
+function Handlers.TipUpdate(tip, elapsed)
+	if not tip.tween then
+		return
+	end
+	tip.tween.elapsed = tip.tween.elapsed + elapsed
+	local progress = Clamp01(tip.tween.elapsed / tip.tween.duration)
+	if tip.tween.showing then
+		local eased = EaseOut(progress)
+		tip:SetAlpha(eased)
+		tip:SetPoint("TOP", lib.ui.toolbar, "BOTTOM", 0, -TIP_GAP + TIP_DROP * (1 - eased))
+	else
+		tip:SetAlpha(1 - progress)
+	end
+	if progress >= 1 then
+		if not tip.tween.showing then
+			tip:Hide()
+		end
+		tip.tween = nil
+		tip:SetScript("OnUpdate", nil)
+	end
 end
 
 ---Shows the tip once per account, the first time edit mode opens.
@@ -348,12 +384,25 @@ function lib:ShowFirstTip()
 		return
 	end
 	self:SetPreference("tipSeen", true)
-	self.ui.tip = self.ui.tip or BuildTip(self.ui)
-	self.ui.tip:Show()
+	local tip = self.ui.tip or BuildTip(self.ui)
+	self.ui.tip = tip
+	tip:SetAlpha(0)
+	tip:SetPoint("TOP", self.ui.toolbar, "BOTTOM", 0, -TIP_GAP + TIP_DROP)
+	StartTipTween(tip, true, TIP_FADE_IN)
+	tip:Show()
 end
 
-function lib:HideFirstTip()
-	if self.ui and self.ui.tip then
-		self.ui.tip:Hide()
+---Hides the tip; `fade` fades it out first.
+function lib:HideFirstTip(fade)
+	local tip = self.ui and self.ui.tip
+	if not tip or not tip:IsShown() then
+		return
+	end
+	if fade then
+		StartTipTween(tip, false, TIP_FADE_OUT)
+	else
+		tip.tween = nil
+		tip:SetScript("OnUpdate", nil)
+		tip:Hide()
 	end
 end
