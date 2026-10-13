@@ -27,7 +27,7 @@ function lib:CreateTextInput(parent)
 	box:SetAutoFocus(false)
 	lib:SetFont(box, "body", TEXT_SIZE)
 	box:SetScript("OnEnterPressed", function() Handlers.Commit(view) end)
-	box:SetScript("OnEscapePressed", function() view.cancelling = true; box:ClearFocus() end)
+	box:SetScript("OnEscapePressed", function() view.canceling = true; box:ClearFocus() end)
 	box:HookScript("OnEditFocusLost", function() Handlers.FocusLost(view) end)
 	view.frame, view.box = frame, box
 
@@ -68,16 +68,16 @@ function lib.TextInput:Update(_, refused)
 end
 
 function lib.TextInput:Release()
-	self.cancelling = true
+	self.canceling = true
 	self.box:ClearFocus()
-	self.cancelling = nil
+	self.canceling = nil
 	self.setting = nil
 end
 
 -- Going inactive drops an edit in progress.
 function lib.TextInput:SetActive(active)
 	if not active and self.box:HasFocus() then
-		self.cancelling = true
+		self.canceling = true
 		self.box:ClearFocus()
 	end
 	self.box:SetEnabled(active)
@@ -94,9 +94,9 @@ function Handlers.Commit(view)
 		return
 	end
 	local text = Trim(view.box:GetText())
-	view.cancelling = true
+	view.canceling = true
 	view.box:ClearFocus()
-	view.cancelling = nil
+	view.canceling = nil
 	local reason
 	if text == "" and not setting.allowEmpty then
 		reason = L.CANT_BE_EMPTY
@@ -122,8 +122,8 @@ end
 
 -- Clicking away saves, as Enter does; Escape, a recycled row or going inactive puts the saved text back.
 function Handlers.FocusLost(view)
-	if view.cancelling then
-		view.cancelling = nil
+	if view.canceling then
+		view.canceling = nil
 		view:ShowValue()
 		return
 	end

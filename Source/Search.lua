@@ -40,12 +40,13 @@ lib.SearchHandlers = Handlers
 local FILLER = { a = true, an = true, ["and"] = true, the = true, of = true, to = true, ["for"] = true, ["in"] = true,
 	on = true, with = true, at = true, by = true, ["or"] = true }
 local SYNONYM_MIN = 3 -- a synonym engages once this many of its letters are typed
+local SPELLING_MIN = 4 -- a partly typed word takes its other spelling once this many letters are typed
 local FUZZY_MIN, FUZZY_SLACK = 3, 4
 
 -- Groups of words that name the same thing; a typed word in a group also finds the others. Adopters add their own
 -- with lib:AddSearchSynonyms.
 local synonymGroups = {
-	{ "color", "colour", "tint" },
+	{ "color", "tint" },
 	{ "opacity", "alpha", "transparency", "transparent" },
 	{ "position", "move", "location" },
 	{ "font", "typeface" },
@@ -58,6 +59,55 @@ local synonymGroups = {
 	{ "sound", "audio" },
 	{ "tooltip", "tip" },
 }
+
+-- American and British spellings of one word, American first, each the start its other forms share ("customiz"
+-- covers customize, customized and customization). A typed word in either spelling also matches the other. Listed
+-- word by word, because suffix rules (-our, -re, -ise) would also respell words such as your, fire and precise.
+local SPELLINGS = {
+	-- -or, -our
+	{ "armor", "armour" }, { "behavior", "behaviour" }, { "color", "colour" }, { "favor", "favour" },
+	{ "flavor", "flavour" }, { "harbor", "harbour" }, { "honor", "honour" }, { "humor", "humour" },
+	{ "labor", "labour" }, { "neighbor", "neighbour" }, { "rumor", "rumour" }, { "savior", "saviour" },
+	{ "valor", "valour" }, { "vapor", "vapour" }, { "vigor", "vigour" },
+	-- -er, -re
+	{ "caliber", "calibre" }, { "center", "centre" }, { "centered", "centred" }, { "centering", "centring" },
+	{ "fiber", "fibre" }, { "luster", "lustre" }, { "maneuver", "manoeuvre" }, { "meter", "metre" },
+	{ "saber", "sabre" }, { "scepter", "sceptre" }, { "somber", "sombre" }, { "specter", "spectre" },
+	{ "theater", "theatre" },
+	-- -ize, -ise; -yze, -yse
+	{ "analyz", "analys" }, { "authoriz", "authoris" }, { "categoriz", "categoris" }, { "customiz", "customis" },
+	{ "finaliz", "finalis" }, { "initializ", "initialis" }, { "localiz", "localis" }, { "maximiz", "maximis" },
+	{ "memoriz", "memoris" }, { "minimiz", "minimis" }, { "normaliz", "normalis" }, { "optimiz", "optimis" },
+	{ "organiz", "organis" }, { "paralyz", "paralys" }, { "personaliz", "personalis" }, { "prioritiz", "prioritis" },
+	{ "randomiz", "randomis" }, { "realiz", "realis" }, { "recogniz", "recognis" }, { "serializ", "serialis" },
+	{ "specializ", "specialis" }, { "stabiliz", "stabilis" }, { "standardiz", "standardis" },
+	{ "summariz", "summaris" }, { "synchroniz", "synchronis" }, { "utiliz", "utilis" }, { "visualiz", "visualis" },
+	-- -l-, -ll-
+	{ "beveled", "bevelled" }, { "canceled", "cancelled" }, { "canceling", "cancelling" },
+	{ "channeled", "channelled" }, { "channeling", "channelling" }, { "dueling", "duelling" },
+	{ "duelist", "duellist" }, { "fueled", "fuelled" }, { "jeweler", "jeweller" }, { "jewelry", "jewellery" },
+	{ "labeled", "labelled" }, { "labeling", "labelling" }, { "leveled", "levelled" }, { "leveling", "levelling" },
+	{ "marvelous", "marvellous" }, { "modeled", "modelled" }, { "modeling", "modelling" },
+	{ "signaled", "signalled" }, { "signaling", "signalling" }, { "traveled", "travelled" },
+	{ "traveler", "traveller" }, { "traveling", "travelling" },
+	-- -se, -ce; -og, -ogue; others
+	{ "defense", "defence" }, { "license", "licence" }, { "offense", "offence" },
+	{ "analog", "analogue" }, { "catalog", "catalogue" }, { "dialog", "dialogue" },
+	{ "archeology", "archaeology" }, { "artifact", "artefact" }, { "gray", "grey" }, { "judgment", "judgement" },
+}
+
+-- The pairs by the first letter of each spelling, so a word is compared only with the pairs it can be in.
+local spellingsByLetter = {}
+for _, pair in ipairs(SPELLINGS) do
+	for side = 1, 2 do
+		local letter = pair[side]:sub(1, 1)
+		local bucket = spellingsByLetter[letter] or {}
+		spellingsByLetter[letter] = bucket
+		if bucket[#bucket] ~= pair then
+			bucket[#bucket + 1] = pair
+		end
+	end
+end
 
 ---Adds a group of words that name the same thing, so searching for one also finds the others.
 ---@param ... string the words, each one plain word
@@ -148,8 +198,51 @@ end
 
 -- Matching ---------------------------------------------------------------------------------------------------
 
--- The forms a typed word may take: itself, its stem ("bars", "fading"), and every word of a synonym group it
--- names or is starting to name.
+-- The word in its other spelling, the rest of it kept ("colours" gives "colors"), or nil when it has none. When
+-- more than one start fits ("centered" starts both center and centered), the longest is the word's.
+local function OtherSpelling(word)
+	local bucket = spellingsByLetter[word:sub(1, 1)]
+	if not bucket then
+		return nil
+	end
+	local other, fitted = nil, 0
+	for _, pair in ipairs(bucket) do
+		for side = 1, 2 do
+			local start = pair[side]
+			if #start > fitted and word:sub(1, #start) == start then
+				other, fitted = pair[3 - side] .. word:sub(#start + 1), #start
+			end
+		end
+	end
+
+	return other
+end
+
+-- Adds the other spelling of each of forms[first] to forms[last]: the whole word respelled, and, for a word typed
+-- past the letters both spellings share ("colou", "centr"), the other spelling's start.
+local function AddSpellings(forms, first, last)
+	for index = first, last do
+		local form = forms[index]
+		local other = OtherSpelling(form)
+		if other then
+			forms[#forms + 1] = other
+		end
+		local bucket = spellingsByLetter[form:sub(1, 1)]
+		if bucket and #form >= SPELLING_MIN then
+			for _, pair in ipairs(bucket) do
+				for side = 1, 2 do
+					local start, rival = pair[side], pair[3 - side]
+					if #form < #start and start:sub(1, #form) == form and rival:sub(1, #form) ~= form then
+						forms[#forms + 1] = rival
+					end
+				end
+			end
+		end
+	end
+end
+
+-- The forms a typed word may take: itself, its stem ("bars", "fading"), its other spelling ("colour", "color"),
+-- and every word of a synonym group it names or is starting to name, in either spelling.
 local function Forms(word)
 	local forms = { word }
 	if #word >= 5 then
@@ -161,6 +254,7 @@ local function Forms(word)
 	if #word >= 4 and word:sub(-1) == "s" then
 		forms[#forms + 1] = word:sub(1, -2)
 	end
+	AddSpellings(forms, 1, #forms)
 	local bases = #forms
 	for _, group in ipairs(synonymGroups) do
 		local named
@@ -178,8 +272,17 @@ local function Forms(word)
 			end
 		end
 	end
+	AddSpellings(forms, bases + 1, #forms)
+	-- Each form once, since every entry's words are tried against all of them.
+	local unique, seen = {}, {}
+	for _, form in ipairs(forms) do
+		if not seen[form] then
+			seen[form] = true
+			unique[#unique + 1] = form
+		end
+	end
 
-	return forms
+	return unique
 end
 
 -- A word of the text starts with one of the forms. Returns the word's number and the form's length.
@@ -218,7 +321,8 @@ local function Fuzzy(text, needle)
 	return at - first <= #needle + FUZZY_SLACK
 end
 
--- The query's words that must match (filler is optional unless it is all there is), each with its forms.
+-- The query's words that must match (filler is optional unless it is all there is), each with its forms; the typed
+-- words joined and squeezed; and joined in their other spellings, or nil when no word has one.
 local function Query(text)
 	local words = Words(text)
 	local query = {}
@@ -232,18 +336,24 @@ local function Query(text)
 			query[#query + 1] = Forms(word)
 		end
 	end
+	local respelled, changed = {}, false
+	for index, word in ipairs(words) do
+		local other = OtherSpelling(word)
+		respelled[index] = other or word
+		changed = changed or other ~= nil
+	end
 
-	return query, Joined(words), table.concat(words)
+	return query, Joined(words), table.concat(words), changed and Joined(respelled) or nil
 end
 
--- How well an entry matches, best first: the label holds the query as typed; every word is in the label (or its
--- keywords); every word is in the label or where it lives; every word is somewhere, its description included; the
--- letters in order. Nil when it does not match.
-local function Score(entry, query, phrase, squeezed)
+-- How well an entry matches, best first: the label holds the query as typed (or in its other spelling); every word
+-- is in the label (or its keywords); every word is in the label or where it lives; every word is somewhere, its
+-- description included; the letters in order. Nil when it does not match.
+local function Score(entry, query, phrase, squeezed, respelled)
 	if #query == 0 then
 		return nil
 	end
-	if entry.phrase:find(phrase, 1, true) then
+	if entry.phrase:find(phrase, 1, true) or (respelled and entry.phrase:find(respelled, 1, true)) then
 		return 5
 	elseif AllFound(query, entry.own) then
 		return 4
@@ -256,10 +366,11 @@ local function Score(entry, query, phrase, squeezed)
 	end
 end
 
----Finds what the search text names, best first: pages, sections and settings, by how well each matches.
+---Finds what the search text names, in American or British spelling, best first: pages, sections and settings, by
+---how well each matches.
 ---@return table entries
 function lib.Window:FindSettings(text)
-	local query, phrase, squeezed = Query(text)
+	local query, phrase, squeezed, respelled = Query(text)
 	local scored = {}
 	for _, entry in ipairs(self.searchIndex or BuildIndex(self)) do
 		local visible = true
@@ -275,7 +386,7 @@ function lib.Window:FindSettings(text)
 			end
 			visible = entry.setting ~= nil
 		end
-		local score = visible and Score(entry, query, phrase, squeezed)
+		local score = visible and Score(entry, query, phrase, squeezed, respelled)
 		if score then
 			entry.score = score
 			scored[#scored + 1] = entry
@@ -355,7 +466,7 @@ function lib.Window:BuildSearch()
 	box:SetPoint("TOPLEFT", BOX_LEFT, -BOX_TOP)
 	box:SetSize(BOX_WIDTH, BOX_HEIGHT)
 	-- A square frame drawn from the cross-section of Blizzard's `common-dropdown-textholder` edge (the atlas's own
-	-- bevelled lip and chamfered corners read as stray lines on this taller box). A brighter copy shows while typing;
+	-- beveled lip and chamfered corners read as stray lines on this taller box). A brighter copy shows while typing;
 	-- a vertex color cannot brighten past the art.
 	local function Art(path, sublevel)
 		local art = box:CreateTexture(nil, "BACKGROUND", nil, sublevel)

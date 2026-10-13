@@ -411,7 +411,7 @@ function Harness:DeclareControls(page)
 		options = lib.OUTLINES, depends = "active" })
 	inactive:TextInput({ id = "deadText", label = "Text Input", path = "controls.deadText", default = "text",
 		depends = "active" })
-	inactive:Button({ id = "deadButton", label = "Button", verb = "Delete", confirm = "Close me by unticking Controls Active.",
+	inactive:Button({ id = "deadButton", label = "Button", verb = "Delete", confirm = "Close me by unchecking Controls Active.",
 		run = function() end, depends = "active" })
 	inactive:Checkbox({ id = "deadCheck", label = "Checkbox", path = "controls.deadCheck", depends = "active" })
 	inactive:Color({ id = "deadColor", label = "Color", path = "controls.deadColor", hasOpacity = true,
@@ -562,10 +562,10 @@ function COMMANDS.bad()
 		mystery = true,
 		targets = {
 			{ key = "one", frame = scratch, default = { point = "MIDDLE", x = 0, y = 0 } },
-			{ key = "two", frame = scratch, default = { point = "CENTER", x = 0, y = 0 }, colour = true },
+			{ key = "two", frame = scratch, default = { point = "CENTER", x = 0, y = 0 }, shade = true },
 		},
 	})
-	Print('registered a declaration with three problems (unknown field "mystery", a bad default, unknown field "colour"); each should appear as a reported error')
+	Print('registered a declaration with three problems (unknown field "mystery", a bad default, unknown field "shade"); each should appear as a reported error')
 end
 
 function COMMANDS.edit(which)
