@@ -19,7 +19,7 @@ local TOOLBAR_CLEARANCE = 6  -- space kept between the toolbar's opening spot an
 local TOOLBAR_SPOT_STEP = 16 -- step when looking down the screen for a free spot
 local TOOLBAR_TOP_HIDDEN = 12 -- how far the toolbar art's top edge sits above the top of the screen
 local ACCENT = { 0.84, 0.67, 0.36 }
-local TINT = { 0.03, 0.023, 0.018, 0.2 }
+local TINT = { 0.03, 0.023, 0.018, 0.25 } -- 25 % (Alex, 2026-10-13; EllesmereUI's is 20 %)
 local GRID_MODES = { DIMMED = "BRIGHT", BRIGHT = "OFF", OFF = "DIMMED" }
 local GRID_LABELS = { DIMMED = L.DIMMED, BRIGHT = L.BRIGHT, OFF = L.OFF }
 -- The outlined grid in gold, its inner lines faint when Dimmed and full when Bright (Alex, 2026-10-13).

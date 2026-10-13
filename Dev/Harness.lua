@@ -867,6 +867,23 @@ function COMMANDS.icons()
 	sheet:SetShown(not sheet:IsShown())
 end
 
+-- Edit mode's screen tint at another strength, to compare (the library's is 25 %). Lasts until /reload.
+function COMMANDS.tint(percent)
+	local tint = lib.ui and lib.ui.tint
+	if not tint then
+		Print("open edit mode once first (/lasdev edit), then /lasdev tint <percent>")
+		return
+	end
+	percent = tonumber(percent)
+	if not percent then
+		Print("usage: /lasdev tint <0-100>, e.g. 25 (the library's), 20, 30")
+		return
+	end
+	percent = math.floor(math.max(0, math.min(100, percent)) + 0.5)
+	tint:SetColorTexture(0.03, 0.023, 0.018, percent / 100) -- the library's TINT color
+	Print("edit mode tint: %d%%%s", percent, lib:IsEditing() and "" or " (shows the next time edit mode opens)")
+end
+
 function COMMANDS.lock()
 	Harness.layoutLock = not Harness.layoutLock
 	Print("the Profiles page's layout lock is now %s", Harness.layoutLock and "on" or "off")
@@ -1011,7 +1028,7 @@ function COMMANDS.media()
 end
 
 function COMMANDS.help()
-	Print("/lasdev edit [second] | hide <key> | pend <key> <dx> <dy> | move | show | set <key> <POINT> <x> <y> | reset [key] | profile <name> | off <key> | scale <key> <n> | bad | media | tip | combat [key] [dx] [dy] | settings | status [text] | block | lock | shadow [on|off|size n|red|below|probe] | sound <kit> | icons")
+	Print("/lasdev edit [second] | hide <key> | pend <key> <dx> <dy> | move | show | set <key> <POINT> <x> <y> | reset [key] | profile <name> | off <key> | scale <key> <n> | bad | media | tip | combat [key] [dx] [dy] | settings | status [text] | block | lock | shadow [on|off|size n|red|below|probe] | sound <kit> | icons | tint <percent>")
 end
 
 SLASH_LIBAEONSETTINGSDEV1 = "/lasdev"
