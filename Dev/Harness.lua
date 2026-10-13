@@ -122,6 +122,8 @@ function Harness:DeclarePages()
 		description = "W3: every basic control, with refusals and a checkbox that makes the rest inactive." }))
 	self:DeclareOverrides(window:Page("overrides", { title = "Overrides",
 		description = "W5: Clock follows the Whole Bar until a setting is changed here." }))
+	self:DeclareAppearance(window:Page("appearance", { title = "Appearance",
+		description = "W6: a preview shared by tabs that set the same things for different panels." }))
 	self:DeclareBar(window:Page("bar", { title = "Bar", switch = { path = "bar.enabled", default = true },
 		description = "A page with a switch: turning it off dims and desaturates everything below the header." }))
 	window:Divider()
@@ -221,6 +223,80 @@ function Harness:DeclareOverrides(page)
 		run = function(setting)
 			setting.window:ShowStatus(("%d overrides cleared."):format(setting.window:ClearOverrides("overrides")))
 		end })
+end
+
+-- W6 test page: a preview (state pills, shrinking to fit with its caption) over tabs for Shared, Left and Right.
+function Harness:DeclareAppearance(page)
+	local function Get(path)
+		local value = Harness:Profile()
+		for key in path:gmatch("[^.]+") do
+			value = type(value) == "table" and value[key] or nil
+		end
+		return value
+	end
+	local function Panel(side)
+		return {
+			width = Get("look." .. side .. ".width") or Get("look.shared.width") or 240,
+			color = Get("look." .. side .. ".color") or Get("look.shared.color") or { r = 0.62, g = 0.46, b = 0.29 },
+		}
+	end
+	page:Preview({
+		height = 84,
+		states = function()
+			local states = { "Normal" }
+			if Get("look.fade") then
+				states[#states + 1] = "Faded"
+			end
+			states[#states + 1] = "In Combat"
+			return states
+		end,
+		create = function(canvas)
+			canvas.panels = {}
+			for index, side in ipairs({ "left", "right" }) do
+				local panel = canvas:CreateTexture(nil, "ARTWORK")
+				local text = canvas:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+				text:SetPoint("CENTER", panel)
+				text:SetText(side == "left" and "Left" or "Right")
+				canvas.panels[index] = { texture = panel, text = text, side = side }
+			end
+		end,
+		refresh = function(canvas, state)
+			local x, height, gap = 0, 32, 12
+			for _, entry in ipairs(canvas.panels) do
+				local panel = Panel(entry.side)
+				entry.texture:ClearAllPoints()
+				entry.texture:SetPoint("LEFT", canvas, "LEFT", x, 0)
+				entry.texture:SetSize(panel.width, height)
+				entry.texture:SetColorTexture(panel.color.r, panel.color.g, panel.color.b, state == "Faded" and 0.3 or 0.9)
+				entry.texture:SetShown(state ~= "In Combat")
+				entry.text:SetShown(state ~= "In Combat")
+				x = x + panel.width + gap
+			end
+			return x - gap, height
+		end,
+		caption = function(state, scale)
+			if state == "In Combat" then
+				return "Hidden in combat; it returns when combat ends."
+			elseif scale < 0.999 then
+				return ("Shown at %d%% to fit; on screen it is 100%%."):format(scale * 100 + 0.5)
+			end
+		end,
+	})
+
+	local shared = page:Tab("shared", "Shared")
+	local look = shared:Section("look", "Panels")
+	look:Slider({ id = "width", label = "Width", path = "look.shared.width", default = 240, min = 60, max = 900, step = 10,
+		description = "Past about 480 each, the preview shrinks to fit." })
+	look:Color({ id = "color", label = "Color", path = "look.shared.color", default = { r = 0.62, g = 0.46, b = 0.29 } })
+	look:Checkbox({ id = "fade", label = "Fade Out", path = "look.fade", description = "Adds a Faded pill to the preview." })
+	for _, side in ipairs({ { "left", "Left" }, { "right", "Right" } }) do
+		local tab = page:Tab(side[1], side[2], { countOverrides = true })
+		local section = tab:Section(side[1] .. "Look", side[2] .. " Panel")
+		section:Slider({ id = side[1] .. "Width", label = "Width", path = "look." .. side[1] .. ".width", min = 60,
+			max = 900, step = 10, inherits = { path = "look.shared.width", from = "Shared" } })
+		section:Color({ id = side[1] .. "Color", label = "Color", path = "look." .. side[1] .. ".color",
+			inherits = { path = "look.shared.color", from = "Shared" } })
+	end
 end
 
 -- W2 test page (checkboxes since W3): the page switch, a depends chain, blocked() and a refused save.

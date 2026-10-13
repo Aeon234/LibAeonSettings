@@ -27,5 +27,6 @@
 	<Script file="Source\Color.lua" />
 	<Script file="Source\Custom.lua" />
 	<Script file="Source\Page.lua" />
+	<Script file="Source\Preview.lua" />
 	<Script file="Source\Finish.lua" />
 </Ui>

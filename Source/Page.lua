@@ -220,6 +220,8 @@ local function BuildPageView(window)
 	view.switchLabel:SetPoint("RIGHT", view.switch.frame, "LEFT", -SWITCH_GAP, 0)
 	view.switchLabel:SetText(L.ENABLED)
 
+	-- The preview and tabs, between the header and the scrolling sections (Preview.lua), which places the body.
+	lib:BuildFixedArea(window, view)
 	local body = CreateFrame("Frame", nil, content)
 	body:SetPoint("TOPLEFT", header, "BOTTOMLEFT")
 	body:SetPoint("BOTTOMRIGHT")
@@ -272,8 +274,9 @@ function lib.Window:ShowPage()
 		return
 	end
 	local view = self.pageView or BuildPageView(self)
-	if view.shownPage then
-		self.offsets[view.shownPage.id] = view.scroll.target
+	-- Each page (and each of its tabs) keeps its own scroll offset for the session.
+	if view.shownKey then
+		self.offsets[view.shownKey] = view.scroll.target
 	end
 	if view.shownPage and view.shownPage.switch then
 		view.shownPage.switch.boundView = nil
@@ -305,7 +308,10 @@ function lib.Window:ShowPage()
 	view.header:SetHeight(TITLE_HEIGHT
 		+ (page.description and DESCRIPTION_GAP + view.description:GetStringHeight() or 0))
 
-	for _, section in ipairs(page.sections or {}) do
+	local sections = page:ShownSections()
+	view.shownKey = page.tab and (page.id .. "/" .. page.tab) or page.id
+	self:ShowFixedArea(page)
+	for _, section in ipairs(sections) do
 		local header = Acquire(view.sectionHeaders)
 		header.title:SetText(section.title or "")
 		view.items[#view.items + 1] = { header = header }
@@ -331,7 +337,7 @@ function lib.Window:ShowPage()
 
 	self:RefreshStates()
 	self:LayoutPage()
-	view.scroll:JumpTo(self.offsets[page.id] or 0)
+	view.scroll:JumpTo(self.offsets[view.shownKey] or 0)
 end
 
 -- States and layout ------------------------------------------------------------------------------------------
@@ -526,6 +532,7 @@ function lib.Window:SettingChanged(setting, instant, refused)
 	end
 	self:RefreshStates()
 	self:LayoutPage()
+	self:RefreshFixedArea()
 end
 
 -- Overrides ---------------------------------------------------------------------------------------------------
@@ -580,4 +587,5 @@ function lib.Window:Refresh()
 	end
 	self:RefreshStates()
 	self:LayoutPage()
+	self:RefreshFixedArea()
 end
