@@ -773,7 +773,7 @@ local ICON_FILES = {
 }
 -- The library's own art, as shown on the sheet.
 local ICON_MEDIA = {
-	{ "icon-grid-on" }, { "icon-grid-off" }, { "icon-dark-overlays-on" }, { "icon-dark-overlays-off" },
+	{ "icon-grid-dim" }, { "icon-grid-bright" }, { "icon-grid-off" }, { "icon-dark-overlays-on" }, { "icon-dark-overlays-off" },
 	{ "icon-snap-on" }, { "icon-snap-off" }, { "icon-coordinates-on" }, { "icon-coordinates-off" },
 	{ "icon-hover-top-bar-on" }, { "icon-hover-top-bar-off" }, { "icon-addons-on" }, { "icon-addons-off" },
 	{ "icon-cog-on" }, { "chevron" }, { "override-diamond" }, { "nav-hover" },

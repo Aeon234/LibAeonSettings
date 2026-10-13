@@ -22,6 +22,8 @@ local ACCENT = { 0.84, 0.67, 0.36 }
 local TINT = { 0.03, 0.023, 0.018, 0.2 }
 local GRID_MODES = { DIMMED = "BRIGHT", BRIGHT = "OFF", OFF = "DIMMED" }
 local GRID_LABELS = { DIMMED = L.DIMMED, BRIGHT = L.BRIGHT, OFF = L.OFF }
+-- The outlined grid in gold, its inner lines faint when Dimmed and full when Bright (Alex, 2026-10-13).
+local GRID_ICONS = { DIMMED = "icon-grid-dim", BRIGHT = "icon-grid-bright" }
 local ICON_ON, ICON_OFF = { 1, 0.82, 0 }, { 0.62, 0.62, 0.62 }
 local ICON_ALPHA_ON, ICON_ALPHA_OFF, ICON_ALPHA_HOVER = 0.8, 0.45, 1
 -- Q151: clicks in edit mode use the checkbox sounds, off when a toggle turns off.
@@ -114,8 +116,8 @@ end
 
 -- Toolbar ------------------------------------------------------------------------------------------------------
 
-local function PaintToggle(toggle, on, label, hovered)
-	toggle.icon:SetTexture(Texture(on and toggle.iconOn or toggle.iconOff))
+local function PaintToggle(toggle, on, label, hovered, iconOn)
+	toggle.icon:SetTexture(Texture(on and (iconOn or toggle.iconOn) or toggle.iconOff))
 	toggle.icon:SetVertexColor(unpack(on and ICON_ON or ICON_OFF))
 	toggle.icon:SetAlpha(hovered and ICON_ALPHA_HOVER or on and ICON_ALPHA_ON or ICON_ALPHA_OFF)
 	toggle.state:SetText(label)
@@ -252,7 +254,7 @@ function lib:RefreshToolbar()
 		return
 	end
 	local mode = self:GetPreference("grid")
-	PaintToggle(toolbar.grid, mode ~= "OFF", GRID_LABELS[mode] or L.DIMMED, toolbar.grid.hovered)
+	PaintToggle(toolbar.grid, mode ~= "OFF", GRID_LABELS[mode] or L.DIMMED, toolbar.grid.hovered, GRID_ICONS[mode])
 	local fill = self:GetPreference("fill")
 	PaintToggle(toolbar.fill, fill, fill and L.ON or L.OFF, toolbar.fill.hovered)
 	local snap = self:GetPreference("snap")
