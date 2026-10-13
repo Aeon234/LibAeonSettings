@@ -20,7 +20,43 @@ local ROUND = lib.mediaPath .. "Textures\\shadow-round" -- the same glow as a ri
 local DEFAULT_SIZE = 4
 lib.SHADOW_COLOR = { 0, 0, 0, 0.618 } -- WindTools' black at its border alpha
 local STYLES = { textures = true, backdrop = true }
-local OPTION_FIELDS = { size = true, color = true, round = true, style = true, below = true }
+local OPTION_FIELDS = { size = true, color = true, round = true, style = true, below = true, extend = true, shape = true }
+
+-- Shaped glows for Blizzard art that is not a rectangle (Dev/make_shadow_shapes.py, from Blizzard's art exported at 2x,
+-- half a unit per texel), with the same glow profile as the square shadow.
+-- "frame": a frame drawn with Blizzard's metal NineSlice (its portrait ring, its chamfered corners). Each piece of the
+-- frame's own NineSlice whose atlas is known gets the glow made from that piece's art, laid over it and reaching
+-- `size + 2` units past its outer sides, so the glow follows the art wherever and however large it is drawn. Pieces
+-- with other art get none.
+-- Each shape exists for the sizes in SHAPE_SIZES (one texel per unit); a shadow takes the nearest to its `size`.
+local SHAPE_SIZES = { 2, 4, 6, 8, 10 }
+local NINE_PIECES = { "TopLeftCorner", "TopRightCorner", "BottomLeftCorner", "BottomRightCorner", "TopEdge",
+	"BottomEdge", "LeftEdge", "RightEdge" }
+local NINE_SIDES = { -- the outward sides of each piece: { left, top, right, bottom }
+	TopLeftCorner = { 1, 1, 0, 0 }, TopRightCorner = { 0, 1, 1, 0 }, BottomLeftCorner = { 1, 0, 0, 1 },
+	BottomRightCorner = { 0, 0, 1, 1 }, TopEdge = { 0, 1, 0, 0 }, BottomEdge = { 0, 0, 0, 1 }, LeftEdge = { 1, 0, 0, 0 },
+	RightEdge = { 0, 0, 1, 0 },
+}
+-- Lower-case atlas name: the glow made from it, and the piece it was made for (a layout that mirrors an atlas onto
+-- another piece gets no glow there, rather than one facing the wrong way).
+local NINE_GLOWS = {
+	["ui-frame-metal-cornertopleft"] = { "cornertopleft", "TopLeftCorner" },
+	["ui-frame-portraitmetal-cornertopleft"] = { "portraitcornertopleft", "TopLeftCorner" },
+	["ui-frame-portraitmetal-cornertopleftsmall"] = { "portraitcornertopleftsmall", "TopLeftCorner" },
+	["ui-frame-metal-cornertopright"] = { "cornertopright", "TopRightCorner" },
+	["ui-frame-metal-cornertoprightdouble"] = { "cornertoprightdouble", "TopRightCorner" },
+	["ui-frame-metal-cornerbottomleft"] = { "cornerbottomleft", "BottomLeftCorner" },
+	["ui-frame-metal-cornerbottomright"] = { "cornerbottomright", "BottomRightCorner" },
+	["_ui-frame-metal-edgetop"] = { "edgetop", "TopEdge" },
+	["_ui-frame-metal-edgebottom"] = { "edgebottom", "BottomEdge" },
+	["!ui-frame-metal-edgeleft"] = { "edgeleft", "LeftEdge" },
+	["!ui-frame-metal-edgeright"] = { "edgeright", "RightEdge" },
+}
+-- "sidetab": a side tab (`LargeSideTabButtonTemplate`), around its `Background` art; Forever's tab art is wider than
+-- Retail's, which tells the two apart.
+local SHAPES = { frame = true, sidetab = true }
+local SIDETAB_FOREVER_WIDTH = 55
+local SIDES = { left = true, top = true, right = true, bottom = true }
 
 -- The glow's eight segments in the backdrop edge layout, as Blizzard's Backdrop.lua reads them (texture
 -- coordinates in eighths, one texel in from each side; the edges' along-the-edge coordinate stretched, since the
@@ -92,6 +128,59 @@ local function BuildTextures(shadow)
 	shadow.pieces = pieces
 end
 
+local function Texture(name)
+	return lib.mediaPath .. "Textures\\" .. name
+end
+
+-- The built size nearest to `size` (the larger on a tie).
+local function ShapeSize(size)
+	local best
+	for _, built in ipairs(SHAPE_SIZES) do
+		if not best or math.abs(built - size) <= math.abs(best - size) then
+			best = built
+		end
+	end
+
+	return best
+end
+
+-- One glow per known piece of the frame's NineSlice, each anchored to its piece.
+local function BuildFrameShape(shadow)
+	local nine = type(shadow.region.NineSlice) == "table" and shadow.region.NineSlice or shadow.region
+	local size = ShapeSize(shadow.size)
+	local pad = size + 2
+	shadow.pieces = {}
+	for _, name in ipairs(NINE_PIECES) do
+		local piece = nine[name]
+		local atlas = type(piece) == "table" and piece.GetAtlas and piece:GetAtlas()
+		local glow = atlas and NINE_GLOWS[atlas:lower()]
+		if glow and glow[2] == name then
+			local texture = shadow.frame:CreateTexture(nil, "BORDER")
+			texture:SetTexture(Texture(("shadow-metal-%s-%d"):format(glow[1], size)))
+			local sides = NINE_SIDES[name]
+			texture:SetPoint("TOPLEFT", piece, "TOPLEFT", -pad * sides[1], pad * sides[2])
+			texture:SetPoint("BOTTOMRIGHT", piece, "BOTTOMRIGHT", pad * sides[3], -pad * sides[4])
+			shadow.pieces[name] = texture
+		end
+	end
+	if not next(shadow.pieces) then
+		Report("AddShadow: shape \"frame\", but the frame has no known NineSlice art")
+	end
+end
+
+local function BuildTabShape(shadow)
+	local art = shadow.region.Background or shadow.region
+	local info = C_Texture.GetAtlasInfo("common-sidetab")
+	local forever = not info or info.width >= SIDETAB_FOREVER_WIDTH
+	local size = ShapeSize(shadow.size)
+	local pad = size + 2
+	local texture = shadow.frame:CreateTexture(nil, "BORDER")
+	texture:SetTexture(Texture(("%s-%d"):format(forever and "shadow-shape-sidetab" or "shadow-shape-sidetab-retail", size)))
+	texture:SetPoint("TOPLEFT", art, "TOPLEFT", -pad, pad)
+	texture:SetPoint("BOTTOMRIGHT", art, "BOTTOMRIGHT", pad, -pad)
+	shadow.pieces = { Tab = texture }
+end
+
 local function BuildRound(shadow)
 	local ring = shadow.frame:CreateTexture(nil, "BORDER")
 	ring:SetTexture(ROUND)
@@ -107,11 +196,16 @@ local function Build(shadow)
 		shadow.frame:SetParent(nil)
 	end
 	shadow.pieces, shadow.ring = nil, nil
-	local template = shadow.style == "backdrop" and not shadow.round and "BackdropTemplate" or nil
+	local template = shadow.style == "backdrop" and not shadow.round and not shadow.shape and "BackdropTemplate" or nil
 	local frame = CreateFrame("Frame", nil, host, template)
 	shadow.frame = frame
-	shadow.built = { style = shadow.style, round = shadow.round }
-	if shadow.round then
+	shadow.built = { style = shadow.style, round = shadow.round, shape = shadow.shape,
+		shapeSize = shadow.shape and ShapeSize(shadow.size) }
+	if shadow.shape == "frame" then
+		BuildFrameShape(shadow)
+	elseif shadow.shape == "sidetab" then
+		BuildTabShape(shadow)
+	elseif shadow.round then
 		BuildRound(shadow)
 	elseif shadow.style == "textures" then
 		BuildTextures(shadow)
@@ -130,7 +224,8 @@ end
 -- under the region's edge), both on whole pixels.
 local function Draw(shadow)
 	local built = shadow.built
-	if not shadow.frame or built.style ~= shadow.style or built.round ~= shadow.round then
+	if not shadow.frame or built.style ~= shadow.style or built.round ~= shadow.round or built.shape ~= shadow.shape
+		or (shadow.shape and built.shapeSize ~= ShapeSize(shadow.size)) then
 		Build(shadow)
 	end
 	local frame, region = shadow.frame, shadow.region
@@ -138,10 +233,21 @@ local function Draw(shadow)
 	local size = Snap(shadow.size, frame)
 	local edge = Snap(Edge(shadow), frame)
 	frame:ClearAllPoints()
-	frame:SetPoint("TOPLEFT", region, "TOPLEFT", -size, size)
-	frame:SetPoint("BOTTOMRIGHT", region, "BOTTOMRIGHT", size, -size)
+	if shadow.shape then
+		-- The glow textures are anchored to the art itself; the frame only holds them.
+		frame:SetAllPoints(region)
+	else
+		-- `extend` moves each side further out (or, negative, in) to follow art that reaches past the frame.
+		local extend = shadow.extend or {}
+		frame:SetPoint("TOPLEFT", region, "TOPLEFT", -size - (extend.left or 0), size + (extend.top or 0))
+		frame:SetPoint("BOTTOMRIGHT", region, "BOTTOMRIGHT", size + (extend.right or 0), -size - (extend.bottom or 0))
+	end
 	local r, g, b, a = unpack(shadow.color)
-	if shadow.round then
+	if shadow.shape then
+		for _, piece in pairs(shadow.pieces) do
+			piece:SetVertexColor(r, g, b, a)
+		end
+	elseif shadow.round then
 		shadow.ring:SetVertexColor(r, g, b, a)
 	elseif shadow.style == "textures" then
 		for name, piece in pairs(shadow.pieces) do
@@ -179,6 +285,19 @@ local function Apply(shadow, options)
 	if options.below ~= nil then
 		shadow.below = options.below and true or false
 	end
+	if options.extend ~= nil then
+		shadow.extend = type(options.extend) == "table" and options.extend or nil
+	end
+	if options.shape ~= nil then
+		local shape = options.shape
+		if shape == true then
+			shape = type(shadow.region.NineSlice) == "table" and "frame" or nil
+			if not shape then
+				Report("AddShadow: shape = true, but the frame has no NineSlice")
+			end
+		end
+		shadow.shape = SHAPES[shape] and shape or nil
+	end
 end
 
 -- A protected frame in combat waits for the end of combat: making and placing a frame on it is restricted then.
@@ -193,7 +312,11 @@ end
 ---the caller may pass a border color), `round` (the round glow, matched at Blizzard's 198-unit minimap), `style`
 ---("textures", the default, or "backdrop"), `below` (one level under the frame, for rows of closely spaced buttons
 ---or bars; call `Restack` if the frame was at level 0 and has been raised). A protected frame in combat gets its
----shadow when combat ends.
+---shadow when combat ends. `extend` ({ left?, top?, right?, bottom? }) moves sides further out (negative: in) for art
+---that reaches past the frame. `shape` draws a shaped glow instead of the square one: "frame" (a frame drawn with
+---Blizzard's metal NineSlice, ring and chamfers included: each known piece gets its own glow), "sidetab" (a side tab,
+---around its art), or true (the frame's NineSlice). A shape takes the nearest of the sizes it is built in (2, 4, 6, 8,
+---10); `extend` does not apply to it.
 ---@return table? shadow with Show, Hide, SetShown, SetColor, SetSize, SetStyle, SetBelow, Restack
 function lib:AddShadow(region, options)
 	options = options or {}
@@ -208,6 +331,16 @@ function lib:AddShadow(region, options)
 	for field in pairs(options) do
 		if not OPTION_FIELDS[field] then
 			Report(("AddShadow: unknown option %q"):format(tostring(field)))
+		end
+	end
+	if options.shape ~= nil and options.shape ~= true and options.shape ~= false and not SHAPES[options.shape] then
+		Report(("AddShadow: unknown shape %q"):format(tostring(options.shape)))
+	end
+	if type(options.extend) == "table" then
+		for side in pairs(options.extend) do
+			if not SIDES[side] then
+				Report(("AddShadow: unknown extend side %q"):format(tostring(side)))
+			end
 		end
 	end
 	if options.style ~= nil and not STYLES[options.style] then

@@ -743,8 +743,15 @@ local SHADOW_RED = { 0.9, 0.2, 0.1, 0.8 }
 local function ShadowTargets()
 	local targets = {
 		{ Harness.frames.bar }, { Harness.frames.unit }, { Harness.frames.icon }, { Harness.frames.secure },
-		{ CharacterFrame }, { Minimap, { round = true } },
+		{ CharacterFrame, { shape = true } }, { Minimap, { round = true } },
 	}
+	-- The character frame's side tabs: the tab-shaped glow, below each tab (a tight stack, as WindTools' lower shadow).
+	for index = 1, 6 do
+		local tab = _G["CharacterFrameModeTab" .. index]
+		if tab then
+			targets[#targets + 1] = { tab, { shape = "sidetab", below = true } }
+		end
+	end
 	return targets
 end
 
@@ -787,8 +794,13 @@ function COMMANDS.shadow(what, value)
 	local color = state.red and SHADOW_RED or false
 	for _, entry in ipairs(ShadowTargets()) do
 		if entry[1] then
-			local shadow = lib:AddShadow(entry[1], { style = state.style, size = state.size, below = state.below,
-				round = entry[2] and entry[2].round })
+			local own = entry[2] or {}
+			local below = state.below
+			if own.below ~= nil then
+				below = own.below
+			end
+			local shadow = lib:AddShadow(entry[1], { style = state.style, size = state.size, below = below,
+				round = own.round, shape = own.shape })
 			if shadow then
 				shadow:SetColor(color or nil)
 				shadow:Show()
