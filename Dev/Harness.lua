@@ -102,6 +102,13 @@ function Harness:Register()
 		targets = self.targets,
 	})
 	self:RegisterSecond()
+	self.settings = lib:Settings(ADDON_NAME, {
+		title = "LibAeonSettings Harness",
+		version = "dev",
+		store = function() return Harness:Profile() end,
+		account = function() return LibAeonSettingsDevDB end,
+		footer = "|cffffd100Changes|r apply immediately",
+	})
 end
 
 -- A second registration under its own name stands in for another adopting addon: its own frames, its own saved
@@ -307,6 +314,15 @@ function COMMANDS.combat(key, dx, dy)
 		tostring(InCombatLockdown()), lib:DeferredCount())
 end
 
+function COMMANDS.settings()
+	Harness.settings:Toggle()
+end
+
+function COMMANDS.status(_, _, _, _, rest)
+	local text = rest or ""
+	Harness.settings:ShowStatus(text ~= "" and text or "A status message for six seconds")
+end
+
 function COMMANDS.tip()
 	local editMode = LibAeonSettingsDevDB.editMode
 	if editMode then
@@ -320,14 +336,16 @@ function COMMANDS.media()
 end
 
 function COMMANDS.help()
-	Print("/lasdev edit [second] | hide <key> | pend <key> <dx> <dy> | move | show | set <key> <POINT> <x> <y> | reset [key] | profile <name> | off <key> | scale <key> <n> | bad | media | tip | combat [key] [dx] [dy]")
+	Print("/lasdev edit [second] | hide <key> | pend <key> <dx> <dy> | move | show | set <key> <POINT> <x> <y> | reset [key] | profile <name> | off <key> | scale <key> <n> | bad | media | tip | combat [key] [dx] [dy] | settings | status [text]")
 end
 
 SLASH_LIBAEONSETTINGSDEV1 = "/lasdev"
 SlashCmdList.LIBAEONSETTINGSDEV = function(input)
-	local command, a, b, c, d = strsplit(" ", strtrim(input or ""))
+	input = strtrim(input or "")
+	local command, a, b, c, d = strsplit(" ", input)
+	local rest = input:match("^%S+%s+(.+)$")
 	local handler = COMMANDS[(command or ""):lower()] or COMMANDS.help
-	handler(a, b, c, d)
+	handler(a, b, c, d, rest)
 end
 
 local loader = CreateFrame("Frame")

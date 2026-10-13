@@ -1,6 +1,7 @@
 <Ui xmlns="http://www.blizzard.com/wow/ui/">
 	<Script file="Source\Core.lua" />
 	<Script file="Source\Locale.lua" />
+	<Script file="Source\Fonts.lua" />
 	<Script file="Source\Geometry.lua" />
 	<Script file="Source\Placement.lua" />
 	<Script file="Source\EditMode.lua" />
@@ -12,5 +13,6 @@
 	<Script file="Source\AddonsWindow.lua" />
 	<Script file="Source\Effects.lua" />
 	<Script file="Source\Mover.lua" />
+	<Script file="Source\Window.lua" />
 	<Script file="Source\Finish.lua" />
 </Ui>

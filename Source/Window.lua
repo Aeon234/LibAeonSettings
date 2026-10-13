@@ -1,0 +1,293 @@
+-- Settings windows: one per registered addon, built on first open. This file holds the registration and the
+-- window shell (frame, title, close, footer, dragging, Escape, combat); pages and controls are added by later files.
+
+local lib = LibStub("LibAeonSettings-1.0")
+if not lib.loading then
+	return
+end
+
+local L = lib.L
+
+local WINDOW_WIDTH, WINDOW_HEIGHT = 1331, 900
+local TITLE_SIZE, VERSION_SIZE = 14, 12
+local FOOTER_HEIGHT = 35
+local FOOTER_TEXT_SIZE = 14
+local STATUS_SECONDS = 6
+local TEXT_FADE_OUT, TEXT_FADE_IN = 0.15, 0.25 -- the footer text's crossfade when it changes
+local GOLD = { 1, 0.82, 0 }
+local VERSION_GRAY = { 0.62, 0.62, 0.62 }
+
+local DECLARATION_FIELDS = { title = true, version = true, store = true, account = true, width = true, height = true,
+	footer = true, frameName = true }
+
+lib.windows = lib.windows or {}
+
+-- Window methods are looked up on the library at call time, so windows made through an older copy use the newest
+-- code after an upgrade.
+lib.Window = {}
+local windowMeta = { __index = function(_, name) return lib.Window[name] end }
+
+local Handlers = {}
+lib.WindowHandlers = Handlers
+
+---Registers an addon's settings window. Calling it again for the same addon returns the same window with the
+---new declaration. Nothing is built until the window first opens.
+---@param addonName string the addon's folder name
+---@param declaration table { title, version?, store?, account?, width?, height?, footer?, frameName? }
+---@return table? window
+function lib:Settings(addonName, declaration)
+	if type(addonName) ~= "string" or type(declaration) ~= "table" then
+		self:Report(addonName, "Settings(addonName, declaration) needs a name and a table")
+		return
+	end
+	for field in pairs(declaration) do
+		if not DECLARATION_FIELDS[field] then
+			self:Report(addonName, ("unknown settings field %q"):format(tostring(field)))
+		end
+	end
+	if type(declaration.title) ~= "string" then
+		self:Report(addonName, "the settings declaration needs a title")
+	end
+
+	local window = self.windows[addonName]
+	if not window then
+		window = setmetatable({ addonName = addonName, pages = {}, pageOrder = {} }, windowMeta)
+		self.windows[addonName] = window
+	end
+	window.declaration = declaration
+
+	return window
+end
+
+---@return table? window
+function lib:GetSettings(addonName)
+	return self.windows[addonName]
+end
+
+-- Building ---------------------------------------------------------------------------------------------------
+
+local function FrameName(window)
+	local name = window.declaration.frameName
+	if type(name) == "string" and name ~= "" then
+		return name
+	end
+
+	return "LibAeonSettingsWindow" .. window.addonName:gsub("[^%w]", "")
+end
+
+local function BuildFooter(window, frame)
+	local footer = CreateFrame("Frame", nil, frame)
+	footer:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 8, 4)
+	footer:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -4, 4)
+	footer:SetHeight(FOOTER_HEIGHT)
+
+	footer.text = footer:CreateFontString(nil, "OVERLAY")
+	lib:SetFont(footer.text, "body", FOOTER_TEXT_SIZE)
+	footer.text:SetPoint("LEFT", 14, 0)
+	footer.text:SetJustifyH("LEFT")
+
+	footer.editMode = CreateFrame("Button", nil, footer, "SharedButtonTemplate")
+	footer.editMode:SetText(L.OPEN_EDIT_MODE)
+	footer.editMode:SetSize(footer.editMode:GetFontString():GetStringWidth() + 40, 30)
+	footer.editMode:SetPoint("RIGHT", -10, 0)
+	footer.editMode:SetScript("OnClick", function() Handlers.EditMode(window) end)
+
+	return footer
+end
+
+local function Build(window)
+	local declaration = window.declaration
+	local name = FrameName(window)
+	local frame = CreateFrame("Frame", name, UIParent, "SettingsFrameTemplate")
+	frame:SetSize(declaration.width or WINDOW_WIDTH, declaration.height or WINDOW_HEIGHT)
+	frame:SetFrameStrata("HIGH")
+	frame:SetToplevel(true)
+	frame:EnableMouse(true)
+	frame:SetMovable(true)
+	frame:SetClampedToScreen(true)
+	frame:SetDontSavePosition(true)
+	frame:Hide()
+	frame:SetScript("OnHide", function() Handlers.Hidden(window) end)
+	frame.ClosePanelButton:SetScript("OnClick", function() window:Close() end)
+
+	-- The title bar drags the window.
+	local titleBar = CreateFrame("Frame", nil, frame)
+	titleBar:SetPoint("TOPLEFT", 0, 0)
+	titleBar:SetPoint("TOPRIGHT", -28, 0)
+	titleBar:SetHeight(22)
+	titleBar:EnableMouse(true)
+	titleBar:RegisterForDrag("LeftButton")
+	titleBar:SetScript("OnDragStart", function() frame:StartMoving() end)
+	titleBar:SetScript("OnDragStop", function() Handlers.Moved(window) end)
+
+	frame.NineSlice.Text:SetText("")
+	local title = titleBar:CreateFontString(nil, "OVERLAY")
+	lib:SetFont(title, "header", TITLE_SIZE)
+	title:SetTextColor(unpack(GOLD))
+	title:SetPoint("TOP", frame, "TOP", 0, -4)
+	local version = titleBar:CreateFontString(nil, "OVERLAY")
+	lib:SetFont(version, "body", VERSION_SIZE)
+	version:SetTextColor(unpack(VERSION_GRAY))
+	version:SetPoint("LEFT", title, "RIGHT", 6, 0)
+	frame.title, frame.version = title, version
+
+	frame.footer = BuildFooter(window, frame)
+
+	-- Escape closes the window, as it does Blizzard's panels.
+	tinsert(UISpecialFrames, name)
+
+	window.frame = frame
+	window:RefreshShell()
+
+	return frame
+end
+
+---Fills the title, version and footer from the declaration.
+function lib.Window:RefreshShell()
+	local frame, declaration = self.frame, self.declaration
+	if not frame then
+		return
+	end
+	frame.title:SetText(declaration.title or self.addonName)
+	frame.version:SetText(declaration.version or "")
+	frame.version:SetShown(declaration.version ~= nil)
+	self:SetFooterText(self.statusText or declaration.footer or "", false)
+	frame.footer.editMode:SetShown(lib.registrations[self.addonName] ~= nil)
+end
+
+-- Opening and closing ----------------------------------------------------------------------------------------
+
+---Opens the window, on the page and at the place it last had this session. Refused in combat, and while edit
+---mode is open (which is asked to close first).
+function lib.Window:Open()
+	if InCombatLockdown() then
+		UIErrorsFrame:AddMessage(L.UNAVAILABLE_IN_COMBAT, 1, 0.1, 0.1)
+		return
+	end
+	if lib:IsEditing() then
+		lib:RequestClose(false)
+		if lib:IsEditing() then
+			return
+		end
+	end
+	local frame = self.frame or Build(self)
+	frame:ClearAllPoints()
+	if self.position then
+		frame:SetPoint(unpack(self.position))
+	else
+		frame:SetPoint("CENTER")
+	end
+	self:RefreshShell()
+	frame:Show()
+	lib.combatWatch:RegisterEvent("PLAYER_REGEN_DISABLED")
+end
+
+function lib.Window:Close()
+	if self.frame then
+		self.frame:Hide()
+	end
+end
+
+function lib.Window:Toggle()
+	if self:IsShown() then
+		self:Close()
+	else
+		self:Open()
+	end
+end
+
+---@return boolean
+function lib.Window:IsShown()
+	return self.frame ~= nil and self.frame:IsShown()
+end
+
+-- The footer text fades out, changes, and fades back in. The tween's OnUpdate runs only while it fades.
+function Handlers.FooterFade(footer, elapsed)
+	local fade = footer.fade
+	fade.elapsed = fade.elapsed + elapsed
+	if fade.phase == "out" then
+		local progress = math.min(1, fade.elapsed / TEXT_FADE_OUT)
+		footer.text:SetAlpha(fade.from * (1 - progress))
+		if progress >= 1 then
+			footer.text:SetText(fade.text)
+			fade.phase, fade.elapsed = "in", 0
+		end
+	else
+		local progress = math.min(1, fade.elapsed / TEXT_FADE_IN)
+		footer.text:SetAlpha(progress)
+		if progress >= 1 then
+			footer.fade = nil
+			footer:SetScript("OnUpdate", nil)
+		end
+	end
+end
+
+---Sets the footer text, crossfading when `animate` is true and the window is shown.
+function lib.Window:SetFooterText(text, animate)
+	local footer = self.frame and self.frame.footer
+	if not footer then
+		return
+	end
+	if footer.fade then
+		footer.fade.text = text
+		return
+	end
+	if footer.text:GetText() == text then
+		return
+	end
+	if not animate or not self.frame:IsShown() then
+		footer.text:SetText(text)
+		footer.text:SetAlpha(1)
+		return
+	end
+	footer.fade = { phase = "out", elapsed = 0, from = footer.text:GetAlpha(), text = text }
+	footer:SetScript("OnUpdate", function(frame, elapsed) Handlers.FooterFade(frame, elapsed) end)
+end
+
+---Shows a message in the footer for a few seconds, then the footer's own text again, each change crossfading.
+function lib.Window:ShowStatus(text)
+	self.statusText = text
+	self.statusToken = (self.statusToken or 0) + 1
+	local token = self.statusToken
+	self:SetFooterText(text, true)
+	C_Timer.After(STATUS_SECONDS, function()
+		if self.statusToken == token then
+			self.statusText = nil
+			self:SetFooterText(self.declaration.footer or "", true)
+		end
+	end)
+end
+
+function Handlers.Moved(window)
+	local frame = window.frame
+	frame:StopMovingOrSizing()
+	local point, _, relativePoint, x, y = frame:GetPoint(1)
+	window.position = { point, UIParent, relativePoint, x, y }
+end
+
+function Handlers.Hidden(window)
+	for _, other in pairs(lib.windows) do
+		if other:IsShown() then
+			return
+		end
+	end
+	lib.combatWatch:UnregisterEvent("PLAYER_REGEN_DISABLED")
+end
+
+-- The footer's Edit Mode button closes the window and opens the library's edit mode from this addon; leaving edit
+-- mode opens the window again.
+function Handlers.EditMode(window)
+	window:Close()
+	lib:OpenEditMode(window.addonName)
+	if lib:IsEditing() then
+		lib.session.returnTo = window
+	end
+end
+
+-- Combat closes every open window; each opens again where it was the next time.
+lib.combatWatch = lib.combatWatch or CreateFrame("Frame")
+lib.combatWatch:SetScript("OnEvent", function()
+	for _, window in pairs(lib.windows) do
+		window:Close()
+	end
+end)

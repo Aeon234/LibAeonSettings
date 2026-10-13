@@ -184,6 +184,10 @@ function lib:OpenEditMode(addonName)
 	end
 
 	session.waitingOpener = nil
+	-- Edit mode draws over the whole screen; the library's settings windows close first.
+	for _, window in pairs(self.windows or {}) do
+		window:Close()
+	end
 	session.open = true
 	session.paused = false
 	session.opener = addonName
@@ -206,6 +210,8 @@ function lib:CloseEditMode(save)
 		return
 	end
 	local pending = session.pending
+	local returnTo = session.returnTo
+	session.returnTo = nil
 	session.open = false
 	session.paused = false
 	session.pending = {}
@@ -230,6 +236,15 @@ function lib:CloseEditMode(save)
 			end
 			registration:Apply()
 		end
+	end
+
+	-- Edit mode opened from a settings window goes back to it.
+	if returnTo then
+		C_Timer.After(0, function()
+			if not InCombatLockdown() and not lib:IsEditing() then
+				returnTo:Open()
+			end
+		end)
 	end
 end
 
