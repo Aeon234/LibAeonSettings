@@ -1,5 +1,5 @@
 -- Settings windows: one per registered addon, built on first open. This file holds the registration and the
--- window shell (frame, title, close, footer, dragging, Escape, combat); pages and controls are added by later files.
+-- window shell (frame, title, close, footer, dragging, Escape, combat); the sidebar, pages and controls are added by later files.
 
 local lib = LibStub("LibAeonSettings-1.0")
 if not lib.loading then
@@ -198,11 +198,6 @@ local function Build(window)
 	sidebarRegion:SetWidth(SIDEBAR_WIDTH)
 	frame.sidebarRegion = sidebarRegion
 
-	local content = CreateFrame("Frame", nil, frame)
-	content:SetPoint("TOPLEFT", frame, "TOPLEFT", contentLeft + 20, -(INNER_TOP + 14))
-	content:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -(INNER_RIGHT + 20), INNER_BOTTOM + 12)
-	frame.content = content
-
 	-- Escape closes the window, as it does Blizzard's panels.
 	tinsert(UISpecialFrames, name)
 
@@ -371,19 +366,3 @@ lib.combatWatch:SetScript("OnEvent", function()
 		window:Close()
 	end
 end)
-
--- Until pages draw their own content, the content area shows the page's title.
-function lib.Window:ShowPage()
-	local frame = self.frame
-	local page = self.pages[self.page]
-	if not frame or not page then
-		return
-	end
-	if not frame.placeholder then
-		frame.placeholder = frame.content:CreateFontString(nil, "OVERLAY")
-		lib:SetFont(frame.placeholder, "header", 32)
-		frame.placeholder:SetTextColor(unpack(GOLD))
-		frame.placeholder:SetPoint("TOPLEFT")
-	end
-	frame.placeholder:SetText(page.title)
-end

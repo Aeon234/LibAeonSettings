@@ -74,10 +74,11 @@ function lib.Window:Divider()
 	return AddNode(self, { kind = "divider", id = "\0divider" .. self.dividers })
 end
 
-local PAGE_FIELDS = { title = true, description = true, under = true, icon = true, slot = true }
+local PAGE_FIELDS = { title = true, description = true, under = true, icon = true, slot = true, switch = true }
 
 ---Adds a page: at the top level, under a header, or under a group. `info.icon` (a file or atlas) or `info.slot`
----reserves the 16-unit icon slot before its title.
+---reserves the 16-unit icon slot before its title. `info.switch` (true, or a setting's fields such as `path` and
+---`default`) gives the page an Enabled toggle that dims the page body while off.
 ---@return table? page
 function lib.Window:Page(id, info)
 	info = info or {}
@@ -96,6 +97,7 @@ function lib.Window:Page(id, info)
 	if page then
 		self.pages[id] = page
 		table.insert(self.pageOrder, page)
+		lib:InitPage(self, page, info)
 	end
 
 	return page

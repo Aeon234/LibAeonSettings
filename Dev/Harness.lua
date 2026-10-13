@@ -116,8 +116,10 @@ end
 -- with icons), a page directly under the header, dividers and pages after them.
 function Harness:DeclarePages()
 	local window = self.settings
-	window:Page("general", { title = "General" })
-	window:Page("bar", { title = "Bar" })
+	self:DeclareGeneral(window:Page("general", { title = "General",
+		description = "A page without a switch: sections, notes, a custom row and enough lines to scroll." }))
+	self:DeclareBar(window:Page("bar", { title = "Bar", switch = { path = "bar.enabled", default = true },
+		description = "A page with a switch: turning it off dims and desaturates everything below the header." }))
 	window:Divider()
 	window:Header("modules", "Modules")
 	local groups = {
@@ -138,6 +140,65 @@ function Harness:DeclarePages()
 	window:Divider()
 	window:Page("databroker", { title = "DataBroker" })
 	window:Page("profiles", { title = "Profiles" })
+end
+
+-- W2 test page: notes, hidden halves, a custom row and a long section for the content scroll.
+function Harness:DeclareGeneral(page)
+	local intro = page:Section("intro", "Introduction")
+	intro:Note("Notes run across the section.", "A smaller second part sits under the note in the description color.")
+	intro:Toggle({ id = "extras", label = "Show Extras", path = "general.extras", default = false,
+		description = "Shows the hidden settings below." })
+	intro:Toggle({ id = "plain", label = "Plain Setting", path = "general.plain", default = true })
+	local extras = function() return Harness:Profile().general and Harness:Profile().general.extras end
+	intro:Toggle({ id = "extraLeft", label = "Extra Left (hidden half)", path = "general.extraLeft", show = extras })
+	intro:Toggle({ id = "visible", label = "Always Shown", path = "general.visible" })
+	intro:Toggle({ id = "extraA", label = "Extra A (whole line hidden)", path = "general.extraA", show = extras })
+	intro:Toggle({ id = "extraB", label = "Extra B (whole line hidden)", path = "general.extraB", show = extras })
+	intro:Toggle({ id = "after", label = "After the Hidden Line", path = "general.after" })
+
+	local custom = page:Section("custom", "Custom Rows")
+	custom:Custom({ id = "swatch", label = "Custom in a Half", width = 120, height = 24,
+		create = function(area)
+			area.texture = area:CreateTexture(nil, "ARTWORK")
+			area.texture:SetAllPoints()
+		end,
+		refresh = function(area)
+			local on = Harness:Profile().general and Harness:Profile().general.plain ~= false
+			area.texture:SetColorTexture(on and 0.62 or 0.3, on and 0.46 or 0.3, on and 0.29 or 0.3, 1)
+		end })
+	custom:Skip()
+	custom:Custom({ id = "wide", wide = true, height = 60,
+		create = function(area)
+			local background = area:CreateTexture(nil, "BACKGROUND")
+			background:SetAllPoints()
+			background:SetColorTexture(1, 1, 1, 0.05)
+			local text = area:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+			text:SetPoint("CENTER")
+			text:SetText("A wide custom row with no label: the adopter draws across the line")
+		end })
+
+	local long = page:Section("long", "A Long Section")
+	for index = 1, 24 do
+		long:Toggle({ id = "long" .. index, label = "Filler Setting " .. index, path = "general.long" .. index,
+			description = index % 5 == 0 and "Every fifth one has a description." or nil })
+	end
+end
+
+-- W2 test page: the page switch, a depends chain, blocked() and a refused save.
+function Harness:DeclareBar(page)
+	local behavior = page:Section("behavior", "Behavior")
+	behavior:Toggle({ id = "fade", label = "Fade Out", path = "bar.fade", default = false,
+		description = "The next two depend on this one, the second through the first." })
+	behavior:Toggle({ id = "fadeDelay", label = "Delay the Fade", path = "bar.fadeDelay", default = false,
+		depends = "fade" })
+	behavior:Toggle({ id = "fadeInstant", label = "Fade Instantly", path = "bar.fadeInstant", depends = "fadeDelay" })
+	behavior:Toggle({ id = "locked", label = "Locked", path = "bar.locked",
+		blocked = function() return Harness.blocked and "Blocked by the harness (/lasdev block)." end })
+	behavior:Toggle({ id = "refuses", label = "Refuses to Save", wide = true,
+		get = function() return false end,
+		set = function() return false, "The harness refuses this one." end })
+	behavior:Toggle({ id = "otherPage", label = "Follows General", path = "bar.otherPage",
+		depends = "general/plain" })
 end
 
 -- A second registration under its own name stands in for another adopting addon: its own frames, its own saved
@@ -343,6 +404,12 @@ function COMMANDS.combat(key, dx, dy)
 		tostring(InCombatLockdown()), lib:DeferredCount())
 end
 
+function COMMANDS.block()
+	Harness.blocked = not Harness.blocked
+	Print("blocked() now returns %s", Harness.blocked and "a reason" or "nothing")
+	Harness.settings:Refresh()
+end
+
 function COMMANDS.settings()
 	Harness.settings:Toggle()
 end
@@ -365,7 +432,7 @@ function COMMANDS.media()
 end
 
 function COMMANDS.help()
-	Print("/lasdev edit [second] | hide <key> | pend <key> <dx> <dy> | move | show | set <key> <POINT> <x> <y> | reset [key] | profile <name> | off <key> | scale <key> <n> | bad | media | tip | combat [key] [dx] [dy] | settings | status [text]")
+	Print("/lasdev edit [second] | hide <key> | pend <key> <dx> <dy> | move | show | set <key> <POINT> <x> <y> | reset [key] | profile <name> | off <key> | scale <key> <n> | bad | media | tip | combat [key] [dx] [dy] | settings | status [text] | block")
 end
 
 SLASH_LIBAEONSETTINGSDEV1 = "/lasdev"

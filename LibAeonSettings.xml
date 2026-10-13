@@ -16,5 +16,9 @@
 	<Script file="Source\Window.lua" />
 	<Script file="Source\Scroll.lua" />
 	<Script file="Source\Sidebar.lua" />
+	<Script file="Source\Model.lua" />
+	<Script file="Source\Toggle.lua" />
+	<Script file="Source\Custom.lua" />
+	<Script file="Source\Page.lua" />
 	<Script file="Source\Finish.lua" />
 </Ui>
