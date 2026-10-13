@@ -138,6 +138,13 @@ function lib.Scroll:JumpTo(offset)
 	self:UpdateLit()
 end
 
+---Glides to an offset (clamped to the list's range).
+function lib.Scroll:GlideTo(offset)
+	self.target = math.max(0, math.min(self:Range(), offset))
+	self.driver:Show()
+	self:UpdateLit()
+end
+
 ---Keeps a band (top and height in list units) in view, gliding the least distance needed.
 function lib.Scroll:Reveal(top, height)
 	local viewHeight = self.frame:GetHeight()

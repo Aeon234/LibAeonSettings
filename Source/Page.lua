@@ -147,7 +147,7 @@ local function ResetHalf(half)
 		half.view.frame:Hide()
 	end
 	if half.setting then
-		half.setting.boundView = nil
+		half.setting.boundView, half.setting.boundHalf = nil, nil
 	end
 	half.setting, half.view = nil, nil
 end
@@ -251,7 +251,7 @@ local function BindHalf(view, setting)
 		other.frame:SetShown(other == control)
 	end
 	half.setting, half.view = setting, control
-	setting.boundView = control
+	setting.boundView, setting.boundHalf = control, half
 	control.frame:ClearAllPoints()
 	if control.Place then
 		control:Place(half)
@@ -280,6 +280,9 @@ function lib.Window:ShowPage()
 	end
 	if view.shownPage and view.shownPage.switch then
 		view.shownPage.switch.boundView = nil
+	end
+	if view.flash then
+		view.flash:Hide()
 	end
 	ReleaseAll(view.halves)
 	ReleaseAll(view.sectionHeaders)
@@ -415,6 +418,7 @@ end
 local function PlaceHalf(half, child, left, y, width, height)
 	half:ClearAllPoints()
 	half:SetPoint("TOPLEFT", child, "TOPLEFT", left, -y)
+	half.top = y
 	half:SetSize(width, height)
 	half:SetShown(half.shown)
 	local labelWidth = math.max(MIN_LABEL, width - INSET - CONTROL_RIGHT - half.view:GetWidth() - LABEL_GAP)

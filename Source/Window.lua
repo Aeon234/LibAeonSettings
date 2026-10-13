@@ -203,6 +203,7 @@ local function Build(window)
 
 	window.frame = frame
 	window:BuildSidebar(sidebarRegion)
+	window:BuildSearch()
 	window:RefreshShell()
 
 	return frame

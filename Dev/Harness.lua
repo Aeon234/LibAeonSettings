@@ -152,7 +152,7 @@ end
 function Harness:DeclareGeneral(page)
 	local intro = page:Section("intro", "Introduction")
 	intro:Note("Notes run across the section.", "A smaller second part sits under the note in the description color.")
-	intro:Checkbox({ id = "extras", label = "Show Extras", path = "general.extras", default = false,
+	intro:Checkbox({ id = "extras", label = "Show Extras", path = "general.extras", default = false, keywords = "reveal hidden",
 		description = "Shows the hidden settings below." })
 	intro:Checkbox({ id = "plain", label = "Plain Setting", path = "general.plain", default = true })
 	local extras = function() return Harness:Profile().general and Harness:Profile().general.extras end
@@ -387,7 +387,7 @@ function Harness:DeclareControls(page)
 	buttons:Button({ id = "fail", label = "Failing Action", verb = "Reset Position",
 		run = function() return false, "The harness frame is missing." end })
 
-	local colors = page:Section("colors", "Colors")
+	local colors = page:Section("colors", "Colors & Swatches")
 	colors:Color({ id = "textColor", label = "Text Color", path = "controls.textColor",
 		default = { r = 1, g = 0.82, b = 0 }, classColor = { path = "controls.textClass", default = false } })
 	colors:Color({ id = "background", label = "Background", path = "controls.background", hasOpacity = true,

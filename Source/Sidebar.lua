@@ -37,6 +37,7 @@ local function AddNode(window, node)
 	window.nodes[node.id] = node
 	table.insert(window.nav, node)
 	window.navChanged = true
+	window.searchIndex = nil
 
 	return node
 end
