@@ -10,6 +10,8 @@ local L = lib.L
 local WINDOW_WIDTH = 240
 local ROW_HEIGHT = 28
 local PADDING = 10
+local SOUND_ON = SOUNDKIT and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON
+local SOUND_OFF = SOUNDKIT and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_OFF
 
 local Handlers = {}
 lib.AddonsWindowHandlers = Handlers
@@ -87,6 +89,7 @@ local function Row(window, index)
 end
 
 function Handlers.Click(check)
+	PlaySound(check:GetChecked() and SOUND_ON or SOUND_OFF)
 	lib:SetAddonShown(check.addonName, check:GetChecked())
 	lib:RefreshAddonsWindow()
 end
@@ -135,6 +138,12 @@ function lib:ToggleAddonsWindow()
 	window:SetPoint("TOP", ui.toolbar.addons, "BOTTOM", 0, -12)
 	window:Show()
 	self:RefreshAddonsWindow()
+end
+
+function lib:IsAddonsWindowShown()
+	local window = self.ui and self.ui.addonsWindow
+
+	return window ~= nil and window:IsShown()
 end
 
 ---Closes the Addons window. Returns true when it was open.

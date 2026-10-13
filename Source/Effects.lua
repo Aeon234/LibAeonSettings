@@ -1,4 +1,4 @@
--- Edit mode's presentation: the opening sequence and emblem, Hover Top Bar, the Shift fade and the first-time tip.
+-- Edit mode's presentation: the opening sequence, Hover Top Bar, the Shift fade and the first-time tip.
 -- Animations use animation groups; OnUpdate runs only for the toolbar's slide and while Hover Top Bar is on.
 
 local lib = LibStub("LibAeonSettings-1.0")
@@ -8,9 +8,6 @@ end
 
 local L = lib.L
 
-local EMBLEM_SIZE = 112
-local EMBLEM_OFFSET_Y = 60
-local CORNER_SPREAD = 11
 local HOVER_BAR_ZONE = 60    -- UI units around the toolbar within which Hover Top Bar shows it
 local HOVER_BAR_SPEED = 4    -- alpha per second
 local SHIFT_FADE = 0.15
@@ -21,10 +18,6 @@ local TIP_DELAY = 0.7            -- seconds into the opening sequence, as the to
 local Handlers = {}
 lib.EffectHandlers = Handlers
 
-local function Texture(name)
-	return lib.mediaPath .. "Textures\\" .. name
-end
-
 local function Alpha(group, from, to, duration, delay, order)
 	local animation = group:CreateAnimation("Alpha")
 	animation:SetFromAlpha(from)
@@ -34,83 +27,6 @@ local function Alpha(group, from, to, duration, delay, order)
 	animation:SetOrder(order or 1)
 
 	return animation
-end
-
-local function Translation(group, x, y, duration, delay, order, smoothing)
-	local animation = group:CreateAnimation("Translation")
-	animation:SetOffset(x, y)
-	animation:SetDuration(duration)
-	animation:SetStartDelay(delay or 0)
-	animation:SetOrder(order or 1)
-	if smoothing then
-		animation:SetSmoothing(smoothing)
-	end
-
-	return animation
-end
-
--- Emblem -------------------------------------------------------------------------------------------------------
-
--- Four bronze corners open around three layout tiles while a shine crosses them, then the emblem fades.
-local CORNERS = {
-	{ "TOPLEFT", -1, 1, 0, 1, 0, 1 },
-	{ "TOPRIGHT", 1, 1, 1, 0, 0, 1 },
-	{ "BOTTOMLEFT", -1, -1, 0, 1, 1, 0 },
-	{ "BOTTOMRIGHT", 1, -1, 1, 0, 1, 0 },
-}
-
-local function BuildEmblem()
-	local emblem = CreateFrame("Frame", nil, UIParent)
-	emblem:SetFrameStrata("FULLSCREEN_DIALOG")
-	emblem:SetSize(EMBLEM_SIZE, EMBLEM_SIZE)
-	emblem:SetPoint("CENTER", UIParent, "CENTER", 0, EMBLEM_OFFSET_Y)
-	emblem:Hide()
-	local unit = EMBLEM_SIZE / 128
-
-	emblem.corners = {}
-	for _, corner in ipairs(CORNERS) do
-		local point, dx, dy, left, right, top, bottom = unpack(corner)
-		local texture = emblem:CreateTexture(nil, "ARTWORK")
-		texture:SetTexture(Texture("emblem-corner"))
-		texture:SetTexCoord(left, right, top, bottom)
-		texture:SetSize(64 * unit, 64 * unit)
-		texture:SetPoint(point)
-		local group = texture:CreateAnimationGroup()
-		Translation(group, dx * CORNER_SPREAD, dy * CORNER_SPREAD, 0.9, 0.2, 1, "OUT")
-		Translation(group, 0, 0, 2.2, 0, 2) -- holds the corners open until the emblem has faded
-		texture.open = group
-		table.insert(emblem.corners, texture)
-	end
-	local function Tile(name, x, y, width, height)
-		local texture = emblem:CreateTexture(nil, "ARTWORK", nil, 1)
-		texture:SetTexture(Texture(name))
-		texture:SetSize(width * unit, height * unit)
-		texture:SetPoint("TOPLEFT", x * unit, -y * unit)
-	end
-	Tile("emblem-tile-h", 22, 24, 50, 25)
-	Tile("emblem-tile-h", 22, 54, 50, 25)
-	Tile("emblem-tile-v", 76, 24, 27, 55)
-
-	local shine = emblem:CreateTexture(nil, "OVERLAY")
-	shine:SetTexture(Texture("emblem-shine"))
-	shine:SetBlendMode("ADD")
-	shine:SetSize(128 * unit, 16 * unit)
-	shine:SetPoint("CENTER", -60 * unit, 0)
-	shine:SetRotation(math.rad(-30))
-	shine:SetAlpha(0)
-	local shineGroup = shine:CreateAnimationGroup()
-	Alpha(shineGroup, 0, 1, 0.28, 0.4, 1)
-	Translation(shineGroup, 120 * unit, 0, 0.7, 0.4, 1)
-	Alpha(shineGroup, 1, 0, 0.42, 0, 2)
-	emblem.shine = shineGroup
-
-	local fade = emblem:CreateAnimationGroup()
-	Alpha(fade, 1, 1, 1.2, 0, 1)
-	Alpha(fade, 1, 0, 2, 0, 2)
-	fade:SetScript("OnFinished", function() emblem:Hide() end)
-	emblem.fade = fade
-
-	return emblem
 end
 
 -- Opening ------------------------------------------------------------------------------------------------------
@@ -162,8 +78,8 @@ function lib:PrepareOpening()
 	ApplyOpening(ui, 0)
 end
 
----Plays the opening sequence: the tint and grid fade in, the toolbar slides down as it fades in,
----the emblem opens and the movers fade in.
+---Plays the opening sequence: the tint and grid fade in, the toolbar slides down as it fades in and the movers
+---fade in.
 function lib:PlayOpening()
 	local ui = self.ui
 	C_Timer.After(TIP_DELAY, function()
@@ -178,27 +94,6 @@ function lib:PlayOpening()
 	end
 	ui.openingDriver.elapsed = 0
 	ui.openingDriver:Show()
-
-	ui.emblem = ui.emblem or BuildEmblem()
-	local emblem = ui.emblem
-	emblem:SetAlpha(1)
-	emblem:Show()
-	for _, corner in ipairs(emblem.corners) do
-		corner.open:Stop()
-		corner.open:Play()
-	end
-	emblem.shine:Stop()
-	emblem.shine:Play()
-	emblem.fade:Stop()
-	emblem.fade:Play()
-end
-
-function lib:HideEmblem()
-	local emblem = self.ui and self.ui.emblem
-	if emblem then
-		emblem.fade:Stop()
-		emblem:Hide()
-	end
 end
 
 ---Ends the opening sequence at once, everything in its final state.

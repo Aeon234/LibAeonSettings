@@ -24,6 +24,9 @@ local GRID_MODES = { DIMMED = "BRIGHT", BRIGHT = "OFF", OFF = "DIMMED" }
 local GRID_LABELS = { DIMMED = L.DIMMED, BRIGHT = L.BRIGHT, OFF = L.OFF }
 local ICON_ON, ICON_OFF = { 1, 0.82, 0 }, { 0.62, 0.62, 0.62 }
 local ICON_ALPHA_ON, ICON_ALPHA_OFF, ICON_ALPHA_HOVER = 0.8, 0.45, 1
+-- Q151: clicks in edit mode use the checkbox sounds, off when a toggle turns off.
+local SOUND_ON = SOUNDKIT and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON
+local SOUND_OFF = SOUNDKIT and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_OFF
 
 -- Every script calls through the library at run time, so a newer copy's code runs on frames an older copy built.
 local Handlers = {}
@@ -119,7 +122,7 @@ local function PaintToggle(toggle, on, label, hovered)
 	toggle.state:SetTextColor(unpack(on and ICON_ON or ICON_OFF))
 end
 
-local function CreateToggle(toolbar, name, iconName, onClick, tooltip)
+local function CreateToggle(toolbar, name, iconName, onClick, tooltip, isOn)
 	local toggle = CreateFrame("Button", nil, toolbar)
 	toggle:SetHeight(TOGGLE_HEIGHT)
 	toggle.iconOn, toggle.iconOff = "icon-" .. iconName .. "-on", "icon-" .. iconName .. "-off"
@@ -136,12 +139,14 @@ local function CreateToggle(toolbar, name, iconName, onClick, tooltip)
 	toggle:SetScript("OnLeave", function(self) Handlers.ToggleHover(self, false) end)
 	toggle.onClick = onClick
 	toggle.tooltip = tooltip
+	toggle.isOn = isOn
 
 	return toggle
 end
 
 function Handlers.ToggleClick(toggle)
 	toggle.onClick()
+	PlaySound((not toggle.isOn or toggle.isOn()) and SOUND_ON or SOUND_OFF)
 	lib:RefreshToolbar()
 end
 
@@ -202,28 +207,30 @@ local function CreateToolbar()
 	toolbar.grid = CreateToggle(toolbar, L.GRID_LINES, "grid", function()
 		lib:SetPreference("grid", GRID_MODES[lib:GetPreference("grid")] or "DIMMED")
 		lib:RefreshGrid()
-	end, L.TIP_GRID)
+	end, L.TIP_GRID, function() return lib:GetPreference("grid") ~= "OFF" end)
 	toolbar.fill = CreateToggle(toolbar, L.MOVER_FILL, "dark-overlays", function()
 		lib:SetPreference("fill", not lib:GetPreference("fill"))
 		lib:RefreshMovers()
-	end, L.TIP_FILL)
+	end, L.TIP_FILL, function() return lib:GetPreference("fill") end)
 	toolbar.snap = CreateToggle(toolbar, L.SNAP_ELEMENTS, "snap", function()
 		lib:SetPreference("snap", not lib:GetPreference("snap"))
-	end, L.TIP_SNAP)
+	end, L.TIP_SNAP, function() return lib:GetPreference("snap") end)
 	toolbar.coordinates = CreateToggle(toolbar, L.COORDINATES, "coordinates", function()
 		lib:SetPreference("coordinates", not lib:GetPreference("coordinates"))
 		lib:RefreshMovers()
-	end, L.TIP_COORDINATES)
+	end, L.TIP_COORDINATES, function() return lib:GetPreference("coordinates") end)
 	toolbar.hoverBar = CreateToggle(toolbar, L.HOVER_TOP_BAR, "hover-top-bar", function()
 		lib:SetPreference("hoverBar", not lib:GetPreference("hoverBar"))
 		lib:RefreshEffects()
-	end, L.TIP_HOVER_TOP_BAR)
-	toolbar.addons = CreateToggle(toolbar, L.ADDONS, "addons", function() lib:ToggleAddonsWindow() end, L.TIP_ADDONS)
+	end, L.TIP_HOVER_TOP_BAR, function() return lib:GetPreference("hoverBar") end)
+	toolbar.addons = CreateToggle(toolbar, L.ADDONS, "addons", function() lib:ToggleAddonsWindow() end, L.TIP_ADDONS,
+		function() return lib:IsAddonsWindowShown() end)
 	toolbar.toggles = { toolbar.grid, toolbar.fill, toolbar.snap, toolbar.coordinates,
 		toolbar.hoverBar, toolbar.addons }
 
 	-- Toolbar scale, 100 to 150 percent in steps of 10.
 	local function Scale(delta)
+		PlaySound(SOUND_ON)
 		local scale = lib:GetPreference("toolbarScale") or SCALE_MIN
 		scale = math.max(SCALE_MIN, math.min(SCALE_MAX, Round((scale + delta) * 10) / 10))
 		lib:SetPreference("toolbarScale", scale)
@@ -509,7 +516,6 @@ function lib:HideEditUI()
 		return
 	end
 	self:StopOpening()
-	self:HideEmblem()
 	self:HideFirstTip()
 	self:WatchShift(false)
 	self.ui.screen:Hide()

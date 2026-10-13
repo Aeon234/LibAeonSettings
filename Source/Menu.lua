@@ -11,6 +11,7 @@ local PADDING = 8
 -- Blizzard's own menu art: the row highlight and the submenu arrow of its dropdown menus.
 local ROW_HIGHLIGHT = "Interface\\QuestFrame\\UI-QuestTitleHighlight"
 local SUBMENU_ARROW = "Interface\\ChatFrame\\ChatFrameExpandArrow"
+local CLICK_SOUND = SOUNDKIT and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON -- Q151
 local BORDER_OUTSET = 3     -- the frame art reaches this far outside the panel
 local PANEL_FILL = { 0.122, 0.118, 0.129, 0.92 }
 local PANEL_BORDER = { 0.52, 0.41, 0.32 }
@@ -68,23 +69,44 @@ local function CreatePanel()
 	return panel
 end
 
+-- Puts every row back in the panel's pool; the next build takes them again before making new ones.
 local function ClearRows(panel)
+	-- A panel made by an older copy of the library has no pool, and its rows no kind: those rows are left hidden.
+	panel.free = panel.free or { hint = {}, separator = {}, action = {}, number = {} }
 	for _, row in ipairs(panel.rows) do
 		row:Hide()
+		row:ClearAllPoints()
+		if row.kind then
+			table.insert(panel.free[row.kind], row)
+		end
 	end
-	panel.rows = {}
+	wipe(panel.rows)
 	panel.height = PADDING
 end
 
-local function NewRow(panel, height)
-	local row = CreateFrame("Button", nil, panel)
+-- A row of `kind`, from the pool or made by `create(row)` the first time, placed below the rows before it.
+local function NewRow(panel, kind, height, create)
+	local row = table.remove(panel.free[kind])
+	if not row then
+		row = CreateFrame("Button", nil, panel)
+		row.kind = kind
+		create(row)
+	end
 	row:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, -panel.height)
 	row:SetPoint("RIGHT", panel, "RIGHT", 0, 0)
 	row:SetHeight(height)
+	row:Show()
 	panel.height = panel.height + height
 	table.insert(panel.rows, row)
 
 	return row
+end
+
+-- What a reused row must not keep from its last use.
+local function ResetScripts(row)
+	row:SetScript("OnEnter", nil)
+	row:SetScript("OnLeave", nil)
+	row:SetScript("OnClick", nil)
 end
 
 ---@class LibAeonSettingsMenuBuilder
@@ -92,82 +114,84 @@ local Builder = {}
 local builderMeta = { __index = Builder }
 
 function Builder:Hint(text)
-	local row = NewRow(self.panel, 10)
-	local label = row:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-	label:SetPoint("TOPLEFT", 10, 0)
-	label:SetPoint("RIGHT", -10, 0)
-	label:SetJustifyH("LEFT")
-	label:SetText(text)
-	row:SetHeight(label:GetStringHeight() + 8)
+	local row = NewRow(self.panel, "hint", 10, function(row)
+		row.label = row:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+		row.label:SetPoint("TOPLEFT", 10, 0)
+		row.label:SetPoint("RIGHT", -10, 0)
+		row.label:SetJustifyH("LEFT")
+	end)
+	row.label:SetText(text)
+	row:SetHeight(row.label:GetStringHeight() + 8)
 	self.panel.height = self.panel.height - 10 + row:GetHeight()
 end
 
 function Builder:Separator()
-	local row = NewRow(self.panel, 7)
-	local line = row:CreateTexture(nil, "ARTWORK")
-	line:SetColorTexture(0.62, 0.46, 0.29, 0.5)
-	line:SetHeight(1)
-	line:SetPoint("LEFT", 8, 0)
-	line:SetPoint("RIGHT", -8, 0)
+	NewRow(self.panel, "separator", 7, function(row)
+		local line = row:CreateTexture(nil, "ARTWORK")
+		line:SetColorTexture(0.62, 0.46, 0.29, 0.5)
+		line:SetHeight(1)
+		line:SetPoint("LEFT", 8, 0)
+		line:SetPoint("RIGHT", -8, 0)
+	end)
+end
+
+local function CreateActionRow(row)
+	row.label = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+	row.label:SetPoint("LEFT", 10, 0)
+	row.arrow = row:CreateTexture(nil, "ARTWORK")
+	row.arrow:SetSize(16, 16)
+	row.arrow:SetPoint("RIGHT", -6, 0)
+	row.arrow:SetTexture(SUBMENU_ARROW)
+	row.hover = row:CreateTexture(nil, "BACKGROUND")
+	row.hover:SetPoint("TOPLEFT", 2, 0)
+	row.hover:SetPoint("BOTTOMRIGHT", -2, 0)
+	row.hover:SetTexture(ROW_HIGHLIGHT)
+	row.hover:SetBlendMode("ADD")
+end
+
+-- Fills an action row (also the label of a number row).
+local function FillAction(row, text, onClick, options)
+	options = options or {}
+	ResetScripts(row)
+	-- The font object's own color too: a caller may have recolored this label the last time it was used.
+	local font = onClick and GameFontHighlight or GameFontDisable
+	row.label:SetFontObject(font)
+	row.label:SetTextColor(font:GetTextColor())
+	row.label:SetText(text)
+	if options.color then
+		row.label:SetTextColor(unpack(options.color))
+	end
+	row.arrow:SetShown(options.arrow and true or false)
+	row.hover:Hide()
+	if onClick then
+		local hover = row.hover
+		row:SetScript("OnEnter", function(self) hover:Show(); if options.onEnter then options.onEnter(self) end end)
+		row:SetScript("OnLeave", function(self) hover:Hide(); if options.onLeave then options.onLeave(self) end end)
+		row:SetScript("OnClick", function(self) PlaySound(CLICK_SOUND); onClick(self) end)
+	end
 end
 
 ---A row of text; `onClick` makes it an action. `options.color` colors it; `options.arrow` marks a flyout.
 function Builder:Action(text, onClick, options)
-	options = options or {}
-	local row = NewRow(self.panel, ROW_HEIGHT)
-	local label = row:CreateFontString(nil, "OVERLAY", onClick and "GameFontHighlight" or "GameFontDisable")
-	label:SetPoint("LEFT", 10, 0)
-	label:SetText(text)
-	if options.color then
-		label:SetTextColor(unpack(options.color))
-	end
-	if options.arrow then
-		local arrow = row:CreateTexture(nil, "ARTWORK")
-		arrow:SetSize(16, 16)
-		arrow:SetPoint("RIGHT", -6, 0)
-		arrow:SetTexture(SUBMENU_ARROW)
-	end
-	if onClick then
-		local hover = row:CreateTexture(nil, "BACKGROUND")
-		hover:SetPoint("TOPLEFT", 2, 0)
-		hover:SetPoint("BOTTOMRIGHT", -2, 0)
-		hover:SetTexture(ROW_HIGHLIGHT)
-		hover:SetBlendMode("ADD")
-		hover:Hide()
-		row:SetScript("OnEnter", function(self) hover:Show(); if options.onEnter then options.onEnter(self) end end)
-		row:SetScript("OnLeave", function(self) hover:Hide(); if options.onLeave then options.onLeave(self) end end)
-		row:SetScript("OnClick", function(self) onClick(self) end)
-	end
+	local row = NewRow(self.panel, "action", ROW_HEIGHT, CreateActionRow)
+	FillAction(row, text, onClick, options)
 
-	return row, label
+	return row, row.label
 end
 
----A labeled number box: Enter applies the typed value, Escape restores the shown one.
-function Builder:Number(text, value, onSet, disabledReason)
-	local row, label = self:Action(text)
-	label:SetFontObject(disabledReason and "GameFontDisable" or "GameFontHighlight")
+local function CreateNumberRow(row)
+	CreateActionRow(row)
 	local box = CreateFrame("EditBox", nil, row, "InputBoxTemplate")
 	box:SetSize(64, 18)
 	box:SetPoint("RIGHT", -10, 0)
 	box:SetAutoFocus(false)
 	box:SetJustifyH("CENTER")
 	box:SetTextInsets(0, 5, 0, 0) -- the template's border starts 5 units left of the box and ends at its right edge
-	box:SetText(tostring(value))
-	box.value = value
-	if disabledReason then
-		box:Disable()
-		row:SetScript("OnEnter", function(self)
-			GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-			GameTooltip:SetText(disabledReason, 1, 1, 1, 1, true)
-			GameTooltip:Show()
-		end)
-		row:SetScript("OnLeave", function() GameTooltip:Hide() end)
-	end
 	box:SetScript("OnEnterPressed", function(self)
 		local number = tonumber(self:GetText())
 		self:ClearFocus()
-		if number then
-			onSet(number)
+		if number and self.onSet then
+			self.onSet(number)
 		else
 			self:SetText(tostring(self.value))
 		end
@@ -176,6 +200,29 @@ function Builder:Number(text, value, onSet, disabledReason)
 		self:SetText(tostring(self.value))
 		self:ClearFocus()
 	end)
+	row.box = box
+end
+
+---A labeled number box: Enter applies the typed value, Escape restores the shown one.
+function Builder:Number(text, value, onSet, disabledReason)
+	local row = NewRow(self.panel, "number", ROW_HEIGHT, CreateNumberRow)
+	FillAction(row, text)
+	local font = disabledReason and GameFontDisable or GameFontHighlight
+	row.label:SetFontObject(font)
+	row.label:SetTextColor(font:GetTextColor())
+	local box = row.box
+	box:ClearFocus()
+	box:SetText(tostring(value))
+	box.value, box.onSet = value, onSet
+	box:SetEnabled(not disabledReason)
+	if disabledReason then
+		row:SetScript("OnEnter", function(self)
+			GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+			GameTooltip:SetText(disabledReason, 1, 1, 1, 1, true)
+			GameTooltip:Show()
+		end)
+		row:SetScript("OnLeave", function() GameTooltip:Hide() end)
+	end
 
 	return box
 end

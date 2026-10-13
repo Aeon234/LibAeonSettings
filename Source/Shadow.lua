@@ -1,7 +1,7 @@
 -- Shadows: a soft glow outside a frame, for an addon's own frames and Blizzard's (decided 2026-10-13, from ElvUI
--- WindTools' shadows). Two ways of drawing it are kept for comparison in game: "textures", eight edge textures made
--- directly (the default), and "backdrop", WindTools' way, a BackdropTemplate frame whose edge file is the glow. A
--- round frame takes the round glow. The module keeps its own weak-keyed table of shadows: it writes nothing into
+-- WindTools' shadows), drawn as eight edge textures made directly. WindTools' way, a BackdropTemplate frame whose edge
+-- file is the glow, was built beside it for comparison and removed (Alex, 2026-10-13): the backdrop runs Lua on every
+-- resize, Retail's needs a patch ElvUI applies, and it cannot leave out a side. A round frame takes the round glow. The module keeps its own weak-keyed table of shadows: it writes nothing into
 -- the frames it shadows and hooks none of them, so it does not follow their border colors or frame levels.
 -- `below` puts a shadow one level under its frame, as WindTools' lower shadow does for rows of closely spaced
 -- buttons and bars (action buttons, the micro menu, cooldown and timer bars): no glow draws over a neighbor, and the
@@ -19,8 +19,7 @@ local GLOW = lib.mediaPath .. "Textures\\shadow-glow"   -- Alex's GlowTex.tga: 1
 local ROUND = lib.mediaPath .. "Textures\\shadow-round" -- the same glow as a ring, matched at the 198-unit minimap
 local DEFAULT_SIZE = 4
 lib.SHADOW_COLOR = { 0, 0, 0, 0.618 } -- WindTools' black at its border alpha
-local STYLES = { textures = true, backdrop = true }
-local OPTION_FIELDS = { size = true, color = true, round = true, style = true, below = true, extend = true, shape = true }
+local OPTION_FIELDS = { size = true, color = true, round = true, below = true, extend = true, shape = true }
 
 -- Shaped glows for Blizzard art that is not a rectangle (Dev/make_shadow_shapes.py, from Blizzard's art exported at 2x,
 -- half a unit per texel), with the same glow profile as the square shadow.
@@ -188,7 +187,7 @@ local function BuildRound(shadow)
 	shadow.ring = ring
 end
 
--- Makes (or remakes, when the style or shape changed) the shadow's frame around its region.
+-- Makes (or remakes, when the shape changed) the shadow's frame around its region.
 local function Build(shadow)
 	local host = Host(shadow.region)
 	if shadow.frame then
@@ -196,10 +195,9 @@ local function Build(shadow)
 		shadow.frame:SetParent(nil)
 	end
 	shadow.pieces, shadow.ring = nil, nil
-	local template = shadow.style == "backdrop" and not shadow.round and not shadow.shape and "BackdropTemplate" or nil
-	local frame = CreateFrame("Frame", nil, host, template)
+	local frame = CreateFrame("Frame", nil, host)
 	shadow.frame = frame
-	shadow.built = { style = shadow.style, round = shadow.round, shape = shadow.shape,
+	shadow.built = { round = shadow.round, shape = shadow.shape,
 		shapeSize = shadow.shape and ShapeSize(shadow.size) }
 	if shadow.shape == "frame" then
 		BuildFrameShape(shadow)
@@ -207,7 +205,7 @@ local function Build(shadow)
 		BuildTabShape(shadow)
 	elseif shadow.round then
 		BuildRound(shadow)
-	elseif shadow.style == "textures" then
+	else
 		BuildTextures(shadow)
 	end
 end
@@ -224,7 +222,7 @@ end
 -- under the region's edge), both on whole pixels.
 local function Draw(shadow)
 	local built = shadow.built
-	if not shadow.frame or built.style ~= shadow.style or built.round ~= shadow.round or built.shape ~= shadow.shape
+	if not shadow.frame or built.round ~= shadow.round or built.shape ~= shadow.shape
 		or (shadow.shape and built.shapeSize ~= ShapeSize(shadow.size)) then
 		Build(shadow)
 	end
@@ -249,7 +247,7 @@ local function Draw(shadow)
 		end
 	elseif shadow.round then
 		shadow.ring:SetVertexColor(r, g, b, a)
-	elseif shadow.style == "textures" then
+	else
 		for name, piece in pairs(shadow.pieces) do
 			if name == "Top" or name == "Bottom" then
 				piece:SetHeight(edge)
@@ -260,9 +258,6 @@ local function Draw(shadow)
 			end
 			piece:SetVertexColor(r, g, b, a)
 		end
-	else
-		frame:SetBackdrop({ edgeFile = GLOW, edgeSize = edge })
-		frame:SetBackdropBorderColor(r, g, b, a)
 	end
 	frame:SetShown(shadow.shown)
 end
@@ -278,9 +273,6 @@ local function Apply(shadow, options)
 	end
 	if options.round ~= nil then
 		shadow.round = options.round and true or false
-	end
-	if options.style ~= nil then
-		shadow.style = STYLES[options.style] and options.style or shadow.style
 	end
 	if options.below ~= nil then
 		shadow.below = options.below and true or false
@@ -309,15 +301,15 @@ end
 
 ---Gives a frame (or a texture, around which its parent frame's shadow is placed) a shadow, or updates its
 ---shadow. Options: `size` (units outside the frame, default 4), `color` ({ r, g, b, a }, default black at 0.618;
----the caller may pass a border color), `round` (the round glow, matched at Blizzard's 198-unit minimap), `style`
----("textures", the default, or "backdrop"), `below` (one level under the frame, for rows of closely spaced buttons
+---the caller may pass a border color), `round` (the round glow, matched at Blizzard's 198-unit minimap), `below`
+---(one level under the frame, for rows of closely spaced buttons
 ---or bars; call `Restack` if the frame was at level 0 and has been raised). A protected frame in combat gets its
 ---shadow when combat ends. `extend` ({ left?, top?, right?, bottom? }) moves sides further out (negative: in) for art
 ---that reaches past the frame. `shape` draws a shaped glow instead of the square one: "frame" (a frame drawn with
 ---Blizzard's metal NineSlice, ring and chamfers included: each known piece gets its own glow), "sidetab" (a side tab,
 ---around its art), or true (the frame's NineSlice). A shape takes the nearest of the sizes it is built in (2, 4, 6, 8,
 ---10); `extend` does not apply to it.
----@return table? shadow with Show, Hide, SetShown, SetColor, SetSize, SetStyle, SetBelow, Restack
+---@return table? shadow with Show, Hide, SetShown, SetColor, SetSize, SetBelow, Restack
 function lib:AddShadow(region, options)
 	options = options or {}
 	if type(region) ~= "table" or type(region.GetObjectType) ~= "function" then
@@ -343,9 +335,6 @@ function lib:AddShadow(region, options)
 			end
 		end
 	end
-	if options.style ~= nil and not STYLES[options.style] then
-		Report(("AddShadow: style must be \"textures\" or \"backdrop\", not %q"):format(tostring(options.style)))
-	end
 	if not Host(region) then
 		Report("AddShadow: the region has no parent frame")
 		return
@@ -353,7 +342,7 @@ function lib:AddShadow(region, options)
 	local shadow = self.shadows[region]
 	if not shadow then
 		shadow = setmetatable({ region = region, size = DEFAULT_SIZE, color = { unpack(self.SHADOW_COLOR) },
-			round = false, style = "textures", below = false, shown = true }, shadowMeta)
+			round = false, below = false, shown = true }, shadowMeta)
 		self.shadows[region] = shadow
 	end
 	Apply(shadow, options)
@@ -472,16 +461,6 @@ end
 
 function lib.Shadow:SetSize(size)
 	self.size = tonumber(size) or DEFAULT_SIZE
-	self:Refresh()
-end
-
----"textures" or "backdrop", for comparing the two in game.
-function lib.Shadow:SetStyle(style)
-	if not STYLES[style] then
-		Report(("SetStyle: style must be \"textures\" or \"backdrop\", not %q"):format(tostring(style)))
-		return
-	end
-	self.style = style
 	self:Refresh()
 end
 

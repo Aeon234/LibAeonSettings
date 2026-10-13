@@ -731,13 +731,149 @@ function COMMANDS.combat(key, dx, dy)
 		tostring(InCombatLockdown()), lib:DeferredCount())
 end
 
+-- The sound round: plays a sound kit by its SOUNDKIT name or number, on the Master channel as EllesmereUI's unlock
+-- sound plays, to audition candidates for the edit mode's sounds.
+function COMMANDS.sound(which)
+	local kit = which and (tonumber(which) or SOUNDKIT[which:upper()])
+	if not kit then
+		Print("usage: /lasdev sound <SOUNDKIT name or number>, e.g. UI_DRAGONRIDING_FULL_NODE or 856")
+		return
+	end
+	PlaySound(kit, "Master")
+	Print("played %s (%d)", which, kit)
+end
+
+-- Icon pass: every atlas and file the library draws, checked in this client, and its own art laid out on one sheet.
+local ICON_ATLASES = {
+	"checkbox-minimal", "common-button-list-small-selected", "common-icon-undo", "common-radiobutton-circle",
+	"common-radiobutton-dot", "common-search-magnifyingglass", "common-sidetab", "Options_HorizontalDivider",
+	"Options_InnerFrame",
+}
+for _, prefix in ipairs({ "Options_Tab_", "Options_Tab_Active_" }) do
+	for _, part in ipairs({ "Left", "Middle", "Right" }) do
+		table.insert(ICON_ATLASES, prefix .. part)
+	end
+end
+for _, kit in ipairs({ "editmode-actionbar-highlight", "editmode-actionbar-selected" }) do
+	for _, piece in ipairs({ "%s-NineSlice-Corner", "_%s-NineSlice-EdgeTop", "_%s-NineSlice-EdgeBottom",
+		"!%s-NineSlice-EdgeLeft", "!%s-NineSlice-EdgeRight", "%s-NineSlice-Center" }) do
+		table.insert(ICON_ATLASES, piece:format(kit))
+	end
+end
+-- The metal pieces the frame shadows recognize (they are only compared, never drawn).
+for _, piece in ipairs({ "ui-frame-metal-cornertopleft", "ui-frame-portraitmetal-cornertopleft",
+	"ui-frame-portraitmetal-cornertopleftsmall", "ui-frame-metal-cornertopright", "ui-frame-metal-cornertoprightdouble",
+	"ui-frame-metal-cornerbottomleft", "ui-frame-metal-cornerbottomright", "_ui-frame-metal-edgetop",
+	"_ui-frame-metal-edgebottom", "!ui-frame-metal-edgeleft", "!ui-frame-metal-edgeright" }) do
+	table.insert(ICON_ATLASES, piece)
+end
+local ICON_FILES = {
+	"Interface\\QuestFrame\\UI-QuestTitleHighlight", "Interface\\ChatFrame\\ChatFrameExpandArrow",
+	"Interface\\Buttons\\WHITE8X8",
+}
+-- The library's own art, as shown on the sheet.
+local ICON_MEDIA = {
+	{ "icon-grid-on" }, { "icon-grid-off" }, { "icon-dark-overlays-on" }, { "icon-dark-overlays-off" },
+	{ "icon-snap-on" }, { "icon-snap-off" }, { "icon-coordinates-on" }, { "icon-coordinates-off" },
+	{ "icon-hover-top-bar-on" }, { "icon-hover-top-bar-off" }, { "icon-addons-on" }, { "icon-addons-off" },
+	{ "icon-cog-on" }, { "chevron" }, { "override-diamond" }, { "nav-hover" },
+	{ "swatch-checker" }, { "toggle-track" }, { "search-box" }, { "search-box-focus" }, { "mover-fill" },
+	{ "mover-frame" }, { "anchor-line" }, { "pulse" }, { "shadow-glow" }, { "shadow-round" },
+}
+for _, size in ipairs({ 2, 4, 6, 8, 10 }) do
+	for _, piece in ipairs({ "cornertopleft", "portraitcornertopleft", "portraitcornertopleftsmall", "cornertopright",
+		"cornertoprightdouble", "cornerbottomleft", "cornerbottomright", "edgetop", "edgebottom", "edgeleft", "edgeright" }) do
+		table.insert(ICON_MEDIA, { ("shadow-metal-%s-%d"):format(piece, size), nil, true })
+	end
+	table.insert(ICON_MEDIA, { ("shadow-shape-sidetab-%d"):format(size), nil, true })
+	table.insert(ICON_MEDIA, { ("shadow-shape-sidetab-retail-%d"):format(size), nil, true })
+end
+
+local function IconSheet()
+	if Harness.iconSheet then
+		return Harness.iconSheet
+	end
+	local sheet = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
+	sheet:SetFrameStrata("DIALOG")
+	sheet:SetPoint("CENTER")
+	sheet:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
+	sheet:SetBackdropColor(0.08, 0.07, 0.06, 0.95)
+	sheet:SetBackdropBorderColor(0.52, 0.41, 0.32)
+	sheet:EnableMouse(true)
+	sheet:SetMovable(true)
+	sheet:RegisterForDrag("LeftButton")
+	sheet:SetScript("OnDragStart", sheet.StartMoving)
+	sheet:SetScript("OnDragStop", sheet.StopMovingOrSizing)
+	local close = CreateFrame("Button", nil, sheet, "UIPanelCloseButton")
+	close:SetPoint("TOPRIGHT", 2, 2)
+	local title = sheet:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+	title:SetPoint("TOPLEFT", 12, -10)
+	title:SetText("LibAeonSettings art")
+	local columns, cell, gap = 6, 96, 6
+	local index = 0
+	for _, entry in ipairs(ICON_MEDIA) do
+		if not entry[3] then
+			local column, row = index % columns, math.floor(index / columns)
+			index = index + 1
+			local swatch = sheet:CreateTexture(nil, "BACKGROUND", nil, 1)
+			swatch:SetColorTexture(0.2, 0.2, 0.2, 1)
+			swatch:SetSize(48, 48)
+			swatch:SetPoint("TOPLEFT", 12 + column * (cell + gap) + (cell - 48) / 2, -34 - row * (cell - 20 + gap))
+			local art = sheet:CreateTexture(nil, "ARTWORK")
+			art:SetAllPoints(swatch)
+			art:SetTexture(lib.mediaPath .. "Textures\\" .. entry[1])
+			local label = sheet:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+			label:SetPoint("TOP", swatch, "BOTTOM", 0, -2)
+			label:SetWidth(cell)
+			label:SetText(entry[1])
+		end
+	end
+	local rows = math.ceil(index / columns)
+	sheet:SetSize(24 + columns * (cell + gap) - gap, 44 + rows * (cell - 20 + gap))
+	Harness.iconSheet = sheet
+
+	return sheet
+end
+
+function COMMANDS.icons()
+	local probe = Harness.iconProbe or UIParent:CreateTexture()
+	Harness.iconProbe = probe
+	local missing, atlases, files = {}, 0, 0
+	for _, atlas in ipairs(ICON_ATLASES) do
+		atlases = atlases + 1
+		if not C_Texture.GetAtlasInfo(atlas) then
+			table.insert(missing, "atlas " .. atlas)
+		end
+	end
+	local function File(path, label)
+		files = files + 1
+		probe:SetTexture(nil)
+		if not probe:SetTexture(path) then
+			table.insert(missing, "file " .. label)
+		end
+	end
+	for _, path in ipairs(ICON_FILES) do
+		File(path, path)
+	end
+	for _, entry in ipairs(ICON_MEDIA) do
+		File(lib.mediaPath .. "Textures\\" .. entry[1], entry[1])
+	end
+	Print("icons: %d atlases and %d files checked, %d missing (client %s)", atlases, files, #missing,
+		(GetBuildInfo()) .. "." .. select(2, GetBuildInfo()))
+	for _, line in ipairs(missing) do
+		Print("  missing %s", line)
+	end
+	local sheet = IconSheet()
+	sheet:SetShown(not sheet:IsShown())
+end
+
 function COMMANDS.lock()
 	Harness.layoutLock = not Harness.layoutLock
 	Print("the Profiles page's layout lock is now %s", Harness.layoutLock and "on" or "off")
 	Harness.settings:Refresh()
 end
 
--- The Shadow module, for comparing its two styles: the harness frames, the Secure Button (protected), the
+-- The Shadow module: the harness frames, the Secure Button (protected), the
 -- character frame, the minimap (round) and the macro frame (load on demand).
 local SHADOW_RED = { 0.9, 0.2, 0.1, 0.8 }
 local function ShadowTargets()
@@ -770,11 +906,9 @@ end
 
 function COMMANDS.shadow(what, value)
 	what = (what or "on"):lower()
-	local state = Harness.shadowState or { style = "textures", size = 4, red = false, below = false }
+	local state = Harness.shadowState or { size = 4, red = false, below = false }
 	Harness.shadowState = state
-	if what == "textures" or what == "backdrop" then
-		state.style = what
-	elseif what == "size" then
+	if what == "size" then
 		state.size = tonumber(value) or 4
 	elseif what == "red" then
 		state.red = not state.red
@@ -788,7 +922,7 @@ function COMMANDS.shadow(what, value)
 		Print("shadows hidden")
 		return
 	elseif what ~= "on" then
-		Print("usage: /lasdev shadow [on | off | textures | backdrop | size <n> | red | below | probe]")
+		Print("usage: /lasdev shadow [on | off | size <n> | red | below | probe]")
 		return
 	end
 	local color = state.red and SHADOW_RED or false
@@ -799,7 +933,7 @@ function COMMANDS.shadow(what, value)
 			if own.below ~= nil then
 				below = own.below
 			end
-			local shadow = lib:AddShadow(entry[1], { style = state.style, size = state.size, below = below,
+			local shadow = lib:AddShadow(entry[1], { size = state.size, below = below,
 				round = own.round, shape = own.shape })
 			if shadow then
 				shadow:SetColor(color or nil)
@@ -807,16 +941,15 @@ function COMMANDS.shadow(what, value)
 			end
 		end
 	end
-	lib:AddShadowWhenLoaded("Blizzard_MacroUI", "MacroFrame", { style = state.style, size = state.size, below = state.below })
+	lib:AddShadowWhenLoaded("Blizzard_MacroUI", "MacroFrame", { size = state.size, below = state.below })
 	local macro = MacroFrame and lib:GetShadow(MacroFrame)
 	if macro then
-		macro:SetStyle(state.style)
 		macro:SetSize(state.size)
 		macro:SetColor(color or nil)
 		macro:SetBelow(state.below)
 		macro:Show()
 	end
-	Print("shadows: %s, size %d, %s, %s", state.style, state.size, state.red and "red" or "default black",
+	Print("shadows: size %d, %s, %s", state.size, state.red and "red" or "default black",
 		state.below and "below their frames" or "at their frames' level")
 end
 
@@ -878,7 +1011,7 @@ function COMMANDS.media()
 end
 
 function COMMANDS.help()
-	Print("/lasdev edit [second] | hide <key> | pend <key> <dx> <dy> | move | show | set <key> <POINT> <x> <y> | reset [key] | profile <name> | off <key> | scale <key> <n> | bad | media | tip | combat [key] [dx] [dy] | settings | status [text] | block | lock | shadow [on|off|textures|backdrop|size n|red]")
+	Print("/lasdev edit [second] | hide <key> | pend <key> <dx> <dy> | move | show | set <key> <POINT> <x> <y> | reset [key] | profile <name> | off <key> | scale <key> <n> | bad | media | tip | combat [key] [dx] [dy] | settings | status [text] | block | lock | shadow [on|off|size n|red|below|probe] | sound <kit> | icons")
 end
 
 SLASH_LIBAEONSETTINGSDEV1 = "/lasdev"

@@ -7,6 +7,11 @@ end
 
 local L = lib.L
 
+-- Q149, Q150: EllesmereUI's unlock-mode sound on opening; Blizzard Edit Mode's quit sound on Save and Exit and on an
+-- Exit with nothing changed. Exit Without Saving plays only its popup's sound.
+local OPEN_SOUND = SOUNDKIT and SOUNDKIT.UI_DRAGONRIDING_FULL_NODE or 201528
+local CLOSE_SOUND = SOUNDKIT and SOUNDKIT.IG_MAINMENU_QUIT or 854
+
 ---@class LibAeonSettingsSession
 ---@field open boolean
 ---@field paused boolean true while combat hides an open session
@@ -198,6 +203,7 @@ function lib:OpenEditMode(addonName)
 	session.expanded, session.pick, session.snapTargets, session.sizeOriginals = nil, nil, nil, nil
 	ShowSamples(session, true)
 	self:ShowEditUI(true)
+	PlaySound(OPEN_SOUND)
 	self.editEvents:RegisterEvent("PLAYER_REGEN_DISABLED")
 	self.editEvents:RegisterEvent("PLAYER_REGEN_ENABLED")
 end
@@ -251,6 +257,7 @@ end
 ---Exit and Escape: closes at once when nothing changed, otherwise asks whether to save.
 function lib:RequestClose(save)
 	if save or not self:IsDirty() then
+		PlaySound(CLOSE_SOUND)
 		self:CloseEditMode(save)
 		return
 	end
@@ -261,7 +268,7 @@ StaticPopupDialogs.LIBAEONSETTINGS_EDIT_EXIT = {
 	text = L.UNSAVED_CHANGES,
 	button1 = L.SAVE_AND_EXIT,
 	button2 = L.EXIT_WITHOUT_SAVING,
-	OnAccept = function() lib:CloseEditMode(true) end,
+	OnAccept = function() PlaySound(CLOSE_SOUND); lib:CloseEditMode(true) end,
 	OnCancel = function() lib:CloseEditMode(false) end,
 	noCancelOnEscape = true,
 	hideOnEscape = true,
