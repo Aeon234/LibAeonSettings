@@ -258,10 +258,11 @@ function lib.Setting:Parent()
 end
 
 ---Whether the setting can be changed now, and why not: the page's switch first, then the furthest setting up its
----`depends` chain that is off, then `blocked()` (true, or a sentence giving the reason).
+---`depends` chain that is off, then a paired Use Class Color that is on, then `blocked()` (true, or a sentence
+---giving the reason).
 ---@return boolean active
 ---@return string? reason
----@return string? cause "page", "depends" or "blocked"
+---@return string? cause "page", "depends", "class" or "blocked"
 function lib.Setting:Activity()
 	local switch = self.page.switch
 	if switch and switch ~= self and not switch:GetValue() then
@@ -277,6 +278,9 @@ function lib.Setting:Activity()
 	end
 	if reason then
 		return false, reason, "depends"
+	end
+	if self.classSetting and self.classSetting:GetValue() then
+		return false, nil, "class"
 	end
 	if self.blocked then
 		local blocked = Call(self.blocked, self)

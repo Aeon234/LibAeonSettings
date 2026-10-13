@@ -274,6 +274,23 @@ function Harness:DeclareControls(page)
 	buttons:Button({ id = "fail", label = "Failing Action", verb = "Reset Position",
 		run = function() return false, "The harness frame is missing." end })
 
+	local colors = page:Section("colors", "Colors")
+	colors:Color({ id = "textColor", label = "Text Color", path = "controls.textColor",
+		default = { r = 1, g = 0.82, b = 0 }, classColor = { path = "controls.textClass", default = false } })
+	colors:Color({ id = "background", label = "Background", path = "controls.background", hasOpacity = true,
+		default = { r = 0, g = 0, b = 0, a = 0.5 }, description = "With opacity: the checkerboard shows through." })
+	colors:Color({ id = "noRed", label = "Refuses Red", path = "controls.noRed", default = { r = 0.2, g = 0.6, b = 1 },
+		set = function(value)
+			if value.r > 0.6 and value.g < 0.4 then
+				return false, "Red is not allowed here."
+			end
+			Harness:Profile().controls = Harness:Profile().controls or {}
+			Harness:Profile().controls.noRed = value
+		end, get = function() return Value("noRed") end })
+	colors:Note("The class color here: " .. ("|cff%02x%02x%02x%s|r"):format(
+		math.floor(select(1, lib:ClassColor()) * 255), math.floor(select(2, lib:ClassColor()) * 255),
+		math.floor(select(3, lib:ClassColor()) * 255), UnitClass("player") or "?"))
+
 	local inactive = page:Section("inactive", "Inactive")
 	inactive:Slider({ id = "deadSlider", label = "Slider", path = "controls.deadSlider", default = 4, min = 0, max = 10,
 		depends = "active" })
@@ -284,6 +301,8 @@ function Harness:DeclareControls(page)
 	inactive:Button({ id = "deadButton", label = "Button", verb = "Delete", confirm = "Close me by unticking Controls Active.",
 		run = function() end, depends = "active" })
 	inactive:Checkbox({ id = "deadCheck", label = "Checkbox", path = "controls.deadCheck", depends = "active" })
+	inactive:Color({ id = "deadColor", label = "Color", path = "controls.deadColor", hasOpacity = true,
+		default = { r = 0.62, g = 0.46, b = 0.29, a = 0.7 }, depends = "active" })
 end
 
 -- A second registration under its own name stands in for another adopting addon: its own frames, its own saved

@@ -300,9 +300,11 @@ local function RefreshHalf(half)
 	local setting, control = half.setting, half.view
 	half.shown = setting:IsShown()
 	local active, reason, cause = setting:Activity()
-	local rowInactive = not active and cause ~= "page"
+	local rowInactive = not active and cause ~= "page" and cause ~= "class"
+	-- A swatch following the class color dims only its control: the label stays and needs no reason.
+	local controlDimmed = rowInactive or cause == "class"
 	-- Desaturate before SetActive, which may set its own (Blizzard's slider dims a step arrow at the range's end).
-	local desaturation = rowInactive and INACTIVE_DESATURATION or not active and PAGE_OFF_DESATURATION or 0
+	local desaturation = controlDimmed and INACTIVE_DESATURATION or not active and PAGE_OFF_DESATURATION or 0
 	if control.desaturation ~= desaturation then
 		control.desaturation = desaturation
 		if control.Desaturate then
@@ -314,7 +316,7 @@ local function RefreshHalf(half)
 	control:SetActive(active)
 	half.blocker:SetShown(not active)
 	half.label:SetAlpha(rowInactive and INACTIVE_ALPHA or 1)
-	control.frame:SetAlpha(rowInactive and INACTIVE_ALPHA or 1)
+	control.frame:SetAlpha(controlDimmed and INACTIVE_ALPHA or 1)
 	if rowInactive and reason then
 		half.small:SetText(reason)
 		half.small:SetTextColor(unpack(REASON_COLOR))
