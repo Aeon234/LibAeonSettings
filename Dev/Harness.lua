@@ -86,6 +86,42 @@ function Harness:Register()
 		account = function() return LibAeonSettingsDevDB end,
 		targets = self.targets,
 	})
+	self:RegisterSecond()
+end
+
+-- A second registration under its own name stands in for another adopting addon: its own frames, its own saved
+-- table, and the same account preferences.
+local SECOND_NAME = "LibAeonSettingsDevSecond"
+
+function Harness:RegisterSecond()
+	local db = LibAeonSettingsDevDB
+	db.second = db.second or {}
+	local panel = SampleFrame("SecondPanel", 260, 60, "Second Addon Panel", 0.3, 0.12, 0.35)
+	local tag = SampleFrame("SecondTag", 120, 24, "Second Tag", 0.12, 0.2, 0.4)
+	local function Size(frame, name)
+		return {
+			min = 20,
+			get = function() return frame:GetSize() end,
+			set = function(width, height) frame:SetSize(width, height); db.second[name] = { width, height } end,
+		}
+	end
+	for frame, name in pairs({ [panel] = "panelSize", [tag] = "tagSize" }) do
+		local size = db.second[name]
+		if size then
+			frame:SetSize(size[1], size[2])
+		end
+	end
+	self.second = lib:Placement(SECOND_NAME, {
+		title = "Second Harness",
+		store = db.second,
+		account = function() return LibAeonSettingsDevDB end,
+		targets = {
+			{ key = "panel", label = "Second Panel", frame = panel, default = { point = "TOP", x = 0, y = -260 },
+				size = Size(panel, "panelSize"), attach = true, match = "both" },
+			{ key = "tag", label = "Second Tag", frame = tag, default = { point = "LEFT", x = 120, y = 60 },
+				size = Size(tag, "tagSize"), attach = true, match = "width" },
+		},
+	})
 end
 
 -- Dragging the sample frames directly stands in for the mover until the edit mode exists; each drop stores the
@@ -203,8 +239,8 @@ function COMMANDS.bad()
 	Print('registered a declaration with three problems (unknown field "mystery", a bad default, unknown field "colour"); each should appear as a reported error')
 end
 
-function COMMANDS.edit()
-	lib:OpenEditMode(ADDON_NAME)
+function COMMANDS.edit(which)
+	lib:OpenEditMode(which == "second" and SECOND_NAME or ADDON_NAME)
 end
 
 -- Stands in for dragging until movers exist: shifts a frame by a pending (unsaved) offset during edit mode.
@@ -243,7 +279,7 @@ function COMMANDS.media()
 end
 
 function COMMANDS.help()
-	Print("/lasdev edit | hide <key> | pend <key> <dx> <dy> | move | show | set <key> <POINT> <x> <y> | reset [key] | profile <name> | off <key> | scale <key> <n> | bad | media")
+	Print("/lasdev edit [second] | hide <key> | pend <key> <dx> <dy> | move | show | set <key> <POINT> <x> <y> | reset [key] | profile <name> | off <key> | scale <key> <n> | bad | media")
 end
 
 SLASH_LIBAEONSETTINGSDEV1 = "/lasdev"

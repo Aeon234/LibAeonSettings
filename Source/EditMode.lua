@@ -86,18 +86,23 @@ function lib:SetPending(addonName, key, position)
 	self:RefreshMovers()
 end
 
----Shows or hides each shown addon's sample content.
-local function ShowSamples(session, shown)
-	for addonName in pairs(session.shown) do
-		local registration = lib.registrations[addonName]
-		for _, target in ipairs(registration and registration:Targets() or {}) do
-			if type(target.sample) == "function" then
-				local ok, err = pcall(target.sample, shown)
-				if not ok then
-					lib:Report(addonName, ("sample for %s failed: %s"):format(target.key, tostring(err)))
-				end
+---Shows or hides one addon's sample content.
+function lib:ShowAddonSamples(addonName, shown)
+	local registration = self.registrations[addonName]
+	for _, target in ipairs(registration and registration:Targets() or {}) do
+		if type(target.sample) == "function" then
+			local ok, err = pcall(target.sample, shown)
+			if not ok then
+				self:Report(addonName, ("sample for %s failed: %s"):format(target.key, tostring(err)))
 			end
 		end
+	end
+end
+
+---Shows or hides the sample content of every addon shown in the session.
+local function ShowSamples(session, shown)
+	for addonName in pairs(session.shown) do
+		lib:ShowAddonSamples(addonName, shown)
 	end
 end
 

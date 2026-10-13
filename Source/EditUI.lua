@@ -185,7 +185,8 @@ local function CreateToolbar()
 		lib:SetPreference("coordinates", not lib:GetPreference("coordinates"))
 		lib:RefreshMovers()
 	end)
-	toolbar.toggles = { toolbar.grid, toolbar.fill, toolbar.snap, toolbar.coordinates }
+	toolbar.addons = CreateToggle(toolbar, L.ADDONS, "addons", function() lib:ToggleAddonsWindow() end)
+	toolbar.toggles = { toolbar.grid, toolbar.fill, toolbar.snap, toolbar.coordinates, toolbar.addons }
 
 	return toolbar
 end
@@ -203,6 +204,10 @@ function lib:RefreshToolbar()
 	PaintToggle(toolbar.snap, snap, snap and L.ON or L.OFF, toolbar.snap.hovered)
 	local coordinates = self:GetPreference("coordinates")
 	PaintToggle(toolbar.coordinates, coordinates, coordinates and L.ON or L.OFF, toolbar.coordinates.hovered)
+	local shownCount, total = self:ShownAddonCount()
+	PaintToggle(toolbar.addons, true, L.ADDONS_SHOWN:format(shownCount, total), toolbar.addons.hovered)
+	-- The Addons toggle appears only when more than one addon registered placement.
+	toolbar.addons:SetShown(total > 1)
 
 	-- Every button and every toggle takes the width of the widest of its kind, the toggles measured over all their
 	-- states, so nothing shifts when a state changes; the row is centered with equal padding.
@@ -213,7 +218,7 @@ function lib:RefreshToolbar()
 	local toggleWidth = 0
 	for _, toggle in ipairs(toolbar.toggles) do
 		local current = toggle.state:GetText()
-		local labelWidth = toggle.name:GetStringWidth()
+		local labelWidth = math.max(toggle.name:GetStringWidth(), toggle.state:GetStringWidth())
 		for _, state in ipairs({ L.ON, L.OFF, L.DIMMED, L.BRIGHT }) do
 			toggle.state:SetText(state)
 			labelWidth = math.max(labelWidth, toggle.state:GetStringWidth())
@@ -234,8 +239,10 @@ function lib:RefreshToolbar()
 	end
 	Place(toolbar.separator, 1)
 	for _, toggle in ipairs(toolbar.toggles) do
-		toggle:SetWidth(toggleWidth)
-		Place(toggle, toggleWidth)
+		if toggle:IsShown() then
+			toggle:SetWidth(toggleWidth)
+			Place(toggle, toggleWidth)
+		end
 	end
 	toolbar:SetWidth(x - TOOLBAR_GAP + TOOLBAR_PADDING)
 end
@@ -262,6 +269,9 @@ function Handlers.KeyDown(frame, key)
 	end
 	if lib.session.pick then
 		lib:EndPick()
+		return
+	end
+	if lib:CloseAddonsWindow() then
 		return
 	end
 	if lib:CloseMenus() then
@@ -340,6 +350,7 @@ function lib:HideEditUI()
 	end
 	self.ui.screen:Hide()
 	self.ui.toolbar:Hide()
+	self:CloseAddonsWindow()
 	self:RefreshMovers()
 end
 

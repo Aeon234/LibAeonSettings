@@ -9,6 +9,7 @@
 	<Script file="Source\Menu.lua" />
 	<Script file="Source\Cog.lua" />
 	<Script file="Source\Anchor.lua" />
+	<Script file="Source\AddonsWindow.lua" />
 	<Script file="Source\Mover.lua" />
 	<Script file="Source\Finish.lua" />
 </Ui>
