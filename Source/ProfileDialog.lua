@@ -294,6 +294,11 @@ function lib.Window:OpenProfileDialog(kind, adapter)
 	Layout(dialog)
 	dialog:ClearAllPoints()
 	dialog:SetPoint("CENTER", self.frame, "CENTER", 0, RAISE)
+	-- Keys reach the game while the dialog shows, all but Escape (Handlers.Key); the window never opens in combat,
+	-- where this call is restricted.
+	if not InCombatLockdown() then
+		dialog:SetPropagateKeyboardInput(true)
+	end
 	dialog:Show()
 	dialog:Raise()
 	Handlers.Validate(self)
