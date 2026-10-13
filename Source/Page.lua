@@ -32,6 +32,14 @@ local DESCRIPTION_COLOR = { 1, 1, 1, 0.72 }
 local REASON_COLOR = { 1, 0.549, 0.471, 0.85 }
 local INACTIVE_ALPHA, INACTIVE_DESATURATION = 0.5, 0.7
 local PAGE_OFF_ALPHA, PAGE_OFF_DESATURATION = 0.5, 0.6
+-- Overrides (Q30, Q70): the ◆/↺ gutter, reserved on every half between the control and the inset.
+local GUTTER_RIGHT, GUTTER_WIDTH, GUTTER_HEIGHT = 20, 44, 16
+local DIAMOND_SIZE, UNDO_SIZE, UNDO_ALPHA = 14, 16, 0.85
+local INHERITED_COLOR = { 0.961, 0.824, 0.478, 0.85 }
+local RESET_SOUND = SOUNDKIT and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON
+
+local Handlers = {}
+lib.PageHandlers = Handlers
 
 -- Pools ------------------------------------------------------------------------------------------------------
 
@@ -92,7 +100,39 @@ local function CreateHalf(view)
 	half.small:SetWordWrap(false)
 	half.small:SetHeight(SMALL_HEIGHT)
 	half.small:SetPoint("TOPLEFT", half.label, "BOTTOMLEFT")
+	-- An overridden row's inherited value ("Whole Bar: 12"), under the label and any description.
+	half.inherited = half:CreateFontString(nil, "OVERLAY")
+	lib:SetFont(half.inherited, "body", SMALL_SIZE)
+	half.inherited:SetTextColor(unpack(INHERITED_COLOR))
+	half.inherited:SetJustifyH("LEFT")
+	half.inherited:SetWordWrap(false)
+	half.inherited:SetHeight(SMALL_HEIGHT)
 	half.controls = {}
+
+	local gutter = CreateFrame("Frame", nil, half)
+	gutter:SetSize(GUTTER_WIDTH, GUTTER_HEIGHT)
+	gutter:SetPoint("RIGHT", -GUTTER_RIGHT, 0)
+	gutter:Hide()
+	local diamond = CreateFrame("Frame", nil, gutter)
+	diamond:SetSize(DIAMOND_SIZE, DIAMOND_SIZE)
+	diamond:SetPoint("LEFT", 2, 0)
+	diamond:EnableMouse(true)
+	local diamondArt = diamond:CreateTexture(nil, "ARTWORK")
+	diamondArt:SetTexture(lib.mediaPath .. "Textures\\override-diamond")
+	diamondArt:SetAllPoints()
+	diamond:SetScript("OnEnter", function() Handlers.DiamondEnter(half) end)
+	diamond:SetScript("OnLeave", GameTooltip_Hide)
+	local undo = CreateFrame("Button", nil, gutter)
+	undo:SetSize(UNDO_SIZE, UNDO_SIZE)
+	undo:SetPoint("RIGHT")
+	undo:SetNormalAtlas("common-icon-undo")
+	undo:GetNormalTexture():SetAlpha(UNDO_ALPHA)
+	undo:SetHighlightAtlas("common-icon-undo", "ADD")
+	undo:GetHighlightTexture():SetAlpha(0.3)
+	undo:SetScript("OnClick", function() Handlers.Undo(half) end)
+	undo:SetScript("OnEnter", function() Handlers.UndoEnter(half) end)
+	undo:SetScript("OnLeave", GameTooltip_Hide)
+	half.gutter, half.undo = gutter, undo
 	-- Over an inactive control: takes its clicks and hover.
 	half.blocker = CreateFrame("Frame", nil, half)
 	half.blocker:EnableMouse(true)
@@ -316,7 +356,18 @@ local function RefreshHalf(half)
 	control:SetActive(active)
 	half.blocker:SetShown(not active)
 	half.label:SetAlpha(rowInactive and INACTIVE_ALPHA or 1)
+	-- A row following the shared value looks ordinary; changing it overrides it (◆, ↺, the inherited line).
+	local overridden = setting:IsOverridden()
 	control.frame:SetAlpha(controlDimmed and INACTIVE_ALPHA or 1)
+	half.gutter:SetShown(overridden)
+	half.gutter:SetAlpha(rowInactive and INACTIVE_ALPHA or 1)
+	half.undo:SetEnabled(active)
+	if overridden then
+		half.inherited:SetFormattedText("%s: %s", setting.inherits.from, setting:FormatValue(setting:InheritedValue()))
+		half.inherited:Show()
+	else
+		half.inherited:Hide()
+	end
 	if rowInactive and reason then
 		half.small:SetText(reason)
 		half.small:SetTextColor(unpack(REASON_COLOR))
@@ -328,7 +379,12 @@ local function RefreshHalf(half)
 	else
 		half.small:Hide()
 	end
-	half.tall = half.small:IsShown()
+	-- A row that can be overridden always keeps room for the inherited line, so overriding never resizes it or
+	-- moves its label.
+	half.lines = (half.small:IsShown() and 1 or 0) + (setting.inherits and 1 or 0)
+	half.tall = half.lines > 0
+	half.inherited:ClearAllPoints()
+	half.inherited:SetPoint("TOPLEFT", half.small:IsShown() and half.small or half.label, "BOTTOMLEFT")
 end
 
 ---Redraws which settings on the shown page are active, hidden or explained, and dims the body while the page's
@@ -358,9 +414,10 @@ local function PlaceHalf(half, child, left, y, width, height)
 	local labelWidth = math.max(MIN_LABEL, width - INSET - CONTROL_RIGHT - half.view:GetWidth() - LABEL_GAP)
 	half.label:SetWidth(labelWidth)
 	half.small:SetWidth(labelWidth)
+	half.inherited:SetWidth(labelWidth)
 	half.label:ClearAllPoints()
 	if half.tall then
-		half.label:SetPoint("TOPLEFT", half, "LEFT", INSET, (LABEL_HEIGHT + SMALL_HEIGHT) / 2)
+		half.label:SetPoint("TOPLEFT", half, "LEFT", INSET, (LABEL_HEIGHT + SMALL_HEIGHT * half.lines) / 2)
 	else
 		half.label:SetPoint("LEFT", half, "LEFT", INSET, 0)
 	end
@@ -458,8 +515,51 @@ function lib.Window:SettingChanged(setting, instant, refused)
 	if setting.boundView then
 		setting.boundView:Update(instant, refused)
 	end
+	-- Rows following a shared value redraw it, in case this was the shared value.
+	for _, item in ipairs(self.pageView.items) do
+		for index = 1, 2 do
+			local half = item[index]
+			if half and half.setting ~= setting and half.setting.inherits and not half.setting:IsOverridden() then
+				half.view:Update(true)
+			end
+		end
+	end
 	self:RefreshStates()
 	self:LayoutPage()
+end
+
+-- Overrides ---------------------------------------------------------------------------------------------------
+
+-- ◆ names the shared value the row overrides.
+function Handlers.DiamondEnter(half)
+	local setting = half.setting
+	if not setting or not setting.inherits then
+		return
+	end
+	GameTooltip:SetOwner(half.gutter, "ANCHOR_TOP")
+	GameTooltip:SetText(L.OVERRIDDEN, 1, 0.82, 0)
+	GameTooltip:AddLine(("%s: %s"):format(setting.inherits.from, setting:FormatValue(setting:InheritedValue())), 1, 1, 1)
+	GameTooltip:Show()
+end
+
+function Handlers.UndoEnter(half)
+	local setting = half.setting
+	if not setting or not setting.inherits then
+		return
+	end
+	GameTooltip:SetOwner(half.gutter, "ANCHOR_TOP")
+	GameTooltip:SetText(L.RESET_TO:format(setting.inherits.from), 1, 1, 1)
+	GameTooltip:Show()
+end
+
+-- ↺ returns the row to the shared value.
+function Handlers.Undo(half)
+	local setting = half.setting
+	if setting and setting:IsOverridden() then
+		PlaySound(RESET_SOUND)
+		GameTooltip:Hide()
+		setting:Reset()
+	end
 end
 
 ---Redraws every value on the shown page at once, for values the adopter changed elsewhere.

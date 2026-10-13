@@ -120,6 +120,8 @@ function Harness:DeclarePages()
 		description = "A page without a switch: sections, notes, a custom row and enough lines to scroll." }))
 	self:DeclareControls(window:Page("controls", { title = "Controls",
 		description = "W3: every basic control, with refusals and a checkbox that makes the rest inactive." }))
+	self:DeclareOverrides(window:Page("overrides", { title = "Overrides",
+		description = "W5: Clock follows the Whole Bar until a setting is changed here." }))
 	self:DeclareBar(window:Page("bar", { title = "Bar", switch = { path = "bar.enabled", default = true },
 		description = "A page with a switch: turning it off dims and desaturates everything below the header." }))
 	window:Divider()
@@ -184,6 +186,41 @@ function Harness:DeclareGeneral(page)
 		long:Checkbox({ id = "long" .. index, label = "Filler Setting " .. index, path = "general.long" .. index,
 			description = index % 5 == 0 and "Every fifth one has a description." or nil })
 	end
+end
+
+-- W5 test page: shared values and settings that follow them until overridden (◆/↺).
+function Harness:DeclareOverrides(page)
+	local shared = page:Section("shared", "Whole Bar")
+	shared:Slider({ id = "size", label = "Font Size", path = "shared.size", default = 12, min = 8, max = 24 })
+	shared:Dropdown({ id = "font", label = "Font", path = "shared.font", default = "Expressway", picker = "font" })
+	shared:Dropdown({ id = "outline", label = "Outline", path = "shared.outline", default = "NONE", options = lib.OUTLINES })
+	shared:Color({ id = "color", label = "Text Color", path = "shared.color", default = { r = 1, g = 1, b = 1 } })
+	shared:Checkbox({ id = "labels", label = "Show Labels", path = "shared.labels", default = true })
+
+	local function From(path)
+		return { path = path, from = "Whole Bar" }
+	end
+	local clock = page:Section("clock", "Clock")
+	clock:Slider({ id = "clockSize", label = "Font Size", path = "clock.size", min = 8, max = 24,
+		inherits = From("shared.size") })
+	clock:Dropdown({ id = "clockFont", label = "Font", path = "clock.font", picker = "font", inherits = From("shared.font") })
+	clock:Dropdown({ id = "clockOutline", label = "Outline", path = "clock.outline", options = lib.OUTLINES,
+		inherits = From("shared.outline"), description = "The six outline choices." })
+	clock:Color({ id = "clockColor", label = "Text Color", path = "clock.color", inherits = From("shared.color") })
+	clock:Checkbox({ id = "clockLabels", label = "Show Labels", path = "clock.labels", inherits = From("shared.labels") })
+	clock:TextInput({ id = "clockFormat", label = "Time Format", path = "clock.format", default = "%H:%M",
+		inherits = { path = "shared.format", from = "Whole Bar", default = "%H:%M" } })
+
+	local actions = page:Section("actions", "Overrides")
+	actions:Button({ id = "count", label = "Count Overrides", verb = "Count",
+		run = function(setting)
+			setting.window:ShowStatus(("%d overridden on this page."):format(setting.window:CountOverrides("overrides")))
+		end })
+	actions:Button({ id = "clear", label = "Clear Overrides", verb = "Clear",
+		confirm = "Return every Clock setting to the Whole Bar's value?",
+		run = function(setting)
+			setting.window:ShowStatus(("%d overrides cleared."):format(setting.window:ClearOverrides("overrides")))
+		end })
 end
 
 -- W2 test page (checkboxes since W3): the page switch, a depends chain, blocked() and a refused save.

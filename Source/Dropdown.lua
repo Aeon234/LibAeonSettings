@@ -185,18 +185,21 @@ function Handlers.Picked(view, value)
 	end
 end
 
--- The closed button shows the saved choice's name, or the saved value as it is when the list no longer has it.
-function lib.Dropdown:ShowValue()
-	local setting = self.setting
-	local value = setting:GetValue()
-	local text
+-- A value's name in the list, or the value as it is when the list no longer has it.
+local function ChoiceText(setting, value)
 	for _, choice in ipairs(Choices(setting)) do
 		if not choice.title and choice.value == value then
-			text = setting.picker and choice.text or lib.TitleCase(tostring(choice.text or choice.value))
-			break
+			return setting.picker and choice.text or lib.TitleCase(tostring(choice.text or choice.value))
 		end
 	end
-	self.dropdown:OverrideText(text or (value ~= nil and tostring(value)) or setting.placeholder or "")
+
+	return value ~= nil and tostring(value) or nil
+end
+
+-- The closed button shows the saved choice's name.
+function lib.Dropdown:ShowValue()
+	local setting = self.setting
+	self.dropdown:OverrideText(ChoiceText(setting, setting:GetValue()) or setting.placeholder or "")
 end
 
 function lib.Dropdown:Bind(setting)
@@ -229,5 +232,6 @@ end
 
 lib:RegisterControl("Dropdown", {
 	fields = { options = true, picker = true, placeholder = true },
+	Format = ChoiceText,
 	Create = function(half) return lib:CreateDropdown(half) end,
 })

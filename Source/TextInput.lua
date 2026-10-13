@@ -132,5 +132,6 @@ end
 
 lib:RegisterControl("TextInput", {
 	fields = { allowEmpty = true, maxLetters = true, validate = true },
+	Format = function(_, value) return value ~= nil and tostring(value) or "" end,
 	Create = function(half) return lib:CreateTextInput(half) end,
 })

@@ -22,7 +22,7 @@ local settingMeta = { __index = function(_, name) return lib.Setting[name] end }
 lib.EMPTY = lib.EMPTY or { empty = true }
 
 local SETTING_FIELDS = { id = true, label = true, description = true, path = true, default = true, get = true,
-	set = true, depends = true, blocked = true, show = true, wide = true }
+	set = true, depends = true, blocked = true, show = true, wide = true, inherits = true }
 local MAX_CHAIN = 16
 
 ---Registers a control kind: `section:<Kind>(info)` declares a setting drawn with it. `info.fields` lists the fields
@@ -94,6 +94,16 @@ function lib.PageModel:NewSetting(kind, info)
 	end
 	local setting = setmetatable(info, settingMeta)
 	setting.kind, setting.page, setting.window = kind, self, window
+	if info.inherits ~= nil then
+		local inherits = type(info.inherits) == "table" and info.inherits or { path = info.inherits }
+		if type(inherits.path) == "string" then
+			inherits.keys = { strsplit(".", inherits.path) }
+		elseif not inherits.get then
+			lib:Report(window.addonName, ("%s/%s: inherits needs a path or get"):format(self.id, info.id))
+		end
+		inherits.from = inherits.from or L.SHARED
+		setting.inherits = inherits
+	end
 	if type(info.path) == "string" then
 		setting.keys = { strsplit(".", info.path) }
 	elseif not info.get and not control.noValue then
@@ -150,19 +160,73 @@ local function Store(window)
 end
 
 ---@return any value the stored value, or the default when nothing is stored
-function lib.Setting:GetValue()
-	local value
-	if self.get then
-		value = Call(self.get, self)
-	elseif self.keys then
-		value = Store(self.window)
-		for index = 1, #self.keys do
-			if type(value) ~= "table" then
-				value = nil
-				break
-			end
-			value = value[self.keys[index]]
+local function ReadPath(window, keys)
+	local value = Store(window)
+	for index = 1, #keys do
+		if type(value) ~= "table" then
+			return nil
 		end
+		value = value[keys[index]]
+	end
+
+	return value
+end
+
+-- What the setting holds itself: nil when nothing is stored (a setting that inherits then follows the shared value).
+function lib.Setting:StoredValue()
+	if self.get then
+		return Call(self.get, self)
+	elseif self.keys then
+		return ReadPath(self.window, self.keys)
+	end
+end
+
+---The shared value an overridable setting follows until it is changed (`inherits`), or nil for other settings.
+function lib.Setting:InheritedValue()
+	local inherits = self.inherits
+	if not inherits then
+		return nil
+	end
+	local value
+	if inherits.get then
+		value = Call(inherits.get, self)
+	elseif inherits.keys then
+		value = ReadPath(self.window, inherits.keys)
+	end
+	if value == nil then
+		value = inherits.default
+	end
+	if value == nil and inherits.path then
+		-- Nothing stored for the shared value yet: the default of the setting that edits it.
+		if inherits.source == nil then
+			inherits.source = false
+			for _, page in ipairs(self.window.pageOrder) do
+				for _, other in pairs(page.settings or {}) do
+					if other.path == inherits.path and other ~= self then
+						inherits.source = other
+					end
+				end
+			end
+		end
+		value = inherits.source and inherits.source.default
+	end
+	if value == nil then
+		return self.default
+	end
+
+	return value
+end
+
+---@return boolean overridden true while a setting that inherits holds its own value (◆)
+function lib.Setting:IsOverridden()
+	return self.inherits ~= nil and self:StoredValue() ~= nil
+end
+
+---@return any value the stored value; else, for a setting that inherits, the shared value; else the default
+function lib.Setting:GetValue()
+	local value = self:StoredValue()
+	if value == nil and self.inherits then
+		return self:InheritedValue()
 	end
 	if value == nil then
 		return self.default
@@ -203,6 +267,12 @@ local function TitleCase(text)
 	return (text:gsub("(%a)([%w']*)", function(first, rest) return first:upper() .. rest end))
 end
 lib.TitleCase = TitleCase
+
+---Clears the setting's own value: a setting that inherits follows the shared value again (↺); another goes back to
+---its default.
+function lib.Setting:Reset()
+	return self:Request(nil)
+end
 
 ---Saves a value from code: the window redraws it at once. Returns false and the reason when refused.
 function lib.Setting:SetValue(value)
@@ -299,4 +369,56 @@ function lib.Setting:IsShown()
 	end
 
 	return Call(self.show, self) and true or false
+end
+
+---The value as text, for the inherited line under an overridden row's label (each control kind formats its own).
+function lib.Setting:FormatValue(value)
+	local control = lib.controls[self.kind]
+	if control and control.Format then
+		return control.Format(self, value) or ""
+	end
+
+	return value ~= nil and tostring(value) or ""
+end
+
+-- Overrides ---------------------------------------------------------------------------------------------------
+
+local function EachPage(window, pageId)
+	if pageId then
+		local page = window.pages[pageId]
+		return page and { page } or {}
+	end
+
+	return window.pageOrder
+end
+
+---@return integer count settings holding their own value instead of the shared one, on a page or the whole window
+function lib.Window:CountOverrides(pageId)
+	local count = 0
+	for _, page in ipairs(EachPage(self, pageId)) do
+		for _, setting in pairs(page.settings or {}) do
+			if setting:IsOverridden() then
+				count = count + 1
+			end
+		end
+	end
+
+	return count
+end
+
+---Returns every overridden setting on a page (or the whole window) to the shared value, for an adopter's Clear
+---Overrides action. Settings whose `set` refuses keep their value.
+---@return integer cleared
+function lib.Window:ClearOverrides(pageId)
+	local cleared = 0
+	for _, page in ipairs(EachPage(self, pageId)) do
+		for _, setting in pairs(page.settings or {}) do
+			if setting:IsOverridden() and Write(setting, nil) then
+				cleared = cleared + 1
+			end
+		end
+	end
+	self:Refresh()
+
+	return cleared
 end

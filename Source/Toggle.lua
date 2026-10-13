@@ -206,4 +206,4 @@ function Handlers.Update(button, elapsed)
 	end
 end
 
-lib:RegisterControl("Toggle", { Create = function(half) return lib:CreateToggle(half) end })
+lib:RegisterControl("Toggle", { Format = function(_, value) return value and lib.L.ON or lib.L.OFF end, Create = function(half) return lib:CreateToggle(half) end })

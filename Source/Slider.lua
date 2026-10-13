@@ -49,6 +49,13 @@ function lib:CreateSlider(parent)
 	return view
 end
 
+local function Format(setting, value)
+	local format = setting.format
+	value = tonumber(value) or setting.min or 0
+
+	return type(format) == "function" and format(value) or (FORMATS[format] or FORMATS.integer)(value)
+end
+
 local function Round(setting, value)
 	local step = setting.step or 1
 	local minimum = setting.min or 0
@@ -71,9 +78,7 @@ function lib.Slider:ShowValue()
 		self.updating = nil
 	end
 	if not self.box:HasFocus() then
-		local format = setting.format
-		local text = type(format) == "function" and format(value) or (FORMATS[format] or FORMATS.integer)(value)
-		self.box:SetText(text)
+		self.box:SetText(Format(setting, value))
 		self.box:SetCursorPosition(0)
 	end
 end
@@ -155,5 +160,6 @@ end
 
 lib:RegisterControl("Slider", {
 	fields = { min = true, max = true, step = true, format = true },
+	Format = Format,
 	Create = function(half) return lib:CreateSlider(half) end,
 })

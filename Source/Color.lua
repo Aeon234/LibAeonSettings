@@ -262,8 +262,21 @@ end
 
 -- `classColor = { path, default, get?, set? }` adds a Use Class Color checkbox in the half beside the swatch; while
 -- it is on, the swatch is dimmed and takes no clicks (its label stays, with no reason line).
+-- A color as text: a chip of it and its hex code, with the opacity when it has one.
+local function FormatColor(setting, color)
+	local r, g, b, a = Components(color, setting.hasOpacity)
+	local chip = ("|TInterface\\Buttons\\WHITE8X8:10:10:0:-1:8:8:0:8:0:8:%d:%d:%d|t"):format(r * 255, g * 255, b * 255)
+	local text = ("%s #%02X%02X%02X"):format(chip, r * 255 + 0.5, g * 255 + 0.5, b * 255 + 0.5)
+	if setting.hasOpacity and a < 1 then
+		text = ("%s %d%%"):format(text, a * 100 + 0.5)
+	end
+
+	return text
+end
+
 lib:RegisterControl("Color", {
 	fields = { hasOpacity = true, classColor = true },
+	Format = FormatColor,
 	Create = function(half) return lib:CreateColorSwatch(half) end,
 })
 
