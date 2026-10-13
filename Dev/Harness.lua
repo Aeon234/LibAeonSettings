@@ -737,6 +737,107 @@ function COMMANDS.lock()
 	Harness.settings:Refresh()
 end
 
+-- The Shadow module, for comparing its two styles: the harness frames, the Secure Button (protected), the
+-- character frame, the minimap (round) and the macro frame (load on demand).
+local SHADOW_RED = { 0.9, 0.2, 0.1, 0.8 }
+local function ShadowTargets()
+	local targets = {
+		{ Harness.frames.bar }, { Harness.frames.unit }, { Harness.frames.icon }, { Harness.frames.secure },
+		{ CharacterFrame }, { Minimap, { round = true } },
+	}
+	return targets
+end
+
+local function EachShadow(fn)
+	for _, entry in ipairs(ShadowTargets()) do
+		local shadow = entry[1] and lib:GetShadow(entry[1])
+		if shadow then
+			fn(shadow)
+		end
+	end
+	local macro = MacroFrame and lib:GetShadow(MacroFrame)
+	if macro then
+		fn(macro)
+	end
+end
+
+function COMMANDS.shadow(what, value)
+	what = (what or "on"):lower()
+	local state = Harness.shadowState or { style = "textures", size = 4, red = false, below = false }
+	Harness.shadowState = state
+	if what == "textures" or what == "backdrop" then
+		state.style = what
+	elseif what == "size" then
+		state.size = tonumber(value) or 4
+	elseif what == "red" then
+		state.red = not state.red
+	elseif what == "below" then
+		state.below = not state.below
+	elseif what == "probe" then
+		Harness:ShadowProbe()
+		return
+	elseif what == "off" then
+		EachShadow(function(shadow) shadow:Hide() end)
+		Print("shadows hidden")
+		return
+	elseif what ~= "on" then
+		Print("usage: /lasdev shadow [on | off | textures | backdrop | size <n> | red | below | probe]")
+		return
+	end
+	local color = state.red and SHADOW_RED or false
+	for _, entry in ipairs(ShadowTargets()) do
+		if entry[1] then
+			local shadow = lib:AddShadow(entry[1], { style = state.style, size = state.size, below = state.below,
+				round = entry[2] and entry[2].round })
+			if shadow then
+				shadow:SetColor(color or nil)
+				shadow:Show()
+			end
+		end
+	end
+	lib:AddShadowWhenLoaded("Blizzard_MacroUI", "MacroFrame", { style = state.style, size = state.size, below = state.below })
+	local macro = MacroFrame and lib:GetShadow(MacroFrame)
+	if macro then
+		macro:SetStyle(state.style)
+		macro:SetSize(state.size)
+		macro:SetColor(color or nil)
+		macro:SetBelow(state.below)
+		macro:Show()
+	end
+	Print("shadows: %s, size %d, %s, %s", state.style, state.size, state.red and "red" or "default black",
+		state.below and "below their frames" or "at their frames' level")
+end
+
+-- Whether a shadow kept one level under its frame keeps that offset when the frame's level changes (WindTools hooks
+-- the frame because, per its comment, the level is reset). First run (Alex, 2026-10-13, Forever 70338): raising the
+-- icon's level by 5 moved its shadow by 5 too, keeping the offset; Raise left the character frame's level as it was.
+-- Second run (same day): changing the icon's strata to HIGH and back kept the shadow's strata with it and its level
+-- one under. So a child keeps its offset; Restack is only for a frame raised from level 0.
+function Harness:ShadowProbe()
+	local function Probe(name, frame, change)
+		local shadow = frame and lib:GetShadow(frame)
+		if not shadow or not shadow:GetFrameLevel() then
+			Print("%s: no shadow yet (/lasdev shadow below first)", name)
+			return
+		end
+		local function Levels()
+			return ("frame %s %d, shadow %s %d"):format(frame:GetFrameStrata(), frame:GetFrameLevel(),
+				shadow.frame:GetFrameStrata(), shadow:GetFrameLevel())
+		end
+		local before = Levels()
+		change(frame)
+		local after = Levels()
+		shadow:Restack()
+		Print("%s (below %s): before %s; after the change %s; after Restack %s", name, tostring(shadow.below),
+			before, after, Levels())
+	end
+	local icon = self.frames.icon
+	local strata = icon:GetFrameStrata()
+	Probe("Harness Icon, SetFrameStrata HIGH", icon, function(frame) frame:SetFrameStrata("HIGH") end)
+	Probe("Harness Icon, SetFrameStrata back to " .. strata, icon, function(frame) frame:SetFrameStrata(strata) end)
+	Probe("Harness Icon, SetFrameLevel +5", icon, function(frame) frame:SetFrameLevel(frame:GetFrameLevel() + 5) end)
+end
+
 function COMMANDS.block()
 	Harness.blocked = not Harness.blocked
 	Print("blocked() now returns %s", Harness.blocked and "a reason" or "nothing")
@@ -765,7 +866,7 @@ function COMMANDS.media()
 end
 
 function COMMANDS.help()
-	Print("/lasdev edit [second] | hide <key> | pend <key> <dx> <dy> | move | show | set <key> <POINT> <x> <y> | reset [key] | profile <name> | off <key> | scale <key> <n> | bad | media | tip | combat [key] [dx] [dy] | settings | status [text] | block | lock")
+	Print("/lasdev edit [second] | hide <key> | pend <key> <dx> <dy> | move | show | set <key> <POINT> <x> <y> | reset [key] | profile <name> | off <key> | scale <key> <n> | bad | media | tip | combat [key] [dx] [dy] | settings | status [text] | block | lock | shadow [on|off|textures|backdrop|size n|red]")
 end
 
 SLASH_LIBAEONSETTINGSDEV1 = "/lasdev"
