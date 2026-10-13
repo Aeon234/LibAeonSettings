@@ -202,6 +202,7 @@ end
 local function TitleCase(text)
 	return (text:gsub("(%a)([%w']*)", function(first, rest) return first:upper() .. rest end))
 end
+lib.TitleCase = TitleCase
 
 ---Saves a value from code: the window redraws it at once. Returns false and the reason when refused.
 function lib.Setting:SetValue(value)
@@ -216,13 +217,25 @@ end
 function lib.Setting:Request(value)
 	local ok, reason = Write(self, value)
 	if not ok then
-		local name = self.label or tostring(self.id)
-		local message = reason and L.COULDNT_SAVE_REASON:format(name, (reason:gsub("%.$", ""))) or L.COULDNT_SAVE:format(name)
-		UIErrorsFrame:AddExternalErrorMessage(TitleCase(message))
+		self:ShowRefusal(reason)
 	end
 	self.window:SettingChanged(self, false, not ok)
 
 	return ok
+end
+
+---Shows "Couldn't save <label>: <reason>." (or without a reason) at the top of the screen, in Title Case.
+function lib.Setting:ShowRefusal(reason)
+	local name = self.label or tostring(self.id)
+	local message = reason and L.COULDNT_SAVE_REASON:format(name, (reason:gsub("%.$", ""))) or L.COULDNT_SAVE:format(name)
+	UIErrorsFrame:AddExternalErrorMessage(TitleCase(message))
+end
+
+---Refuses a value the control itself will not take (its own rules): the message, then the saved value redrawn
+---with the refusal shake.
+function lib.Setting:Refuse(reason)
+	self:ShowRefusal(reason)
+	self.window:SettingChanged(self, true, true)
 end
 
 -- The setting this one depends on, found by id on its page, or "page/id" on another page of the window.

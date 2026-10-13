@@ -17,7 +17,13 @@
 	<Script file="Source\Scroll.lua" />
 	<Script file="Source\Sidebar.lua" />
 	<Script file="Source\Model.lua" />
+	<Script file="Source\Controls.lua" />
 	<Script file="Source\Toggle.lua" />
+	<Script file="Source\Checkbox.lua" />
+	<Script file="Source\Slider.lua" />
+	<Script file="Source\Dropdown.lua" />
+	<Script file="Source\TextInput.lua" />
+	<Script file="Source\Button.lua" />
 	<Script file="Source\Custom.lua" />
 	<Script file="Source\Page.lua" />
 	<Script file="Source\Finish.lua" />

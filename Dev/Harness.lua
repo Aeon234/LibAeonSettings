@@ -118,6 +118,8 @@ function Harness:DeclarePages()
 	local window = self.settings
 	self:DeclareGeneral(window:Page("general", { title = "General",
 		description = "A page without a switch: sections, notes, a custom row and enough lines to scroll." }))
+	self:DeclareControls(window:Page("controls", { title = "Controls",
+		description = "W3: every basic control, with refusals and a checkbox that makes the rest inactive." }))
 	self:DeclareBar(window:Page("bar", { title = "Bar", switch = { path = "bar.enabled", default = true },
 		description = "A page with a switch: turning it off dims and desaturates everything below the header." }))
 	window:Divider()
@@ -146,15 +148,15 @@ end
 function Harness:DeclareGeneral(page)
 	local intro = page:Section("intro", "Introduction")
 	intro:Note("Notes run across the section.", "A smaller second part sits under the note in the description color.")
-	intro:Toggle({ id = "extras", label = "Show Extras", path = "general.extras", default = false,
+	intro:Checkbox({ id = "extras", label = "Show Extras", path = "general.extras", default = false,
 		description = "Shows the hidden settings below." })
-	intro:Toggle({ id = "plain", label = "Plain Setting", path = "general.plain", default = true })
+	intro:Checkbox({ id = "plain", label = "Plain Setting", path = "general.plain", default = true })
 	local extras = function() return Harness:Profile().general and Harness:Profile().general.extras end
-	intro:Toggle({ id = "extraLeft", label = "Extra Left (hidden half)", path = "general.extraLeft", show = extras })
-	intro:Toggle({ id = "visible", label = "Always Shown", path = "general.visible" })
-	intro:Toggle({ id = "extraA", label = "Extra A (whole line hidden)", path = "general.extraA", show = extras })
-	intro:Toggle({ id = "extraB", label = "Extra B (whole line hidden)", path = "general.extraB", show = extras })
-	intro:Toggle({ id = "after", label = "After the Hidden Line", path = "general.after" })
+	intro:Checkbox({ id = "extraLeft", label = "Extra Left (hidden half)", path = "general.extraLeft", show = extras })
+	intro:Checkbox({ id = "visible", label = "Always Shown", path = "general.visible" })
+	intro:Checkbox({ id = "extraA", label = "Extra A (whole line hidden)", path = "general.extraA", show = extras })
+	intro:Checkbox({ id = "extraB", label = "Extra B (whole line hidden)", path = "general.extraB", show = extras })
+	intro:Checkbox({ id = "after", label = "After the Hidden Line", path = "general.after" })
 
 	local custom = page:Section("custom", "Custom Rows")
 	custom:Custom({ id = "swatch", label = "Custom in a Half", width = 120, height = 24,
@@ -179,26 +181,109 @@ function Harness:DeclareGeneral(page)
 
 	local long = page:Section("long", "A Long Section")
 	for index = 1, 24 do
-		long:Toggle({ id = "long" .. index, label = "Filler Setting " .. index, path = "general.long" .. index,
+		long:Checkbox({ id = "long" .. index, label = "Filler Setting " .. index, path = "general.long" .. index,
 			description = index % 5 == 0 and "Every fifth one has a description." or nil })
 	end
 end
 
--- W2 test page: the page switch, a depends chain, blocked() and a refused save.
+-- W2 test page (checkboxes since W3): the page switch, a depends chain, blocked() and a refused save.
 function Harness:DeclareBar(page)
 	local behavior = page:Section("behavior", "Behavior")
-	behavior:Toggle({ id = "fade", label = "Fade Out", path = "bar.fade", default = false,
+	behavior:Checkbox({ id = "fade", label = "Fade Out", path = "bar.fade", default = false,
 		description = "The next two depend on this one, the second through the first." })
-	behavior:Toggle({ id = "fadeDelay", label = "Delay the Fade", path = "bar.fadeDelay", default = false,
+	behavior:Checkbox({ id = "fadeDelay", label = "Delay the Fade", path = "bar.fadeDelay", default = false,
 		depends = "fade" })
-	behavior:Toggle({ id = "fadeInstant", label = "Fade Instantly", path = "bar.fadeInstant", depends = "fadeDelay" })
-	behavior:Toggle({ id = "locked", label = "Locked", path = "bar.locked",
+	behavior:Checkbox({ id = "fadeInstant", label = "Fade Instantly", path = "bar.fadeInstant", depends = "fadeDelay" })
+	behavior:Checkbox({ id = "locked", label = "Locked", path = "bar.locked",
 		blocked = function() return Harness.blocked and "Blocked by the harness (/lasdev block)." end })
-	behavior:Toggle({ id = "refuses", label = "Refuses to Save", wide = true,
+	behavior:Checkbox({ id = "refuses", label = "Refuses to Save", wide = true,
 		get = function() return false end,
 		set = function() return false, "The harness refuses this one." end })
-	behavior:Toggle({ id = "otherPage", label = "Follows General", path = "bar.otherPage",
+	behavior:Checkbox({ id = "otherPage", label = "Follows General", path = "bar.otherPage",
 		depends = "general/plain" })
+end
+
+-- W3 test page: checkboxes, sliders, dropdowns, text inputs and buttons.
+function Harness:DeclareControls(page)
+	local function Value(key)
+		local controls = Harness:Profile().controls
+		return controls and controls[key]
+	end
+
+	local checkboxes = page:Section("checkboxes", "Checkboxes")
+	checkboxes:Checkbox({ id = "active", label = "Controls Active", path = "controls.active", default = true,
+		description = "Everything in the Inactive section depends on this." })
+	checkboxes:Checkbox({ id = "refuseCheck", label = "Refuses to Save", get = function() return false end,
+		set = function() return false, "The harness refuses this one." end })
+
+	local sliders = page:Section("sliders", "Sliders")
+	sliders:Slider({ id = "size", label = "Font Size", path = "controls.size", default = 12, min = 8, max = 32 })
+	sliders:Slider({ id = "scale", label = "Scale", path = "controls.scale", default = 1, min = 0.5, max = 2,
+		step = 0.1, format = "decimal" })
+	sliders:Slider({ id = "alpha", label = "Opacity", path = "controls.alpha", default = 80, min = 0, max = 100,
+		step = 5, format = "percent", description = "Typed as 55 or 55%." })
+	sliders:Slider({ id = "capped", label = "Refuses Above 50", path = "controls.capped", default = 20, min = 0,
+		max = 100, set = function(value)
+			if value > 50 then
+				return false, "It can't go above 50."
+			end
+			Harness:Profile().controls = Harness:Profile().controls or {}
+			Harness:Profile().controls.capped = value
+		end, get = function() return Value("capped") or 20 end })
+
+	local dropdowns = page:Section("dropdowns", "Dropdowns")
+	dropdowns:Dropdown({ id = "format", label = "Text Format", path = "controls.format", default = "current",
+		description = "Choices written in lower case show in Title Case.",
+		options = {
+			{ value = "current", text = "current" },
+			{ value = "currentMax", text = "current / max" },
+			{ value = "percent", text = "percent of max" },
+			{ value = "hidden", text = "hidden", blocked = "Requires a text slot to be free." },
+		} })
+	dropdowns:Dropdown({ id = "long", label = "Long List", path = "controls.long", default = 15,
+		description = "Scrolls past 20, opening on the saved choice.",
+		options = function()
+			local list = { { title = true, text = "Numbers" } }
+			for index = 1, 40 do
+				list[#list + 1] = { value = index, text = "choice number " .. index }
+			end
+			return list
+		end })
+	dropdowns:Dropdown({ id = "font", label = "Font", path = "controls.font", default = "Expressway", picker = "font" })
+	dropdowns:Dropdown({ id = "outline", label = "Outline", path = "controls.outline", default = "SLUG_OUTLINE",
+		options = lib.OUTLINES })
+
+	local texts = page:Section("texts", "Text Inputs")
+	texts:TextInput({ id = "nameFormat", label = "Name Format", path = "controls.nameFormat", default = "[name]",
+		validate = function(text)
+			if not text:find("%[%a+%]") then
+				return "It needs a tag in brackets, such as [name]."
+			end
+		end })
+	texts:TextInput({ id = "welcome", label = "Welcome Message", path = "controls.welcome",
+		default = "Welcome back!", allowEmpty = true, description = "May be empty: the default shows gray." })
+	texts:TextInput({ id = "profileName", label = "Profile Name", path = "controls.profileName", default = "Default",
+		maxLetters = 24 })
+
+	local buttons = page:Section("buttons", "Buttons")
+	buttons:Button({ id = "test", label = "Test Message", verb = "Show Test",
+		run = function(setting) setting.window:ShowStatus("Test message shown.") end })
+	buttons:Button({ id = "delete", label = "Delete Profile", verb = "Delete",
+		confirm = "Delete the profile \"Default\"? Its settings will be lost.",
+		run = function(setting) setting.window:ShowStatus("Nothing was really deleted.") end })
+	buttons:Button({ id = "fail", label = "Failing Action", verb = "Reset Position",
+		run = function() return false, "The harness frame is missing." end })
+
+	local inactive = page:Section("inactive", "Inactive")
+	inactive:Slider({ id = "deadSlider", label = "Slider", path = "controls.deadSlider", default = 4, min = 0, max = 10,
+		depends = "active" })
+	inactive:Dropdown({ id = "deadDropdown", label = "Dropdown", path = "controls.deadDropdown", default = "OUTLINE",
+		options = lib.OUTLINES, depends = "active" })
+	inactive:TextInput({ id = "deadText", label = "Text Input", path = "controls.deadText", default = "text",
+		depends = "active" })
+	inactive:Button({ id = "deadButton", label = "Button", verb = "Delete", confirm = "Close me by unticking Controls Active.",
+		run = function() end, depends = "active" })
+	inactive:Checkbox({ id = "deadCheck", label = "Checkbox", path = "controls.deadCheck", depends = "active" })
 end
 
 -- A second registration under its own name stands in for another adopting addon: its own frames, its own saved
