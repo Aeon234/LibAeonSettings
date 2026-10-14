@@ -1,90 +1,24 @@
 -- C-11, the dropdown: Blizzard's WowStyle1DropdownTemplate (no step arrows) with Blizzard's menu as a single-choice
--- list, 220 wide. Choices are in Title Case; a font picker draws each choice in its own font. Also the suite's six
--- outline choices and the flags each one gives `SetFont`.
+-- list, 220 wide. Choices are in Title Case; a font picker draws each choice in its own font (Fonts.lua).
 
 local lib = LibStub("LibAeonSettings-1.0")
 if not lib.loading then
 	return
 end
 
-local L = lib.L
-
 local HEIGHT, TEXT_SIZE = 25, 14
 local SCROLL_AFTER, ENTRY_HEIGHT = 20, 20
 local MENU_INSETS, ENTRY_PADDING, RADIO_MARK, SCROLL_BAR = 16, 20, 20, 18
-local PICKER_FONT_SIZE = 14
 local REASON_COLOR = { 1, 0.549, 0.471 }
-
--- Blizzard's own fonts under LibSharedMedia's names, plus the library's, for a font picker without LibSharedMedia.
-local FALLBACK_FONTS = {
-	{ "Arial Narrow", "Fonts\\ARIALN.TTF" },
-	{ "Friz Quadrata TT", "Fonts\\FRIZQT__.TTF" },
-	{ "Morpheus", "Fonts\\MORPHEUS.TTF" },
-	{ "Skurri", "Fonts\\SKURRI.TTF" },
-}
-
--- The suite's six outline choices (Alex, 2026-10-07), always with the Slug variants. `SLUG` is a `SetFont` flag,
--- comma-joined with the outline.
-lib.OUTLINES = {
-	{ value = "NONE", text = L.OUTLINE_NONE },
-	{ value = "OUTLINE", text = L.OUTLINE_OUTLINE },
-	{ value = "THICKOUTLINE", text = L.OUTLINE_THICK },
-	{ value = "SLUG", text = L.OUTLINE_SLUG },
-	{ value = "SLUG_OUTLINE", text = L.OUTLINE_SLUG_OUTLINE },
-	{ value = "SLUG_THICKOUTLINE", text = L.OUTLINE_SLUG_THICK },
-}
-local OUTLINE_FLAGS = { NONE = "", OUTLINE = "OUTLINE", THICKOUTLINE = "THICKOUTLINE", SLUG = "SLUG",
-	SLUG_OUTLINE = "SLUG, OUTLINE", SLUG_THICKOUTLINE = "SLUG, THICKOUTLINE" }
-
----@return string flags for `SetFont`, from one of the six outline values
-function lib:OutlineFlags(value)
-	return OUTLINE_FLAGS[value] or ""
-end
 
 lib.Dropdown = {}
 local dropdownMeta = { __index = function(_, name) return lib.Dropdown[name] end }
 lib.DropdownHandlers = lib.DropdownHandlers or {}
 local Handlers = lib.DropdownHandlers
 
--- One font object per file, for drawing a font picker's choices. Font objects are named globals.
-lib.pickerFonts = lib.pickerFonts or {}
-local function PickerFont(file)
-	local font = lib.pickerFonts[file]
-	if not font then
-		lib.pickerFontCount = (lib.pickerFontCount or 0) + 1
-		font = CreateFont("LibAeonSettingsPickerFont" .. lib.pickerFontCount)
-		font:SetFont(file, PICKER_FONT_SIZE, "")
-		font:SetTextColor(1, 1, 1)
-		lib.pickerFonts[file] = font
-	end
-
-	return font
-end
-
--- The choices of a font picker: LibSharedMedia's fonts, read each time the list opens, or the fallback list.
-local function FontChoices()
-	local choices = {}
-	local media = LibStub("LibSharedMedia-3.0", true)
-	if media then
-		local files = media:HashTable("font")
-		for _, name in ipairs(media:List("font")) do
-			table.insert(choices, { value = name, text = name, font = files[name] })
-		end
-	else
-		for _, entry in ipairs(FALLBACK_FONTS) do
-			table.insert(choices, { value = entry[1], text = entry[1], font = entry[2] })
-		end
-		table.insert(choices, { value = "Expressway", text = "Expressway", font = lib.mediaPath .. "Fonts\\Expressway.ttf" })
-		table.insert(choices, { value = "Gilroy Bold", text = "Gilroy Bold", font = lib.mediaPath .. "Fonts\\GilroyBold.ttf" })
-		table.sort(choices, function(a, b) return a.value < b.value end)
-	end
-
-	return choices
-end
-
 local function Choices(setting)
 	if setting.picker == "font" then
-		return FontChoices()
+		return lib:FontChoices()
 	end
 	local options = setting.options
 	if type(options) == "function" then
@@ -139,7 +73,7 @@ function Handlers.Generate(view, root)
 			if view.setting:GetValue() == value then
 				view.selectedIndex = index
 			end
-			local font = choice.font and PickerFont(choice.font)
+			local font = choice.font and lib:PickerFont(choice.font)
 			radio:AddInitializer(function(button)
 				local fontString = button.fontString
 				if not fontString then
@@ -187,6 +121,10 @@ end
 
 -- A value's name in the list, or the value as it is when the list no longer has it.
 local function ChoiceText(setting, value)
+	-- A font's name is its value, so the font list is not built only to show it.
+	if setting.picker == "font" then
+		return value ~= nil and tostring(value) or nil
+	end
 	for _, choice in ipairs(Choices(setting)) do
 		if not choice.title and choice.value == value then
 			return (setting.picker or setting.titleCase == false) and choice.text

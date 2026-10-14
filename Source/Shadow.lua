@@ -100,13 +100,26 @@ end
 
 -- Drawing ------------------------------------------------------------------------------------------------------
 
+-- A texture on the shadow's frame for a build: one an earlier build left spare, reset, or a new one.
+local function NewTexture(shadow)
+	local texture = shadow.spare and table.remove(shadow.spare)
+	if texture then
+		texture:ClearAllPoints()
+		texture:SetTexCoord(0, 1, 0, 1)
+		texture:Show()
+	else
+		texture = shadow.frame:CreateTexture(nil, "BORDER")
+	end
+
+	return texture
+end
+
 local function BuildTextures(shadow)
-	local frame = shadow.frame
 	local pieces = {}
 	-- BORDER, as the backdrop's edge pieces (NineSlice's default layer): the glow's inner unit then draws over the
 	-- frame's own fill, the dark line along its edge that WindTools' shadow has.
 	for name, coords in pairs(PIECES) do
-		local piece = frame:CreateTexture(nil, "BORDER")
+		local piece = NewTexture(shadow)
 		piece:SetTexture(GLOW)
 		piece:SetTexCoord(unpack(coords))
 		pieces[name] = piece
@@ -154,7 +167,7 @@ local function BuildFrameShape(shadow)
 		local atlas = type(piece) == "table" and piece.GetAtlas and piece:GetAtlas()
 		local glow = atlas and NINE_GLOWS[atlas:lower()]
 		if glow and glow[2] == name then
-			local texture = shadow.frame:CreateTexture(nil, "BORDER")
+			local texture = NewTexture(shadow)
 			texture:SetTexture(Texture(("shadow-metal-%s-%d"):format(glow[1], size)))
 			local sides = NINE_SIDES[name]
 			texture:SetPoint("TOPLEFT", piece, "TOPLEFT", -pad * sides[1], pad * sides[2])
@@ -173,7 +186,7 @@ local function BuildTabShape(shadow)
 	local forever = not info or info.width >= SIDETAB_FOREVER_WIDTH
 	local size = ShapeSize(shadow.size)
 	local pad = size + 2
-	local texture = shadow.frame:CreateTexture(nil, "BORDER")
+	local texture = NewTexture(shadow)
 	texture:SetTexture(Texture(("%s-%d"):format(forever and "shadow-shape-sidetab" or "shadow-shape-sidetab-retail", size)))
 	texture:SetPoint("TOPLEFT", art, "TOPLEFT", -pad, pad)
 	texture:SetPoint("BOTTOMRIGHT", art, "BOTTOMRIGHT", pad, -pad)
@@ -181,22 +194,31 @@ local function BuildTabShape(shadow)
 end
 
 local function BuildRound(shadow)
-	local ring = shadow.frame:CreateTexture(nil, "BORDER")
+	local ring = NewTexture(shadow)
 	ring:SetTexture(ROUND)
 	ring:SetAllPoints()
 	shadow.ring = ring
 end
 
--- Makes (or remakes, when the shape changed) the shadow's frame around its region.
+-- Makes the shadow's frame around its region, or remakes its textures when the shape changed: the frame is kept, and
+-- the earlier build's textures wait hidden for the new one to reuse.
 local function Build(shadow)
 	local host = Host(shadow.region)
 	if shadow.frame then
-		shadow.frame:Hide()
-		shadow.frame:SetParent(nil)
+		shadow.frame:SetParent(host)
+		shadow.spare = shadow.spare or {}
+		for _, texture in pairs(shadow.pieces or {}) do
+			texture:Hide()
+			table.insert(shadow.spare, texture)
+		end
+		if shadow.ring then
+			shadow.ring:Hide()
+			table.insert(shadow.spare, shadow.ring)
+		end
+	else
+		shadow.frame = CreateFrame("Frame", nil, host)
 	end
 	shadow.pieces, shadow.ring = nil, nil
-	local frame = CreateFrame("Frame", nil, host)
-	shadow.frame = frame
 	shadow.built = { round = shadow.round, shape = shadow.shape,
 		shapeSize = shadow.shape and ShapeSize(shadow.size) }
 	if shadow.shape == "frame" then

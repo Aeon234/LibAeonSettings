@@ -23,9 +23,7 @@ local NAME_GAP = 8 -- extra room above the name box when the import's summary an
 local ERROR_STEP = 18
 local CHOICE_WIDTH, CHOICE_HEIGHT, CHOICE_STEP = 256, 25, 34
 local BUTTON_WIDTH, BUTTON_HEIGHT, BUTTON_GAP, BUTTONS_GAP = 120, 26, 8, 8
-local TITLE_SIZE = 14
 local RAISE = 80 -- first shown this far above the window's center
-local GOLD = { 1, 0.82, 0 }
 local ERROR_COLOR = { 1, 0.251, 0.251 }
 local REPORT_ALPHA = 0.72
 local BULLET = "|cffc9a54e•|r  "
@@ -78,16 +76,7 @@ end
 -- Building ---------------------------------------------------------------------------------------------------
 
 local function Build(window)
-	local name = window.frame:GetName() .. "ProfileDialog"
-	local dialog = CreateFrame("Frame", name, window.frame, "SettingsFrameTemplate")
-	dialog:SetFrameStrata("DIALOG")
-	dialog:SetToplevel(true)
-	dialog:EnableMouse(true)
-	dialog:SetMovable(true)
-	dialog:SetClampedToScreen(true)
-	dialog:SetDontSavePosition(true)
-	dialog:Hide()
-	dialog.NineSlice.Text:SetText("")
+	local dialog = lib:CreateSettingsShell(window.frame:GetName() .. "ProfileDialog", window.frame, "DIALOG")
 	for sublevel, color in ipairs({ FILL, FILL_SHADE }) do
 		local fill = dialog:CreateTexture(nil, "BACKGROUND", nil, sublevel - 8)
 		fill:SetPoint("TOPLEFT", FILL_LEFT, -FILL_TOP)
@@ -99,19 +88,6 @@ local function Build(window)
 	dialog:EnableKeyboard(true)
 	dialog:SetScript("OnKeyDown", function(_, key) Handlers.Key(window, key) end)
 	dialog:SetScript("OnHide", function() Handlers.Hidden(window) end)
-
-	local drag = CreateFrame("Frame", nil, dialog)
-	drag:SetPoint("TOPLEFT")
-	drag:SetPoint("TOPRIGHT", -28, 0)
-	drag:SetHeight(22)
-	drag:EnableMouse(true)
-	drag:RegisterForDrag("LeftButton")
-	drag:SetScript("OnDragStart", function() dialog:StartMoving() end)
-	drag:SetScript("OnDragStop", function() dialog:StopMovingOrSizing() end)
-	dialog.title = drag:CreateFontString(nil, "OVERLAY")
-	lib:SetFont(dialog.title, "header", TITLE_SIZE)
-	dialog.title:SetTextColor(unpack(GOLD))
-	dialog.title:SetPoint("TOP", dialog, "TOP", 0, -4)
 
 	dialog.message = Text(dialog, MESSAGE_SIZE)
 

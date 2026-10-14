@@ -146,22 +146,22 @@ local function DrawInnerFrame(frame, left, top, width, height)
 	end
 end
 
-local function Build(window)
-	local declaration = window.declaration
-	local name = FrameName(window)
-	local frame = CreateFrame("Frame", name, UIParent, "SettingsFrameTemplate")
-	frame:SetSize(declaration.width or WINDOW_WIDTH, declaration.height or WINDOW_HEIGHT)
-	frame:SetFrameStrata("HIGH")
+---A hidden SettingsFrameTemplate window: top level, clamped to the screen, dragged by a 22-unit bar along its top
+---(short of the close button), with a gold header title (`frame.title`) in place of the template's. `onDragStop` runs
+---when a drag ends; by default the frame just stops moving.
+---@param onDragStop function?
+---@return Frame frame with `titleBar` and `title`
+function lib:CreateSettingsShell(name, parent, strata, onDragStop)
+	local frame = CreateFrame("Frame", name, parent, "SettingsFrameTemplate")
+	frame:SetFrameStrata(strata)
 	frame:SetToplevel(true)
 	frame:EnableMouse(true)
 	frame:SetMovable(true)
 	frame:SetClampedToScreen(true)
 	frame:SetDontSavePosition(true)
 	frame:Hide()
-	frame:SetScript("OnHide", function() Handlers.Hidden(window) end)
-	frame.ClosePanelButton:SetScript("OnClick", function() window:Close() end)
+	frame.NineSlice.Text:SetText("")
 
-	-- The title bar drags the window.
 	local titleBar = CreateFrame("Frame", nil, frame)
 	titleBar:SetPoint("TOPLEFT", 0, 0)
 	titleBar:SetPoint("TOPRIGHT", -28, 0)
@@ -169,18 +169,28 @@ local function Build(window)
 	titleBar:EnableMouse(true)
 	titleBar:RegisterForDrag("LeftButton")
 	titleBar:SetScript("OnDragStart", function() frame:StartMoving() end)
-	titleBar:SetScript("OnDragStop", function() Handlers.Moved(window) end)
-
-	frame.NineSlice.Text:SetText("")
+	titleBar:SetScript("OnDragStop", onDragStop or function() frame:StopMovingOrSizing() end)
 	local title = titleBar:CreateFontString(nil, "OVERLAY")
 	lib:SetFont(title, "header", TITLE_SIZE)
 	title:SetTextColor(unpack(GOLD))
 	title:SetPoint("TOP", frame, "TOP", 0, -4)
-	local version = titleBar:CreateFontString(nil, "OVERLAY")
+	frame.titleBar, frame.title = titleBar, title
+
+	return frame
+end
+
+local function Build(window)
+	local declaration = window.declaration
+	local frame = lib:CreateSettingsShell(FrameName(window), UIParent, "HIGH", function() Handlers.Moved(window) end)
+	frame:SetSize(declaration.width or WINDOW_WIDTH, declaration.height or WINDOW_HEIGHT)
+	frame:SetScript("OnHide", function() Handlers.Hidden(window) end)
+	frame.ClosePanelButton:SetScript("OnClick", function() window:Close() end)
+
+	local version = frame.titleBar:CreateFontString(nil, "OVERLAY")
 	lib:SetFont(version, "body", VERSION_SIZE)
 	version:SetTextColor(unpack(VERSION_GRAY))
-	version:SetPoint("LEFT", title, "RIGHT", 6, 0)
-	frame.title, frame.version = title, version
+	version:SetPoint("LEFT", frame.title, "RIGHT", 6, 0)
+	frame.version = version
 
 	frame.footer = BuildFooter(window, frame)
 

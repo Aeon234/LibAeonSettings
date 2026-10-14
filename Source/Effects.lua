@@ -137,6 +137,11 @@ function Handlers.Update(driver, elapsed)
 	end
 	local toolbar = lib.ui.toolbar
 	local x, y = GetCursorPosition()
+	-- Nothing to do while the cursor rests and the toolbar already shows the alpha this spot gave it.
+	if x == driver.cursorX and y == driver.cursorY and toolbar:GetAlpha() == driver.settled then
+		return
+	end
+	driver.cursorX, driver.cursorY = x, y
 	local cursorScale = UIParent:GetEffectiveScale()
 	x, y = x / cursorScale, y / cursorScale
 	local scale = toolbar:GetScale()
@@ -155,6 +160,7 @@ function Handlers.Update(driver, elapsed)
 		alpha = wanted > alpha and math.min(wanted, alpha + step) or math.max(wanted, alpha - step)
 		toolbar:SetAlpha(alpha)
 	end
+	driver.settled = alpha == wanted and alpha or nil
 end
 
 ---Starts or stops Hover Top Bar to match its preference and the session.

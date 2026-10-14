@@ -50,19 +50,6 @@ local PIECES = {
 lib.MoverHandlers = lib.MoverHandlers or {}
 local Handlers = lib.MoverHandlers
 
----Gives a font string its font object's face and size with a thin outline, for text drawn over any background.
-function lib:OutlineText(fontString)
-	local face, size = fontString:GetFont()
-	if face then
-		fontString:SetFont(face, size, "OUTLINE")
-	end
-	fontString:SetShadowOffset(0, 0)
-end
-
-local function MoverId(addonName, key)  -- also lib:MoverId
-	return addonName .. "\0" .. key
-end
-
 -- Geometry of a target's frame in UIParent units.
 local function FrameRect(frame)  -- also lib:FrameRect
 	local left, bottom = frame:GetLeft(), frame:GetBottom()
@@ -273,7 +260,7 @@ function lib:RefreshMovers()
 			local registration = self.registrations[addonName]
 			if session.shown[addonName] then
 				for _, target in ipairs(registration:Targets()) do
-					local id = MoverId(addonName, target.key)
+					local id = lib:MoverId(addonName, target.key)
 					if not session.hidden[id] and target.frame:IsShown() then
 						local mover = ui.movers[id] or CreateMover(ui.moverLayer)
 						ui.movers[id] = mover
