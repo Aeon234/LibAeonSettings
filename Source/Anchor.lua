@@ -109,7 +109,11 @@ function lib:ApplyMatches(addonName, target, position)
 	local newWidth, newHeight = width, height
 	for dimension, match in pairs({ width = position.matchWidth, height = position.matchHeight }) do
 		local other = self:ResolveTarget(match.addon, match.key)
-		local _, _, otherWidth, otherHeight = other and self:FrameRect(other.frame)
+		-- `other and self:FrameRect(...)` would keep only the first return value.
+		local otherWidth, otherHeight
+		if other then
+			otherWidth, otherHeight = select(3, self:FrameRect(other.frame))
+		end
 		if otherWidth then
 			self:WatchParent(other.frame, self.registrations[addonName], target)
 			local value = ((dimension == "width" and otherWidth or otherHeight) + (match.extra or 0)) / scale
