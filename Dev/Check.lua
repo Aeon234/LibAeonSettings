@@ -336,6 +336,39 @@ do
 		picked == "other" and #(window.undoHistory or {}) == 0)
 end
 
+-- The declaration's write hook
+
+do
+	local store = {}
+	local window = NewWindow(store)
+	window.RefreshUndo = function() end
+	local writes = {}
+	window.declaration.write = function(path, value)
+		if path == "locked" then
+			return false, "Locked."
+		end
+		writes[#writes + 1] = path
+		store[path] = value
+	end
+	local page = NewPage(window, "hook", "Hook")
+	local section = page:Section("one", "One")
+	local size = section:Slider({ id = "size", label = "Size", path = "size", default = 10 })
+	local font = section:Slider({ id = "font", label = "Font", path = "font", inherits = "shared" })
+	local locked = section:Slider({ id = "locked", label = "Locked", path = "locked", default = 1 })
+	local own = 0
+	section:Slider({ id = "own", label = "Own", get = function() return own end, set = function(value) own = value end })
+		:Request(5)
+	size:Request(12)
+	Check("write: a path write goes through the declaration's write", writes[1] == "size" and store.size == 12)
+	Check("write: a setting with its own set does not", #writes == 1 and own == 5)
+	Check("write: write may refuse", not locked:Request(2) and store.locked == nil)
+	window:Undo()
+	Check("write: Undo writes through it", writes[2] == "size" and store.size == nil)
+	font:Request(14)
+	window:ClearOverrides()
+	Check("write: Clear Overrides writes through it", writes[#writes] == "font" and store.font == nil)
+end
+
 -- Undo
 
 do

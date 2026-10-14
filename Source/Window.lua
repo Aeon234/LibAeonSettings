@@ -30,8 +30,8 @@ local INNER_ART_WIDTH, INNER_ART_HEIGHT = 886, 618
 local INNER_COLUMNS = { { 0, 12, 12 }, { 12, 184, SIDEBAR_WIDTH }, { 196, 8, 8 }, { 204, 670, false }, { 874, 12, 12 } }
 local INNER_ROWS = { { 0, 60, 60 }, { 60, 480, false }, { 540, 78, 78 } }
 
-local DECLARATION_FIELDS = { title = true, version = true, store = true, account = true, width = true, height = true,
-	footer = true, frameName = true }
+local DECLARATION_FIELDS = { title = true, version = true, store = true, write = true, account = true, width = true,
+	height = true, footer = true, frameName = true }
 
 lib.windows = lib.windows or {}
 
@@ -44,9 +44,12 @@ lib.WindowHandlers = lib.WindowHandlers or {}
 local Handlers = lib.WindowHandlers
 
 ---Registers an addon's settings window. Calling it again for the same addon returns the same window with the
----new declaration. Nothing is built until the window first opens.
+---new declaration. Nothing is built until the window first opens. `store` (a table, or a function returning one)
+---holds the values settings name by `path`; `write(path, value, setting)`, when given, makes every such write
+---instead, so the addon writes its own store and hears of each change (the player's, Undo's, ↺, Clear Overrides);
+---it may return false and a reason to refuse.
 ---@param addonName string the addon's folder name
----@param declaration table { title, version?, store?, account?, width?, height?, footer?, frameName? }
+---@param declaration table { title, version?, store?, write?, account?, width?, height?, footer?, frameName? }
 ---@return table? window
 function lib:Settings(addonName, declaration)
 	if type(addonName) ~= "string" or type(declaration) ~= "table" then

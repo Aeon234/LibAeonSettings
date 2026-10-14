@@ -258,10 +258,17 @@ function lib.Setting:GetValue()
 	return value
 end
 
--- Writes a value; returns false and a sentence when the adopter's `set` refuses it.
+-- Writes a value through the setting's `set`, the declaration's `write`, or into the store by its path; returns false
+-- and a sentence when the adopter refuses it. Every write of a value goes through here.
 local function Write(setting, value)
-	if setting.set then
-		local ok, reason = Call(setting.set, value, setting)
+	local write = setting.window.declaration.write
+	if setting.set or (write and setting.keys) then
+		local ok, reason
+		if setting.set then
+			ok, reason = Call(setting.set, value, setting)
+		else
+			ok, reason = Call(write, setting.path, value, setting)
+		end
 		if ok == false then
 			return false, reason
 		end

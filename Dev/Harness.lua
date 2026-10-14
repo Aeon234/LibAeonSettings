@@ -107,6 +107,7 @@ function Harness:Register()
 		title = "LibAeonSettings Harness",
 		version = "dev",
 		store = function() return Harness:Profile() end,
+		write = function(path, value) Harness:Write(path, value) end,
 		account = function() return LibAeonSettingsDevDB end,
 		footer = "|cffffd100Changes|r apply immediately",
 	})
@@ -1115,8 +1116,31 @@ function COMMANDS.media()
 	Print("media path: %s", lib.mediaPath)
 end
 
+-- Writes a setting's value into the profile by its path, as an adopter's own store would (Levelbound's Profile:Set),
+-- and tells anyone listening: `/lasdev writes` echoes each one to chat.
+function Harness:Write(path, value)
+	local node = self:Profile()
+	local keys = { strsplit(".", path) }
+	for index = 1, #keys - 1 do
+		if type(node[keys[index]]) ~= "table" then
+			node[keys[index]] = {}
+		end
+		node = node[keys[index]]
+	end
+	node[keys[#keys]] = value
+	self.writeCount = (self.writeCount or 0) + 1
+	if self.echoWrites then
+		Print("write %d: %s = %s", self.writeCount, path, type(value) == "table" and "{...}" or tostring(value))
+	end
+end
+
+function COMMANDS.writes()
+	Harness.echoWrites = not Harness.echoWrites
+	Print("Echoing writes %s (%d so far).", Harness.echoWrites and "on" or "off", Harness.writeCount or 0)
+end
+
 function COMMANDS.help()
-	Print("/lasdev edit [second] | hide <key> | pend <key> <dx> <dy> | move | show | set <key> <POINT> <x> <y> | reset [key] | profile <name> | off <key> | scale <key> <n> | bad | media | tip | combat [key] [dx] [dy] | settings | status [text] | block | lock | shadow [on|off|size n|red|below|probe] | sound <kit> | icons | tint <percent>")
+	Print("/lasdev edit [second] | hide <key> | pend <key> <dx> <dy> | move | show | set <key> <POINT> <x> <y> | reset [key] | profile <name> | off <key> | scale <key> <n> | bad | media | tip | combat [key] [dx] [dy] | settings | status [text] | block | lock | shadow [on|off|size n|red|below|probe] | sound <kit> | icons | tint <percent> | writes")
 end
 
 SLASH_LIBAEONSETTINGSDEV1 = "/lasdev"
