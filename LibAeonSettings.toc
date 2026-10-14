@@ -1,4 +1,4 @@
-## Interface: 16001
+## Interface: 16001, 120100
 ## Title: LibAeonSettings-1.0
 ## Notes: Settings window and edit mode shared by the Aeon addons.
 ## Author: Aeon
