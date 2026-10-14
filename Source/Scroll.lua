@@ -12,8 +12,8 @@ local BAR_GAP = 6           -- between the list and its scroll bar
 local THUMB_REST, THUMB_LIT = 0.45, 1
 local SLIM_TRACK_ALPHA = 0.35
 
-local Handlers = {}
-lib.ScrollHandlers = Handlers
+lib.ScrollHandlers = lib.ScrollHandlers or {}
+local Handlers = lib.ScrollHandlers
 
 ---@class LibAeonSettingsScroll
 lib.Scroll = {}

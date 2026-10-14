@@ -31,8 +31,8 @@ local FLASH_FILL = 0.12
 local GOLD = { 1, 0.82, 0 }
 local CLOSE_DELAY = 0.1
 
-local Handlers = {}
-lib.SearchHandlers = Handlers
+lib.SearchHandlers = lib.SearchHandlers or {}
+local Handlers = lib.SearchHandlers
 
 -- Index ------------------------------------------------------------------------------------------------------
 

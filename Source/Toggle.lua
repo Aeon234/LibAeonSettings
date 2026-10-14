@@ -19,8 +19,8 @@ local SOUND_OFF = SOUNDKIT and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_OFF
 
 lib.Toggle = {}
 local toggleMeta = { __index = function(_, name) return lib.Toggle[name] end }
-local Handlers = {}
-lib.ToggleHandlers = Handlers
+lib.ToggleHandlers = lib.ToggleHandlers or {}
+local Handlers = lib.ToggleHandlers
 
 local function Track(button, left, right)
 	local texture = button:CreateTexture(nil, "BACKGROUND")

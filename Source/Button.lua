@@ -15,8 +15,8 @@ local CLICK_SOUND = SOUNDKIT and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON
 
 lib.ActionButton = {}
 local buttonMeta = { __index = function(_, name) return lib.ActionButton[name] end }
-local Handlers = {}
-lib.ActionButtonHandlers = Handlers
+lib.ActionButtonHandlers = lib.ActionButtonHandlers or {}
+local Handlers = lib.ActionButtonHandlers
 
 function lib:CreateActionButton(parent)
 	local view = setmetatable({ width = MIN_WIDTH }, buttonMeta)

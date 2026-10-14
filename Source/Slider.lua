@@ -17,8 +17,8 @@ local FORMATS = {
 
 lib.Slider = {}
 local sliderMeta = { __index = function(_, name) return lib.Slider[name] end }
-local Handlers = {}
-lib.SliderHandlers = Handlers
+lib.SliderHandlers = lib.SliderHandlers or {}
+local Handlers = lib.SliderHandlers
 
 function lib:CreateSlider(parent)
 	local view = setmetatable({}, sliderMeta)

@@ -40,8 +40,8 @@ lib.windows = lib.windows or {}
 lib.Window = {}
 local windowMeta = { __index = function(_, name) return lib.Window[name] end }
 
-local Handlers = {}
-lib.WindowHandlers = Handlers
+lib.WindowHandlers = lib.WindowHandlers or {}
+local Handlers = lib.WindowHandlers
 
 ---Registers an addon's settings window. Calling it again for the same addon returns the same window with the
 ---new declaration. Nothing is built until the window first opens.

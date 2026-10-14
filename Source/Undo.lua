@@ -15,8 +15,8 @@ local MERGE_SECONDS = 1.5 -- a slider or color saved again this soon after is th
 local MERGES = { Slider = true, Color = true }
 local MAX_STEPS = 100
 
-local Handlers = {}
-lib.UndoHandlers = Handlers
+lib.UndoHandlers = lib.UndoHandlers or {}
+local Handlers = lib.UndoHandlers
 
 local function Copy(value)
 	if type(value) ~= "table" then

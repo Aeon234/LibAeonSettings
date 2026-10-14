@@ -47,8 +47,8 @@ local PIECES = {
 	"TopEdge", "BottomEdge", "LeftEdge", "RightEdge", "Center",
 }
 
-local Handlers = {}
-lib.MoverHandlers = Handlers
+lib.MoverHandlers = lib.MoverHandlers or {}
+local Handlers = lib.MoverHandlers
 
 ---Gives a font string its font object's face and size with a thin outline, for text drawn over any background.
 function lib:OutlineText(fontString)

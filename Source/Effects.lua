@@ -15,8 +15,8 @@ local TIP_GAP, TIP_DROP = 16, 12  -- the tip's distance below the toolbar, and h
 local TIP_FADE_IN, TIP_FADE_OUT = 0.45, 0.2
 local TIP_DELAY = 0.7            -- seconds into the opening sequence, as the toolbar settles
 
-local Handlers = {}
-lib.EffectHandlers = Handlers
+lib.EffectHandlers = lib.EffectHandlers or {}
+local Handlers = lib.EffectHandlers
 
 local function Alpha(group, from, to, duration, delay, order)
 	local animation = group:CreateAnimation("Alpha")

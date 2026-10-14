@@ -19,8 +19,8 @@ local REFUSE_FLASH = 0.6
 local REFUSE_TOOLTIP = 3
 local MATCH_EXTRA_LIMIT = 100
 
-local Handlers = {}
-lib.AnchorHandlers = Handlers
+lib.AnchorHandlers = lib.AnchorHandlers or {}
+local Handlers = lib.AnchorHandlers
 
 -- Targets and links ----------------------------------------------------------------------------------------------
 

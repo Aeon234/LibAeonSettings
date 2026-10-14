@@ -31,8 +31,8 @@ local SOUND_ON = SOUNDKIT and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON
 local SOUND_OFF = SOUNDKIT and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_OFF
 
 -- Every script calls through the library at run time, so a newer copy's code runs on frames an older copy built.
-local Handlers = {}
-lib.EditUIHandlers = Handlers
+lib.EditUIHandlers = lib.EditUIHandlers or {}
+local Handlers = lib.EditUIHandlers
 
 local function Texture(name)
 	return lib.mediaPath .. "Textures\\" .. name

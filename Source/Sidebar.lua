@@ -24,8 +24,8 @@ local KINDS = {
 	item = { inset = 52, font = "body", size = 14, icon = 50, slotted = 72 },
 }
 
-local Handlers = {}
-lib.SidebarHandlers = Handlers
+lib.SidebarHandlers = lib.SidebarHandlers or {}
+local Handlers = lib.SidebarHandlers
 
 -- Model ------------------------------------------------------------------------------------------------------
 

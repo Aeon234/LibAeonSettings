@@ -13,8 +13,8 @@ local PADDING = 10
 local SOUND_ON = SOUNDKIT and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON
 local SOUND_OFF = SOUNDKIT and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_OFF
 
-local Handlers = {}
-lib.AddonsWindowHandlers = Handlers
+lib.AddonsWindowHandlers = lib.AddonsWindowHandlers or {}
+local Handlers = lib.AddonsWindowHandlers
 
 ---Shows or hides another addon's movers for this session. The addon edit mode was opened from always shows; an
 ---addon turned off keeps its pending changes until Save or Exit.

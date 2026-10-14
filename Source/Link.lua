@@ -16,8 +16,8 @@ local TITLE_CENTER = 15 -- the section title's center line, from the header's to
 local SECTION_LANDING = 8 -- a section lands this far below the list's top
 local CLICK_SOUND = SOUNDKIT and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON
 
-local Handlers = {}
-lib.LinkHandlers = Handlers
+lib.LinkHandlers = lib.LinkHandlers or {}
+local Handlers = lib.LinkHandlers
 
 local function FindSection(page, id)
 	for _, section in ipairs(page.sections or {}) do

@@ -25,8 +25,8 @@ local TAB_TEXT = { 1, 1, 1, 0.75 }
 local TAB_SOUND = SOUNDKIT and SOUNDKIT.IG_CHARACTER_INFO_TAB
 local PREVIEW_FIELDS = { height = true, states = true, create = true, refresh = true, caption = true }
 
-local Handlers = {}
-lib.PreviewHandlers = Handlers
+lib.PreviewHandlers = lib.PreviewHandlers or {}
+local Handlers = lib.PreviewHandlers
 lib.Tab = {}
 local tabMeta = { __index = function(_, name) return lib.Tab[name] end }
 

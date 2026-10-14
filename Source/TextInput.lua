@@ -13,8 +13,8 @@ local TEXT_SIZE = 14
 
 lib.TextInput = {}
 local textMeta = { __index = function(_, name) return lib.TextInput[name] end }
-local Handlers = {}
-lib.TextInputHandlers = Handlers
+lib.TextInputHandlers = lib.TextInputHandlers or {}
+local Handlers = lib.TextInputHandlers
 
 function lib:CreateTextInput(parent)
 	local view = setmetatable({}, textMeta)

@@ -13,8 +13,8 @@ lib.CONTROL_HEIGHT = 29
 
 local SHAKE_SECONDS, SHAKE_PIXELS, SHAKE_CYCLES = 0.25, 3, 3 -- motion.reject
 
-local Handlers = {}
-lib.ControlHandlers = Handlers
+lib.ControlHandlers = lib.ControlHandlers or {}
+local Handlers = lib.ControlHandlers
 
 ---Shakes a control sideways around its first anchor (`motion.reject`), the label staying still. Skipped while
 ---hidden.

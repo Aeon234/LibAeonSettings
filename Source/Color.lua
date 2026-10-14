@@ -24,8 +24,8 @@ local SAME = 0.0005            -- colors this close count as the same
 
 lib.Color = {}
 local colorMeta = { __index = function(_, name) return lib.Color[name] end }
-local Handlers = {}
-lib.ColorHandlers = Handlers
+lib.ColorHandlers = lib.ColorHandlers or {}
+local Handlers = lib.ColorHandlers
 
 local function Texture(path)
 	return lib.mediaPath .. "Textures\\" .. path

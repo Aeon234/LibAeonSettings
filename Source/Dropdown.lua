@@ -43,8 +43,8 @@ end
 
 lib.Dropdown = {}
 local dropdownMeta = { __index = function(_, name) return lib.Dropdown[name] end }
-local Handlers = {}
-lib.DropdownHandlers = Handlers
+lib.DropdownHandlers = lib.DropdownHandlers or {}
+local Handlers = lib.DropdownHandlers
 
 -- One font object per file, for drawing a font picker's choices. Font objects are named globals.
 lib.pickerFonts = lib.pickerFonts or {}

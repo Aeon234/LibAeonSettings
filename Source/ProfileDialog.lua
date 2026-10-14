@@ -35,8 +35,8 @@ local FILL, FILL_SHADE = { 0.122, 0.118, 0.129, 1 }, { 0, 0, 0, 0.45 }
 local FILL_LEFT, FILL_TOP, FILL_RIGHT, FILL_BOTTOM = 2, 20, 2, 3
 local CLICK_SOUND = SOUNDKIT and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON
 
-local Handlers = {}
-lib.ProfileDialogHandlers = Handlers
+lib.ProfileDialogHandlers = lib.ProfileDialogHandlers or {}
+local Handlers = lib.ProfileDialogHandlers
 
 -- The large box's font, a named font object as ScrollingEditBoxTemplate takes.
 local function WellFont()

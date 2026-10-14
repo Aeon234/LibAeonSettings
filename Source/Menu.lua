@@ -17,8 +17,8 @@ local PANEL_FILL = { 0.122, 0.118, 0.129, 0.92 }
 local PANEL_BORDER = { 0.52, 0.41, 0.32 }
 local SLICE, SLICE_SCALE = 18, 0.5 -- texels per corner on the 110-texel frame textures, drawn at 2x
 
-local Handlers = {}
-lib.MenuHandlers = Handlers
+lib.MenuHandlers = lib.MenuHandlers or {}
+local Handlers = lib.MenuHandlers
 
 local function FrameTexture(panel, layer, name, color, topExtra)
 	local texture = panel:CreateTexture(nil, layer)

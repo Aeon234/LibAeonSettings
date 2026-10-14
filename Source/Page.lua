@@ -38,8 +38,8 @@ local DIAMOND_SIZE, UNDO_SIZE, UNDO_ALPHA = 14, 16, 0.85
 local INHERITED_COLOR = { 0.961, 0.824, 0.478, 0.85 }
 local RESET_SOUND = SOUNDKIT and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON
 
-local Handlers = {}
-lib.PageHandlers = Handlers
+lib.PageHandlers = lib.PageHandlers or {}
+local Handlers = lib.PageHandlers
 
 -- Pools ------------------------------------------------------------------------------------------------------
 
