@@ -1,5 +1,5 @@
 -- Offline checks of the library's rules that need no client: positions, target lists and size matching, the
--- settings model, Undo and search. Loads the real source files under small stand-ins for the WoW API.
+-- media pickers' choices, the settings model, Undo and search. Loads the real source files under small stand-ins for the WoW API.
 -- Run from anywhere with Lua 5.1: ~/.local/lua51/bin/lua Dev/Check.lua
 
 local root = (arg and arg[0] or ""):match("^(.*)[/\\]Dev[/\\]Check%.lua$") or "."
@@ -81,7 +81,7 @@ function strsplit(separator, text)
 	return unpack(parts)
 end
 
-for _, file in ipairs({ "Core", "Locale", "Geometry", "Placement", "Anchor" }) do
+for _, file in ipairs({ "Core", "Locale", "Media", "Geometry", "Placement", "Anchor" }) do
 	dofile(root .. "/Source/" .. file .. ".lua")
 end
 local lib = LibStub("LibAeonSettings-1.0")
@@ -243,6 +243,38 @@ do
 		section:Toggle({ id = "odd", label = "Odd", path = "odd", colour = true })
 		return #errors == before + 1
 	end)())
+end
+
+-- Media pickers
+
+do
+	Check("media: without LibSharedMedia, Blizzard's bar textures are listed",
+		#lib:TextureChoices() == 3 and lib:TextureFile("Blizzard") == "Interface\\TargetingFrame\\UI-StatusBar")
+	local own = { { value = "none", text = "None" }, { value = "alarm", text = "Alarm", soundKit = 12889 } }
+	Check("media: without LibSharedMedia, a sound picker lists only its own", #lib:SoundChoices(own) == 2)
+
+	local registry = {
+		statusbar = { Flat = "Interface\\Flat", Empty = "" },
+		sound = { None = 1, Alarm = "Interface\\alarm.ogg", Bell = "Interface\\bell.ogg" },
+	}
+	local media = LibStub:NewLibrary("LibSharedMedia-3.0")
+	function media:HashTable(kind) return registry[kind] end
+	function media:List(kind)
+		local names = {}
+		for name in pairs(registry[kind]) do
+			names[#names + 1] = name
+		end
+		table.sort(names)
+		return names
+	end
+	local textures = lib:TextureChoices()
+	Check("media: an empty texture file is left out", #textures == 1 and textures[1].value == "Flat")
+	Check("media: an unknown texture name has no file", lib:TextureFile("Missing") == nil)
+	local sounds = lib:SoundChoices(own)
+	Check("media: the setting's own sounds come first, its None replacing LibSharedMedia's, its names winning",
+		#sounds == 3 and sounds[1] == own[1] and sounds[2] == own[2] and sounds[3].value == "Bell"
+		and sounds[3].soundFile == "Interface\\bell.ogg")
+	libraries["LibSharedMedia-3.0"] = nil
 end
 
 -- Undo

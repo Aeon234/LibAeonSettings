@@ -2,6 +2,7 @@
 	<Script file="Source\Core.lua" />
 	<Script file="Source\Locale.lua" />
 	<Script file="Source\Fonts.lua" />
+	<Script file="Source\Media.lua" />
 	<Script file="Source\Geometry.lua" />
 	<Script file="Source\Placement.lua" />
 	<Script file="Source\EditMode.lua" />

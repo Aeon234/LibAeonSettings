@@ -1,15 +1,21 @@
 -- C-11, the dropdown: Blizzard's WowStyle1DropdownTemplate (no step arrows) with Blizzard's menu as a single-choice
--- list, 220 wide. Choices are in Title Case; a font picker draws each choice in its own font (Fonts.lua).
+-- list, 220 wide. Choices are in Title Case. Pickers: a font picker draws each choice in its own font (Fonts.lua), a
+-- texture picker over a sample of its texture, and a sound picker has a speaker left of the button that plays the
+-- saved choice (Media.lua).
 
 local lib = LibStub("LibAeonSettings-1.0")
 if not lib.loading then
 	return
 end
 
+local L = lib.L
+
 local HEIGHT, TEXT_SIZE = 25, 14
 local SCROLL_AFTER, ENTRY_HEIGHT = 20, 20
 local MENU_INSETS, ENTRY_PADDING, RADIO_MARK, SCROLL_BAR = 16, 20, 20, 18
 local REASON_COLOR = { 1, 0.549, 0.471 }
+local SAMPLE_ALPHA = 0.6
+local SPEAKER_SIZE, SPEAKER_ICON, SPEAKER_GAP, SPEAKER_GRAY = 24, 20, 4, 0.85
 
 lib.Dropdown = {}
 local dropdownMeta = { __index = function(_, name) return lib.Dropdown[name] end }
@@ -19,26 +25,106 @@ local Handlers = lib.DropdownHandlers
 local function Choices(setting)
 	if setting.picker == "font" then
 		return lib:FontChoices()
+	elseif setting.picker == "texture" then
+		return lib:TextureChoices()
 	end
 	local options = setting.options
 	if type(options) == "function" then
 		options = lib.CallAdopter(options, setting)
 	end
+	options = type(options) == "table" and options or {}
+	if setting.picker == "sound" then
+		return lib:SoundChoices(options)
+	end
 
-	return type(options) == "table" and options or {}
+	return options
 end
 
+-- The saved choice, or nil when the list no longer has it.
+local function SavedChoice(setting)
+	local value = setting:GetValue()
+	for _, choice in ipairs(Choices(setting)) do
+		if not choice.title and choice.value == value then
+			return choice
+		end
+	end
+end
+
+-- The view's frame holds the button and, for a sound picker, the speaker, so a refused-save shake and the inactive
+-- dimming move and cover both.
 function lib:CreateDropdown(parent)
 	local view = setmetatable({}, dropdownMeta)
-	local dropdown = CreateFrame("DropdownButton", nil, parent, "WowStyle1DropdownTemplate")
+	local frame = CreateFrame("Frame", nil, parent)
+	frame:SetSize(lib.VALUE_WIDTH, HEIGHT)
+	local dropdown = CreateFrame("DropdownButton", nil, frame, "WowStyle1DropdownTemplate")
+	dropdown:SetPoint("RIGHT")
 	dropdown:SetSize(lib.VALUE_WIDTH, HEIGHT)
 	dropdown:EnableMouseWheel(false)
 	lib:SetFont(dropdown.Text, "body", TEXT_SIZE)
 	dropdown:SetupMenu(function(_, root) Handlers.Generate(view, root) end)
 	dropdown:RegisterCallback(DropdownButtonMixin.Event.OnMenuOpen, function() Handlers.Opened(view) end, view)
-	view.frame, view.dropdown = dropdown, dropdown
+	-- A texture picker's saved texture, behind the closed button's text.
+	local sample = dropdown:CreateTexture(nil, "ARTWORK")
+	sample:SetAlpha(SAMPLE_ALPHA)
+	sample:SetPoint("TOPLEFT", dropdown, "TOPLEFT", 6, -4)
+	sample:SetPoint("BOTTOMRIGHT", dropdown.Arrow, "BOTTOMLEFT", 0, 9)
+	sample:Hide()
+
+	local speaker = CreateFrame("Button", nil, frame)
+	speaker:SetSize(SPEAKER_SIZE, SPEAKER_SIZE)
+	speaker:SetPoint("LEFT")
+	speaker.icon = speaker:CreateTexture(nil, "ARTWORK")
+	speaker.icon:SetAtlas("voicechat-icon-speaker")
+	speaker.icon:SetSize(SPEAKER_ICON, SPEAKER_ICON)
+	speaker.icon:SetPoint("CENTER")
+	speaker.icon:SetVertexColor(SPEAKER_GRAY, SPEAKER_GRAY, SPEAKER_GRAY)
+	speaker:SetScript("OnEnter", function() Handlers.SpeakerEnter(view) end)
+	speaker:SetScript("OnLeave", function() Handlers.SpeakerLeave(view) end)
+	speaker:SetScript("OnMouseDown", function() Handlers.SpeakerDown(view) end)
+	speaker:SetScript("OnMouseUp", function() Handlers.SpeakerUp(view) end)
+	speaker:SetScript("OnClick", function() Handlers.Play(view) end)
+	speaker:Hide()
+	view.frame, view.dropdown, view.sample, view.speaker = frame, dropdown, sample, speaker
+	view.width = lib.VALUE_WIDTH
 
 	return view
+end
+
+function Handlers.SpeakerEnter(view)
+	local speaker = view.speaker
+	if speaker:IsEnabled() then
+		speaker.icon:SetVertexColor(1, 1, 1)
+	end
+	GameTooltip:SetOwner(speaker, "ANCHOR_TOP")
+	GameTooltip:SetText(L.PLAY_SOUND, 1, 1, 1)
+	GameTooltip:Show()
+end
+
+function Handlers.SpeakerLeave(view)
+	local speaker = view.speaker
+	speaker.icon:SetVertexColor(SPEAKER_GRAY, SPEAKER_GRAY, SPEAKER_GRAY)
+	speaker.icon:SetPoint("CENTER")
+	if GameTooltip:IsOwned(speaker) then
+		GameTooltip:Hide()
+	end
+end
+
+function Handlers.SpeakerDown(view)
+	if view.speaker:IsEnabled() then
+		view.speaker.icon:SetPoint("CENTER", 1, -1)
+	end
+end
+
+function Handlers.SpeakerUp(view)
+	view.speaker.icon:SetPoint("CENTER")
+end
+
+-- Plays the saved choice's sound; never changes the choice.
+function Handlers.Play(view)
+	local choice = view.setting and SavedChoice(view.setting)
+	if choice then
+		lib:PlayChoiceSound(choice)
+	end
 end
 
 -- Builds the list each time it opens: radios marking the saved choice, titles, blocked choices gray with their
@@ -50,7 +136,7 @@ function Handlers.Generate(view, root)
 	end
 	local choices = Choices(setting)
 	local scrolls = #choices > SCROLL_AFTER
-	local width = lib.VALUE_WIDTH
+	local width = view.width
 	if scrolls then
 		root:SetScrollMode(SCROLL_AFTER * ENTRY_HEIGHT)
 		root:SetMinimumWidth(width - SCROLL_BAR)
@@ -81,6 +167,14 @@ function Handlers.Generate(view, root)
 				end
 				if font then
 					fontString:SetFontObject(font)
+				end
+				if choice.texture then
+					local sample = button:AttachTexture()
+					sample:SetTexture(choice.texture)
+					sample:SetDrawLayer("BACKGROUND")
+					sample:SetAlpha(SAMPLE_ALPHA)
+					sample:SetPoint("TOPLEFT", 18, -2)
+					sample:SetPoint("BOTTOMRIGHT", -2, 2)
 				end
 				-- Every entry measures its full share, so each row spans the list and clicks anywhere on it;
 				-- longer names are cut short.
@@ -121,8 +215,8 @@ end
 
 -- A value's name in the list, or the value as it is when the list no longer has it.
 local function ChoiceText(setting, value)
-	-- A font's name is its value, so the font list is not built only to show it.
-	if setting.picker == "font" then
+	-- A font's or texture's name is its value, so the list is not built only to show it.
+	if setting.picker == "font" or setting.picker == "texture" then
 		return value ~= nil and tostring(value) or nil
 	end
 	for _, choice in ipairs(Choices(setting)) do
@@ -135,14 +229,25 @@ local function ChoiceText(setting, value)
 	return value ~= nil and tostring(value) or nil
 end
 
--- The closed button shows the saved choice's name.
+-- The closed button shows the saved choice's name, and a texture picker's texture behind it.
 function lib.Dropdown:ShowValue()
 	local setting = self.setting
-	self.dropdown:OverrideText(ChoiceText(setting, setting:GetValue()) or setting.placeholder or "")
+	local value = setting:GetValue()
+	self.dropdown:OverrideText(ChoiceText(setting, value) or setting.placeholder or "")
+	local texture = setting.picker == "texture" and lib:TextureFile(value)
+	if texture then
+		self.sample:SetTexture(texture)
+	end
+	self.sample:SetShown(texture and true or false)
 end
 
+-- A sound picker's button is narrower by the speaker and its gap, so the two together keep both edges in line.
 function lib.Dropdown:Bind(setting)
 	self.setting = setting
+	local sound = setting.picker == "sound"
+	self.width = sound and lib.VALUE_WIDTH - SPEAKER_SIZE - SPEAKER_GAP or lib.VALUE_WIDTH
+	self.dropdown:SetWidth(self.width)
+	self.speaker:SetShown(sound)
 	self:ShowValue()
 end
 
@@ -155,14 +260,17 @@ end
 
 function lib.Dropdown:Release()
 	self.dropdown:CloseMenu()
+	Handlers.SpeakerLeave(self)
 	self.setting = nil
 end
 
 function lib.Dropdown:SetActive(active)
 	if not active then
 		self.dropdown:CloseMenu()
+		Handlers.SpeakerLeave(self)
 	end
 	self.dropdown:SetEnabled(active)
+	self.speaker:SetEnabled(active)
 end
 
 function lib.Dropdown:GetWidth()

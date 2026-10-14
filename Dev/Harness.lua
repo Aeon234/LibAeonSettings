@@ -423,6 +423,16 @@ function Harness:DeclareBar(page)
 		depends = "general/plain" })
 end
 
+-- A sound picker's own sounds, Blizzard sound kits; LibSharedMedia's sounds follow them in the list.
+local SAMPLE_SOUNDS = {
+	{ value = "none", text = "None" },
+	{ value = "raidWarning", text = "Raid Warning", soundKit = SOUNDKIT.RAID_WARNING },
+	{ value = "readyCheck", text = "Ready Check", soundKit = SOUNDKIT.READY_CHECK },
+	{ value = "whisper", text = "Whisper", soundKit = SOUNDKIT.TELL_MESSAGE },
+	{ value = "alarmClock", text = "Alarm Clock", soundKit = SOUNDKIT.ALARM_CLOCK_WARNING_3 },
+	{ value = "questComplete", text = "Quest Complete", soundKit = SOUNDKIT.IG_QUEST_LIST_COMPLETE },
+}
+
 -- W3 test page: checkboxes, sliders, dropdowns, text inputs and buttons.
 function Harness:DeclareControls(page)
 	local function Value(key)
@@ -472,6 +482,10 @@ function Harness:DeclareControls(page)
 	dropdowns:Dropdown({ id = "font", label = "Font", path = "controls.font", default = "Expressway", picker = "font" })
 	dropdowns:Dropdown({ id = "outline", label = "Outline", path = "controls.outline", default = "SLUG_OUTLINE",
 		options = lib.OUTLINES })
+	dropdowns:Dropdown({ id = "texture", label = "Bar Texture", path = "controls.texture", default = "Blizzard",
+		picker = "texture" })
+	dropdowns:Dropdown({ id = "sound", label = "Alert Sound", path = "controls.sound", default = "raidWarning",
+		picker = "sound", options = SAMPLE_SOUNDS })
 
 	local texts = page:Section("texts", "Text Inputs")
 	texts:TextInput({ id = "nameFormat", label = "Name Format", path = "controls.nameFormat", default = "[name]",
@@ -516,6 +530,8 @@ function Harness:DeclareControls(page)
 		depends = "active" })
 	inactive:Dropdown({ id = "deadDropdown", label = "Dropdown", path = "controls.deadDropdown", default = "OUTLINE",
 		options = lib.OUTLINES, depends = "active" })
+	inactive:Dropdown({ id = "deadSound", label = "Sound", path = "controls.deadSound", default = "readyCheck",
+		picker = "sound", options = SAMPLE_SOUNDS, depends = "active" })
 	inactive:TextInput({ id = "deadText", label = "Text Input", path = "controls.deadText", default = "text",
 		depends = "active" })
 	inactive:Button({ id = "deadButton", label = "Button", verb = "Delete", confirm = "Close me by unchecking Controls Active.",
