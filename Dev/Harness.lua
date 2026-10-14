@@ -509,6 +509,17 @@ function Harness:DeclareControls(page)
 		picker = "texture" })
 	dropdowns:Dropdown({ id = "sound", label = "Alert Sound", path = "controls.sound", default = "raidWarning",
 		picker = "sound", options = SAMPLE_SOUNDS })
+	dropdowns:Dropdown({ id = "growth", label = "Growth", path = "controls.growth", default = "up", width = "fit",
+		description = "Fits its two choices.", options = { { value = "up", text = "up" }, { value = "down", text = "down" } } })
+	-- Acts instead of keeping a choice, after asking; 170 wide.
+	local copyFrom = dropdowns:Dropdown({ id = "copyFrom", label = "Copy Settings From", placeholder = "Copy From",
+		width = 170, verb = "Copy", titleCase = false,
+		options = { { value = "Left Panel", text = "Left Panel" }, { value = "Right Panel", text = "Right Panel" },
+			{ value = "Hidden Panel", text = "Hidden Panel", blocked = "It has no settings to copy." } },
+		confirm = function(value) return ("Replace these settings with the %s's?"):format(value) end,
+		get = function() return nil end,
+		set = function(value, setting) setting.window:ShowStatus(("Copied the %s's settings."):format(value)) end })
+	copyFrom.noUndo = true
 
 	local texts = page:Section("texts", "Text Inputs")
 	local nameFormat = texts:TextInput({ id = "nameFormat", label = "Name Format", path = "controls.nameFormat",

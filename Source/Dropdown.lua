@@ -1,7 +1,7 @@
 -- C-11, the dropdown: Blizzard's WowStyle1DropdownTemplate (no step arrows) with Blizzard's menu as a single-choice
 -- list, 220 wide. Choices are in Title Case. Pickers: a font picker draws each choice in its own font (Fonts.lua), a
 -- texture picker over a sample of its texture, and a sound picker has a speaker left of the button that plays the
--- saved choice (Media.lua).
+-- saved choice (Media.lua). A choice may ask before it saves; a dropdown may be narrower than 220, or fit its choices.
 
 local lib = LibStub("LibAeonSettings-1.0")
 if not lib.loading then
@@ -16,6 +16,7 @@ local MENU_INSETS, ENTRY_PADDING, RADIO_MARK, SCROLL_BAR = 16, 20, 20, 18
 local REASON_COLOR = { 1, 0.549, 0.471 }
 local SAMPLE_ALPHA = 0.6
 local SPEAKER_SIZE, SPEAKER_ICON, SPEAKER_GAP, SPEAKER_GRAY = 24, 20, 4, 0.85
+local FIT_MIN = 90
 
 lib.Dropdown = {}
 local dropdownMeta = { __index = function(_, name) return lib.Dropdown[name] end }
@@ -62,6 +63,10 @@ function lib:CreateDropdown(parent)
 	dropdown:EnableMouseWheel(false)
 	lib:SetFont(dropdown.Text, "body", TEXT_SIZE)
 	dropdown:SetupMenu(function(_, root) Handlers.Generate(view, root) end)
+	-- Measures choices for a dropdown that fits them, in the closed button's font.
+	view.measure = dropdown:CreateFontString(nil, "ARTWORK")
+	lib:SetFont(view.measure, "body", TEXT_SIZE)
+	view.measure:Hide()
 	dropdown:RegisterCallback(DropdownButtonMixin.Event.OnMenuOpen, function() Handlers.Opened(view) end, view)
 	-- A texture picker's saved texture, behind the closed button's text.
 	local sample = dropdown:CreateTexture(nil, "ARTWORK")
@@ -206,11 +211,28 @@ function Handlers.Opened(view)
 	end
 end
 
+-- Saves a picked choice, first asking the setting's `confirm(value)` question when it gives one; Cancel saves
+-- nothing.
 function Handlers.Picked(view, value)
 	local setting = view.setting
-	if setting and setting:GetValue() ~= value then
-		setting:Request(value)
+	if not setting or setting:GetValue() == value then
+		return
 	end
+	local question = setting.confirm
+	if type(question) == "function" then
+		question = lib.CallAdopter(question, value, setting)
+	end
+	if not question then
+		setting:Request(value)
+		return
+	end
+	lib:CloseConfirm(view.confirming)
+	view.confirming = lib:Confirm(question, setting.verb, function()
+		view.confirming = nil
+		if view.setting == setting then
+			setting:Request(value)
+		end
+	end)
 end
 
 -- A value's name in the list, or the value as it is when the list no longer has it.
@@ -241,11 +263,44 @@ function lib.Dropdown:ShowValue()
 	self.sample:SetShown(texture and true or false)
 end
 
--- A sound picker's button is narrower by the speaker and its gap, so the two together keep both edges in line.
+-- The width that fits the longest choice (and the placeholder): its text, the radio mark, the entry's padding and
+-- the menu's insets, plus the scroll bar for a list that scrolls; at least 90.
+local function FitWidth(view, setting)
+	local measure = view.measure
+	local widest = 0
+	local choices = Choices(setting)
+	local isPicker = setting.picker ~= nil or setting.titleCase == false
+	for _, choice in ipairs(choices) do
+		local text = isPicker and choice.text or lib.TitleCase(tostring(choice.text or choice.value))
+		measure:SetText(text or "")
+		widest = math.max(widest, measure:GetUnboundedStringWidth())
+	end
+	if setting.placeholder then
+		measure:SetText(setting.placeholder)
+		widest = math.max(widest, measure:GetUnboundedStringWidth())
+	end
+	local width = math.ceil(widest) + RADIO_MARK + ENTRY_PADDING + MENU_INSETS
+	if #choices > SCROLL_AFTER then
+		width = width + SCROLL_BAR
+	end
+
+	return math.max(FIT_MIN, width)
+end
+
+-- The control is the setting's `width` (a number, "fit", or 220). A sound picker's button is narrower by the
+-- speaker and its gap, so the two together keep both edges in line.
 function lib.Dropdown:Bind(setting)
+	lib:CloseConfirm(self.confirming)
+	self.confirming = nil
 	self.setting = setting
 	local sound = setting.picker == "sound"
-	self.width = sound and lib.VALUE_WIDTH - SPEAKER_SIZE - SPEAKER_GAP or lib.VALUE_WIDTH
+	local width = setting.width == "fit" and FitWidth(self, setting) or tonumber(setting.width) or lib.VALUE_WIDTH
+	if sound and setting.width == "fit" then
+		width = width + SPEAKER_SIZE + SPEAKER_GAP
+	end
+	self.total = width
+	self.width = sound and width - SPEAKER_SIZE - SPEAKER_GAP or width
+	self.frame:SetWidth(self.total)
 	self.dropdown:SetWidth(self.width)
 	self.speaker:SetShown(sound)
 	self:ShowValue()
@@ -258,8 +313,11 @@ function lib.Dropdown:Update(_, refused)
 	end
 end
 
+-- Releasing or going inactive closes the list and a confirmation still open.
 function lib.Dropdown:Release()
 	self.dropdown:CloseMenu()
+	lib:CloseConfirm(self.confirming)
+	self.confirming = nil
 	Handlers.SpeakerLeave(self)
 	self.setting = nil
 end
@@ -267,6 +325,8 @@ end
 function lib.Dropdown:SetActive(active)
 	if not active then
 		self.dropdown:CloseMenu()
+		lib:CloseConfirm(self.confirming)
+		self.confirming = nil
 		Handlers.SpeakerLeave(self)
 	end
 	self.dropdown:SetEnabled(active)
@@ -274,11 +334,12 @@ function lib.Dropdown:SetActive(active)
 end
 
 function lib.Dropdown:GetWidth()
-	return lib.VALUE_WIDTH
+	return self.total or lib.VALUE_WIDTH
 end
 
 lib:RegisterControl("Dropdown", {
-	fields = { options = true, picker = true, placeholder = true, titleCase = true },
+	fields = { options = true, picker = true, placeholder = true, titleCase = true, confirm = true, verb = true,
+		width = true },
 	Format = ChoiceText,
 	Create = function(half) return lib:CreateDropdown(half) end,
 })
