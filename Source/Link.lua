@@ -14,6 +14,7 @@ local LINK_HEIGHT, LINK_PADDING, LINK_MIN = 26, 40, 120 -- C-14's button, fitted
 local LINK_TEXT_SIZE = 14
 local TITLE_CENTER = 15 -- the section title's center line, from the header's top
 local SECTION_LANDING = 8 -- a section lands this far below the list's top
+local LINK_GAP = 8
 local CLICK_SOUND = SOUNDKIT and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON
 
 lib.LinkHandlers = lib.LinkHandlers or {}
@@ -63,7 +64,6 @@ local function CreateLink(window, header)
 	lib:SetFont(button:GetFontString(), "body", LINK_TEXT_SIZE)
 	button:SetText(L.EDIT_POSITION)
 	button:SetWidth(math.max(LINK_MIN, math.ceil(button:GetFontString():GetUnboundedStringWidth()) + LINK_PADDING))
-	button:SetPoint("RIGHT", header, "TOPRIGHT", 0, -TITLE_CENTER)
 	button:SetScript("OnClick", function() Handlers.EditPosition(window, header.linkTarget) end)
 	button:SetScript("OnEnter", function() Handlers.LinkEnter(button, header.linkTarget) end)
 	button:SetScript("OnLeave", GameTooltip_Hide)
@@ -78,6 +78,13 @@ function lib.Window:RefreshSectionLink(header, section)
 	header.linkTarget = target
 	if target then
 		local link = header.link or CreateLink(self, header)
+		-- Left of the section's menu when it has one.
+		link:ClearAllPoints()
+		if header.menuSetting then
+			link:SetPoint("RIGHT", header.menu.frame, "LEFT", -LINK_GAP, 0)
+		else
+			link:SetPoint("RIGHT", header, "TOPRIGHT", 0, -TITLE_CENTER)
+		end
 		link:Show()
 	elseif header.link then
 		header.link:Hide()

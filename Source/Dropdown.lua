@@ -2,6 +2,7 @@
 -- list, 220 wide. Choices are in Title Case. Pickers: a font picker draws each choice in its own font (Fonts.lua), a
 -- texture picker over a sample of its texture, and a sound picker has a speaker left of the button that plays the
 -- saved choice (Media.lua). A choice may ask before it saves; a dropdown may be narrower than 220, or fit its choices.
+-- An action dropdown keeps no choice: picking runs its `set`, Undo leaves it out and the button shows its placeholder.
 
 local lib = LibStub("LibAeonSettings-1.0")
 if not lib.loading then
@@ -337,9 +338,25 @@ function lib.Dropdown:GetWidth()
 	return self.total or lib.VALUE_WIDTH
 end
 
+-- An action dropdown needs only `set`: it reads as no choice, and Undo does not record its picks.
+local function Init(setting)
+	if not setting.action then
+		return
+	end
+	setting.noUndo = true
+	if not setting.set then
+		lib:Report(setting.window.addonName, ("%s/%s: an action dropdown needs set"):format(setting.page.id,
+			tostring(setting.id)))
+	end
+	if not setting.get and not setting.path then
+		setting.get = function() return nil end
+	end
+end
+
 lib:RegisterControl("Dropdown", {
 	fields = { options = true, picker = true, placeholder = true, titleCase = true, confirm = true, verb = true,
-		width = true },
+		width = true, action = true },
+	Init = Init,
 	Format = ChoiceText,
 	Create = function(half) return lib:CreateDropdown(half) end,
 })

@@ -20,6 +20,7 @@ local DESCRIPTION_SIZE, DESCRIPTION_GAP = 14, 6
 local SWITCH_SIZE, SWITCH_GAP, SWITCH_TOP = 16, 12, 4
 local SECTION_GAP, SECTION_TITLE_SIZE, SECTION_TITLE_HEIGHT = 14, 18, 30
 local SECTION_RULE_ALPHA = 0.9
+local MENU_CENTER = 15 -- the section title's center line, from the header's top
 local ROW_HEIGHT, TALL_HEIGHT = 44, 52
 local INSET, CONTROL_RIGHT, LABEL_GAP, MIN_LABEL = 20, 64, 12, 80
 local LABEL_SIZE, LABEL_HEIGHT, SMALL_SIZE, SMALL_HEIGHT = 14, 17, 12, 15
@@ -168,6 +169,43 @@ local function CreateSectionHeader(view)
 	return header
 end
 
+-- A section header's menu goes back to the pool with its header: its list and any question close.
+local function ResetSectionHeader(header)
+	if header.menu then
+		header.menu:Release()
+		header.menu.frame:Hide()
+		header.menu.blocker:Hide()
+	end
+	header.menuSetting = nil
+end
+
+-- Shows a section's menu on its title line, right-aligned on the title's center line, or hides the header's.
+local function BindSectionMenu(view, header, section)
+	local setting = section.menu
+	if not setting then
+		return
+	end
+	local menu = header.menu
+	if not menu then
+		menu = lib.controls.Dropdown.Create(header)
+		-- Over an inactive menu: takes its clicks and shows the reason on hover.
+		menu.blocker = CreateFrame("Frame", nil, header)
+		menu.blocker:EnableMouse(true)
+		menu.blocker:SetAllPoints(menu.frame)
+		menu.blocker:SetScript("OnEnter", function() Handlers.MenuBlockerEnter(header) end)
+		menu.blocker:SetScript("OnLeave", GameTooltip_Hide)
+		menu.blocker:Hide()
+		header.menu = menu
+	end
+	menu.frame:ClearAllPoints()
+	menu.frame:SetPoint("RIGHT", header, "TOPRIGHT", 0, -MENU_CENTER)
+	menu:Bind(setting)
+	menu.frame:Show()
+	menu.blocker:SetFrameLevel(menu.frame:GetFrameLevel() + 10)
+	header.menuSetting = setting
+	view.menuOf[setting] = menu
+end
+
 local function CreateNote(view)
 	local note = CreateFrame("Frame", nil, view.scroll.child)
 	note.text = note:CreateFontString(nil, "OVERLAY")
@@ -226,7 +264,7 @@ local function BuildPageView(window)
 	view.scroll = lib:CreateScroll(body, { step = 60 })
 
 	view.halves = NewPool(function() return CreateHalf(view) end, ResetHalf)
-	view.sectionHeaders = NewPool(function() return CreateSectionHeader(view) end)
+	view.sectionHeaders = NewPool(function() return CreateSectionHeader(view) end, ResetSectionHeader)
 	view.notes = NewPool(function() return CreateNote(view) end)
 	view.lines = NewPool(function() return view.scroll.child:CreateTexture(nil, "BORDER") end)
 	view.items = {}
@@ -285,6 +323,8 @@ function lib.Window:ShowPage()
 	wipe(view.items)
 	-- The shown page's rows by setting and section headers by section; settings and sections hold no frames.
 	view.halfOf, view.headerOf = view.halfOf or {}, view.headerOf or {}
+	view.menuOf = view.menuOf or {}
+	wipe(view.menuOf)
 	wipe(view.halfOf)
 	wipe(view.headerOf)
 	view.shownPage = page
@@ -316,6 +356,7 @@ function lib.Window:ShowPage()
 		header.title:SetText(section.title or "")
 		header.section = section
 		view.headerOf[section] = header
+		BindSectionMenu(view, header, section)
 		self:RefreshSectionLink(header, section)
 		view.items[#view.items + 1] = { header = header }
 		for _, line in ipairs(section.lines) do
@@ -411,6 +452,14 @@ function lib.Window:RefreshStates()
 	end
 	local pageOff = page.switch ~= nil and not page.switch:GetValue()
 	view.scroll.frame:SetAlpha(pageOff and PAGE_OFF_ALPHA or 1)
+	-- Section menus: dimmed and closed while inactive, their reason on hover.
+	for setting, menu in pairs(view.menuOf) do
+		local active, reason = setting:Activity()
+		menu:SetActive(active)
+		menu.frame:SetAlpha(active and 1 or INACTIVE_ALPHA)
+		menu.blocker:SetShown(not active)
+		menu.reason = reason
+	end
 	local layoutChanged = false
 	for _, item in ipairs(view.items) do
 		for index = 1, 2 do
@@ -558,7 +607,7 @@ function lib.Window:ControlOf(setting)
 	end
 	local half = view.halfOf[setting]
 
-	return half and half.view
+	return half and half.view or view.menuOf and view.menuOf[setting]
 end
 
 ---Called when a setting's value changed: redraws its view at once (sliding unless `instant`; shaking when
@@ -609,6 +658,16 @@ end
 -- Overrides ---------------------------------------------------------------------------------------------------
 
 -- ◆ names the shared value the row overrides.
+function Handlers.MenuBlockerEnter(header)
+	local menu = header.menu
+	if not menu or not menu.reason then
+		return
+	end
+	GameTooltip:SetOwner(menu.blocker, "ANCHOR_TOP")
+	GameTooltip:SetText(menu.reason, REASON_COLOR[1], REASON_COLOR[2], REASON_COLOR[3], 1, true)
+	GameTooltip:Show()
+end
+
 function Handlers.DiamondEnter(half)
 	local setting = half.setting
 	if not setting or not setting.inherits then
@@ -648,6 +707,9 @@ function lib.Window:Refresh()
 	end
 	if view.shownPage.switch then
 		view.switch:Update(true)
+	end
+	for _, menu in pairs(view.menuOf) do
+		menu:Update(true)
 	end
 	for _, item in ipairs(view.items) do
 		for index = 1, 2 do

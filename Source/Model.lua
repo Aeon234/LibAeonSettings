@@ -26,7 +26,8 @@ local SETTING_FIELDS = { id = true, label = true, description = true, path = tru
 local MAX_CHAIN = 16
 
 ---Registers a control kind: `section:<Kind>(info)` declares a setting drawn with it. `info.fields` lists the fields
----the kind adds; `info.Create(half)` makes its view (see Page.lua for the view contract).
+---the kind adds; `info.Create(half)` makes its view (see Page.lua for the view contract); `info.Init(setting)`, if
+---given, runs on each new setting before its value binding is checked.
 function lib:RegisterControl(kind, info)
 	self.controls[kind] = info
 	self.Section[kind] = function(section, settingInfo)
@@ -94,6 +95,9 @@ function lib.PageModel:NewSetting(kind, info)
 	end
 	local setting = setmetatable(info, settingMeta)
 	setting.kind, setting.page, setting.window = kind, self, window
+	if control.Init then
+		control.Init(setting)
+	end
 	if info.inherits ~= nil then
 		local inherits = type(info.inherits) == "table" and info.inherits or { path = info.inherits }
 		if type(inherits.path) == "string" then
@@ -142,6 +146,23 @@ end
 ---Leaves the next half empty.
 function lib.Section:Skip()
 	Place(self, lib.EMPTY, false)
+end
+
+---Puts a dropdown on the section's title line, right-aligned, for something done to the whole section (such as
+---Copy Settings From). `info` takes a Dropdown's fields; it is not searched and takes no row.
+---@return table? setting
+function lib.Section:Menu(info)
+	if self.menu then
+		lib:Report(self.page.window.addonName, ("%s/%s: a section has one menu"):format(self.page.id, tostring(self.id)))
+		return
+	end
+	local setting = self.page:NewSetting("Dropdown", info)
+	if setting then
+		setting.section = self
+		self.menu = setting
+	end
+
+	return setting
 end
 
 ---Adds a line of text across the section, with an optional smaller second part.

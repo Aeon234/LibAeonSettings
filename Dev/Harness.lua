@@ -426,6 +426,27 @@ function Harness:DeclareAppearance(page)
 			max = 900, step = 10, inherits = { path = "look.shared.width", from = "Shared" } })
 		section:Color({ id = side[1] .. "Color", label = "Color", path = "look." .. side[1] .. ".color",
 			inherits = { path = "look.shared.color", from = "Shared" } })
+		-- A section menu: copies the other panel's own settings over this one's, after asking.
+		local other = side[1] == "left" and { "right", "Right Panel" } or { "left", "Left Panel" }
+		section:Menu({ id = side[1] .. "Copy", placeholder = "Copy From", width = 170, action = true, verb = "Copy",
+			titleCase = false,
+			options = { { value = other[1], text = other[2] },
+				{ value = "hidden", text = "Hidden Panel", blocked = "It has no settings to copy." } },
+			blocked = function()
+				local look = Harness:Profile().look
+				if not (look and look[other[1]] and next(look[other[1]])) then
+					return ("The %s has no settings of its own."):format(other[2])
+				end
+			end,
+			confirm = function(value)
+				return ("Replace the %s Panel's settings with the %s's?"):format(side[2], other[2])
+			end,
+			set = function(value, setting)
+				local look = Harness:Profile().look
+				look[side[1]] = CopyTable(look[value])
+				setting.window:Refresh()
+				setting.window:ShowStatus(("Copied the %s's settings."):format(other[2]))
+			end })
 	end
 end
 
@@ -511,15 +532,6 @@ function Harness:DeclareControls(page)
 		picker = "sound", options = SAMPLE_SOUNDS })
 	dropdowns:Dropdown({ id = "growth", label = "Growth", path = "controls.growth", default = "up", width = "fit",
 		description = "Fits its two choices.", options = { { value = "up", text = "up" }, { value = "down", text = "down" } } })
-	-- Acts instead of keeping a choice, after asking; 170 wide.
-	local copyFrom = dropdowns:Dropdown({ id = "copyFrom", label = "Copy Settings From", placeholder = "Copy From",
-		width = 170, verb = "Copy", titleCase = false,
-		options = { { value = "Left Panel", text = "Left Panel" }, { value = "Right Panel", text = "Right Panel" },
-			{ value = "Hidden Panel", text = "Hidden Panel", blocked = "It has no settings to copy." } },
-		confirm = function(value) return ("Replace these settings with the %s's?"):format(value) end,
-		get = function() return nil end,
-		set = function(value, setting) setting.window:ShowStatus(("Copied the %s's settings."):format(value)) end })
-	copyFrom.noUndo = true
 
 	local texts = page:Section("texts", "Text Inputs")
 	local nameFormat = texts:TextInput({ id = "nameFormat", label = "Name Format", path = "controls.nameFormat",
@@ -529,9 +541,8 @@ function Harness:DeclareControls(page)
 				return "It needs a tag in brackets, such as [name]."
 			end
 		end })
-	-- Acts instead of keeping a choice: puts the tag where Name Format's cursor last was. Undo records the insertion
-	-- on Name Format, not the pick, as the Profiles page's dropdown does.
-	local insertTag = texts:Dropdown({ id = "insertTag", label = "Insert Tag", placeholder = "Insert Tag", titleCase = false,
+	-- An action: puts the tag where Name Format's cursor last was. Undo records the insertion on Name Format.
+	texts:Dropdown({ id = "insertTag", label = "Insert Tag", placeholder = "Insert Tag", titleCase = false, action = true,
 		options = {
 			{ title = true, text = "Unit" },
 			{ value = "[name]", text = "[name]", tooltip = "The unit's name." },
@@ -539,9 +550,7 @@ function Harness:DeclareControls(page)
 			{ title = true, text = "Text" },
 			{ value = "[Ñame]", text = "[Ñame]", tooltip = "A tag with a two-byte letter, for counting characters." },
 		},
-		get = function() return nil end,
 		set = function(tag) nameFormat:InsertText(tag) end })
-	insertTag.noUndo = true
 	texts:TextInput({ id = "welcome", label = "Welcome Message", path = "controls.welcome",
 		default = "Welcome back!", allowEmpty = true, description = "May be empty: the default shows gray." })
 	texts:TextInput({ id = "profileName", label = "Profile Name", path = "controls.profileName", default = "Default",

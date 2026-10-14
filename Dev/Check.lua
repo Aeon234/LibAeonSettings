@@ -1,5 +1,5 @@
 -- Offline checks of the library's rules that need no client: positions, target lists and size matching, the
--- media pickers' choices, the settings model, Undo, search and text insertion. Loads the real source files under small stand-ins for the WoW API.
+-- media pickers' choices, the settings model, Undo, search, text insertion and section menus. Loads the real source files under small stand-ins for the WoW API.
 -- Run from anywhere with Lua 5.1: ~/.local/lua51/bin/lua Dev/Check.lua
 
 local root = (arg and arg[0] or ""):match("^(.*)[/\\]Dev[/\\]Check%.lua$") or "."
@@ -100,7 +100,7 @@ function strlenutf8(text)
 
 	return count
 end
-for _, file in ipairs({ "Model", "Search", "Undo", "TextInput" }) do
+for _, file in ipairs({ "Model", "Search", "Undo", "TextInput", "Dropdown" }) do
 	dofile(root .. "/Source/" .. file .. ".lua")
 end
 
@@ -308,6 +308,32 @@ do
 	local before = #errors
 	section:Toggle({ id = "plain", label = "Plain", path = "slot.plain" }):InsertText("x")
 	Check("cursor: InsertText on another control is reported", #errors == before + 1)
+end
+
+-- Action dropdowns and section menus
+
+do
+	local store = {}
+	local window = NewWindow(store)
+	local page = NewPage(window, "copy", "Copy")
+	local section = page:Section("look", "Look")
+	local picked
+	local copy = section:Menu({ id = "copy", placeholder = "Copy From", action = true,
+		options = { { value = "other", text = "Other" } }, set = function(value) picked = value end })
+	Check("menu: a section menu belongs to its section and takes no row",
+		section.menu == copy and copy.section == section and #section.lines == 0)
+	Check("menu: an action dropdown reads as no choice and is left out of Undo",
+		copy:GetValue() == nil and copy.noUndo == true)
+	local before = #errors
+	section:Menu({ id = "second", action = true, set = function() end })
+	Check("menu: a second menu on a section is reported", #errors == before + 1 and page.settings.second == nil)
+	before = #errors
+	section:Dropdown({ id = "noSet", action = true, options = {} })
+	Check("menu: an action dropdown without set is reported", #errors == before + 1)
+	window.RefreshUndo = function() end
+	copy:Request("other")
+	Check("menu: picking an action runs set without recording Undo",
+		picked == "other" and #(window.undoHistory or {}) == 0)
 end
 
 -- Undo
