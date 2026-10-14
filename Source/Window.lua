@@ -356,6 +356,7 @@ function Handlers.Moved(window)
 end
 
 function Handlers.Hidden(window)
+	window:StopPreview()
 	for _, other in pairs(lib.windows) do
 		if other:IsShown() then
 			return

@@ -123,8 +123,8 @@ function Harness:DeclarePages()
 		description = "W3: every basic control, with refusals and a checkbox that makes the rest inactive." }))
 	self:DeclareOverrides(window:Page("overrides", { title = "Overrides",
 		description = "W5: Clock follows the Whole Bar until a setting is changed here." }))
-	self:DeclareAppearance(window:Page("appearance", { title = "Appearance",
-		description = "W6: a preview shared by tabs that set the same things for different panels." }))
+	self:DeclareAppearance(window:Page("appearance", { title = "Appearance", switch = { path = "look.enabled", default = true },
+		description = "W6: a preview shared by tabs that set the same things for different panels; its parts find their settings." }))
 	self:DeclareBar(window:Page("bar", { title = "Bar", switch = { path = "bar.enabled", default = true },
 		description = "A page with a switch: turning it off dims and desaturates everything below the header." }))
 	window:Divider()
@@ -332,7 +332,9 @@ function Harness:DeclareOverrides(page)
 		end })
 end
 
--- W6 test page: a preview (state pills, shrinking to fit with its caption) over tabs for Shared, Left and Right.
+-- W6 test page: a preview (state pills, shrinking to fit with its caption) over tabs for Shared, Left and Right. Its
+-- parts find their settings: a panel finds its tab's Color, a label its tab's Width and chooses that panel. A tick
+-- counter runs while the preview shows and the page is on, so `stop` can be seen ending it.
 function Harness:DeclareAppearance(page)
 	local function Get(path)
 		local value = Harness:Profile()
@@ -366,8 +368,11 @@ function Harness:DeclareAppearance(page)
 				text:SetText(side == "left" and "Left" or "Right")
 				canvas.panels[index] = { texture = panel, text = text, side = side }
 			end
+			canvas.ticks = canvas:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+			canvas.ticks:SetPoint("TOPLEFT", canvas, "BOTTOMLEFT", 0, -2)
+			canvas.tickCount = 0
 		end,
-		refresh = function(canvas, state)
+		refresh = function(canvas, state, preview)
 			local x, height, gap = 0, 32, 12
 			for _, entry in ipairs(canvas.panels) do
 				local panel = Panel(entry.side)
@@ -377,9 +382,27 @@ function Harness:DeclareAppearance(page)
 				entry.texture:SetColorTexture(panel.color.r, panel.color.g, panel.color.b, state == "Faded" and 0.3 or 0.9)
 				entry.texture:SetShown(state ~= "In Combat")
 				entry.text:SetShown(state ~= "In Combat")
+				preview:Part(entry.texture, entry.side .. "Color")
+				preview:Part(entry.text, entry.side .. "Width", { text = true, key = entry.side })
 				x = x + panel.width + gap
 			end
+			if not canvas.ticker then
+				canvas.ticker = C_Timer.NewTicker(0.5, function()
+					canvas.tickCount = canvas.tickCount + 1
+					canvas.ticks:SetFormattedText("Ticks: %d", canvas.tickCount)
+				end)
+			end
+			canvas.ticks:SetFormattedText("Ticks: %d", canvas.tickCount)
 			return x - gap, height
+		end,
+		stop = function(canvas)
+			if canvas.ticker then
+				canvas.ticker:Cancel()
+				canvas.ticker = nil
+			end
+		end,
+		pick = function(key, preview)
+			preview.page.window:ShowStatus(("Chose the %s panel."):format(key))
 		end,
 		caption = function(state, scale)
 			if state == "In Combat" then

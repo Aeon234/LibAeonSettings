@@ -1,6 +1,7 @@
 -- The page's fixed part between its header and its scrolling sections: the Preview (the adopter draws a sample
 -- into a canvas the library shrinks to fit, with state pills and a caption) and the page tabs (Blizzard's Options
 -- tabs), allowed in two cases only: the same settings for different targets, and large parts sharing one preview.
+-- The sample's parts find their settings: hovering one outlines it in gold, a left click lands on its row.
 
 local lib = LibStub("LibAeonSettings-1.0")
 if not lib.loading then
@@ -23,29 +24,79 @@ local GOLD = { 1, 0.82, 0 }
 local DESCRIPTION_COLOR = { 1, 1, 1, 0.72 }
 local TAB_TEXT = { 1, 1, 1, 0.75 }
 local TAB_SOUND = SOUNDKIT and SOUNDKIT.IG_CHARACTER_INFO_TAB
-local PREVIEW_FIELDS = { height = true, states = true, create = true, refresh = true, caption = true }
+local PREVIEW_FIELDS = { height = true, states = true, create = true, refresh = true, caption = true, pick = true,
+	stop = true }
+local PART_FIELDS = { text = true, key = true }
+local PART_TEXT_PAD, PART_OUTLINE = 2, 2 -- the pad in the sample's own units; the outline in the window's
+local PART_LEVEL, TEXT_PART_LEVEL = 50, 300 -- above the sample's own frames; text parts above every other part
+local INACTIVE_ALPHA = 0.5
+local HINT_SIZE, HINT_ALPHA, HINT_GAP = 11, 0.65, 12
 
 lib.PreviewHandlers = lib.PreviewHandlers or {}
 local Handlers = lib.PreviewHandlers
 lib.Tab = {}
 local tabMeta = { __index = function(_, name) return lib.Tab[name] end }
+lib.PreviewModel = {}
+local previewMeta = { __index = function(_, name) return lib.PreviewModel[name] end }
 
 -- Model ------------------------------------------------------------------------------------------------------
 
 ---Gives the page a Preview above its sections. `info`: `height` (the stage, 84 by default); `states` (a list of
 ---names, or a function returning the ones that apply now; pills show when more than one does); `create(canvas,
 ---preview)` once; `refresh(canvas, state, preview)` on every change, returning the sample's natural width and
----height (the canvas shrinks to fit the stage); `caption(state, scale)` returning a line under the stage.
+---height (the canvas shrinks to fit the stage) and marking its parts with `preview:Part`; `caption(state, scale)`
+---returning a line under the stage; `pick(key, preview)` when a part with a key is clicked; `stop(canvas, preview)`
+---to end the sample's animations, called when the state, the page or the window changes, and after every refresh
+---while the page is switched off.
 function lib.PageModel:Preview(info)
 	info = info or {}
 	for field in pairs(info) do
-		if not PREVIEW_FIELDS[field] then
+		if not PREVIEW_FIELDS[field] and field ~= "page" then
 			lib:Report(self.window.addonName, ("%s: unknown preview field %q"):format(self.id, tostring(field)))
 		end
 	end
-	self.preview = info
+	info.page = self
+	self.preview = setmetatable(info, previewMeta)
 
 	return info
+end
+
+---Marks a part of the sample, from `refresh`: hovering it outlines it, a left click lands on its setting.
+---`target`: a setting id on this page, "page/id", or a function returning one at click time; nil for a part that
+---is only chosen. `options.text`: a font string's part fits its text, 2 larger all round. `options.key` names the
+---part: a click chooses it (it keeps its outline) and calls `pick(key)`. Parts declared later are on top; text parts
+---are above every other part.
+---@param region Region
+---@param target string|fun(preview: table): string?|nil
+---@param options { text: boolean?, key: any }?
+function lib.PreviewModel:Part(region, target, options)
+	local page = self.page
+	local parts = page.declaredParts
+	if not parts then
+		lib:Report(page.window.addonName, ("%s: preview:Part is called from refresh only"):format(page.id))
+		return
+	end
+	options = options or {}
+	for field in pairs(options) do
+		if not PART_FIELDS[field] then
+			lib:Report(page.window.addonName, ("%s: unknown preview part field %q"):format(page.id, tostring(field)))
+		end
+	end
+	if region then
+		table.insert(parts, { region = region, target = target, text = options.text, key = options.key })
+	end
+end
+
+---Chooses the part with `key` (nil: none), as a click on it would, without landing or calling `pick`; for a page
+---whose chosen part follows a control, such as a slot dropdown.
+function lib.PreviewModel:Choose(key)
+	self.page.previewChosen = key
+	Handlers.PlaceChosen(self.page)
+end
+
+---@return any key the chosen part's key, or nil
+function lib.PreviewModel:Chosen()
+	return self.page.previewChosen
 end
 
 ---Adds a tab to the page; its sections are declared with `tab:Section(id, title)`. `info.countOverrides` shows
@@ -197,6 +248,12 @@ function lib:BuildFixedArea(window, view)
 	preview.title:SetPoint("TOPLEFT", 0, -PREVIEW_GAP)
 	preview.title:SetHeight(SECTION_TITLE_HEIGHT)
 	preview.title:SetText(L.PREVIEW)
+	preview.hint = preview:CreateFontString(nil, "OVERLAY")
+	lib:SetFont(preview.hint, "body", HINT_SIZE)
+	preview.hint:SetTextColor(1, 1, 1, HINT_ALPHA)
+	preview.hint:SetPoint("LEFT", preview.title, "RIGHT", HINT_GAP, 0)
+	preview.hint:SetText(L.PREVIEW_HINT)
+	preview.hint:Hide()
 	preview.rule = preview:CreateTexture(nil, "ARTWORK")
 	preview.rule:SetAtlas("Options_HorizontalDivider")
 	preview.rule:SetAlpha(0.9)
@@ -250,6 +307,11 @@ function lib.Window:ShowFixedArea(page)
 	local fixed = view.fixed
 	local preview, tabs = fixed.preview, fixed.tabs
 	local height = 0
+	-- A page change ends the last page's animations and its chosen part.
+	if view.previewPage ~= page then
+		self:StopPreview()
+		view.previewPage = page
+	end
 
 	preview:SetShown(page.preview ~= nil)
 	if page.preview then
@@ -329,6 +391,7 @@ function lib.Window:RefreshFixedArea()
 
 		local canvas = page.previewCanvas
 		local width, height
+		page.declaredParts = {}
 		if page.preview.refresh then
 			width, height = lib.CallAdopter(page.preview.refresh, canvas, current, page.preview)
 		end
@@ -338,6 +401,15 @@ function lib.Window:RefreshFixedArea()
 		local roomHeight = preview.stage:GetHeight() - ROOM_Y
 		local scale = math.min(1, roomWidth / width, roomHeight / height)
 		canvas:SetScale(math.max(0.05, scale))
+		-- While the page is switched off the sample is faded and still; its parts still find their settings.
+		local off = page.switch ~= nil and not page.switch:GetValue()
+		canvas:SetAlpha(off and INACTIVE_ALPHA or 1)
+		page.previewRunning = true
+		if off then
+			self:StopPreview(page)
+		end
+		local count = Handlers.PlaceParts(self, page)
+		preview.hint:SetShown(count > 0)
 		local caption
 		if page.preview.caption then
 			caption = lib.CallAdopter(page.preview.caption, current, scale)
@@ -377,6 +449,7 @@ end
 function Handlers.PillClick(window, state)
 	local page = window.pageView and window.pageView.shownPage
 	if page and page.previewState ~= state then
+		window:StopPreview(page)
 		page.previewState = state
 		PlaySound(TAB_SOUND)
 		window:RefreshFixedArea()
@@ -389,5 +462,199 @@ function Handlers.TabClick(window, tabId)
 		page.tab = tabId
 		PlaySound(TAB_SOUND)
 		window:ShowPage()
+	end
+end
+
+-- Parts ------------------------------------------------------------------------------------------------------
+
+-- A gold outline drawn just inside its frame's edges.
+local function CreateOutline(parent)
+	local outline = CreateFrame("Frame", nil, parent)
+	outline.edges = {}
+	for _, side in ipairs({ { "TOPLEFT", "TOPRIGHT", true }, { "BOTTOMLEFT", "BOTTOMRIGHT", true },
+		{ "TOPLEFT", "BOTTOMLEFT", false }, { "TOPRIGHT", "BOTTOMRIGHT", false } }) do
+		local edge = outline:CreateTexture(nil, "OVERLAY")
+		edge:SetColorTexture(GOLD[1], GOLD[2], GOLD[3], 1)
+		edge:SetPoint(side[1])
+		edge:SetPoint(side[2])
+		edge.horizontal = side[3]
+		table.insert(outline.edges, edge)
+	end
+	outline:Hide()
+
+	return outline
+end
+
+-- Puts an outline over a part's hit area, its edges 2 wide in the window whatever the sample's scale.
+local function ShowOutline(outline, button)
+	outline:ClearAllPoints()
+	outline:SetAllPoints(button)
+	outline:SetFrameLevel(button:GetFrameLevel() + 1)
+	local width = PART_OUTLINE / math.max(0.05, outline:GetParent():GetParent():GetScale())
+	for _, edge in ipairs(outline.edges) do
+		if edge.horizontal then
+			edge:SetHeight(width)
+		else
+			edge:SetWidth(width)
+		end
+	end
+	outline.button = button
+	outline:Show()
+end
+
+local function CreatePart(layer, window)
+	local button = CreateFrame("Button", nil, layer)
+	button:RegisterForClicks("LeftButtonUp")
+	button.window = window
+	button:SetScript("OnEnter", function(self) Handlers.PartEnter(self) end)
+	button:SetScript("OnLeave", function(self) Handlers.PartLeave(self) end)
+	button:SetScript("OnHide", function(self) Handlers.PartLeave(self) end)
+	button:SetScript("OnClick", function(self) Handlers.PartClick(self) end)
+
+	return button
+end
+
+-- A font string's hit area: its text, not its region, 2 larger all round, placed by its justification.
+local function FitText(button, fontString)
+	local width = fontString:GetStringWidth() + 2 * PART_TEXT_PAD
+	local height = fontString:GetStringHeight() + 2 * PART_TEXT_PAD
+	button:SetSize(math.max(1, width), math.max(1, height))
+	local justify = fontString:GetJustifyH()
+	if justify == "LEFT" then
+		button:SetPoint("LEFT", fontString, "LEFT", -PART_TEXT_PAD, 0)
+	elseif justify == "RIGHT" then
+		button:SetPoint("RIGHT", fontString, "RIGHT", PART_TEXT_PAD, 0)
+	else
+		button:SetPoint("CENTER", fontString, "CENTER")
+	end
+end
+
+-- Lays the parts `refresh` declared over the sample, reusing the page's hit areas; returns how many show.
+function Handlers.PlaceParts(window, page)
+	local declared = page.declaredParts or {}
+	page.declaredParts = nil
+	local canvas = page.previewCanvas
+	local layer = page.partLayer
+	if not layer then
+		if #declared == 0 then
+			return 0
+		end
+		layer = CreateFrame("Frame", nil, canvas)
+		layer:SetAllPoints()
+		layer.buttons = {}
+		layer.hover = CreateOutline(layer)
+		layer.chosen = CreateOutline(layer)
+		page.partLayer = layer
+	end
+	local base = canvas:GetFrameLevel() + PART_LEVEL
+	local count = 0
+	for _, part in ipairs(declared) do
+		local region = part.region
+		if not region.IsShown or region:IsShown() then
+			count = count + 1
+			local button = layer.buttons[count] or CreatePart(layer, window)
+			layer.buttons[count] = button
+			button.part, button.page = part, page
+			button:ClearAllPoints()
+			if part.text and region.GetStringWidth then
+				FitText(button, region)
+			else
+				button:SetAllPoints(region)
+			end
+			button:SetFrameLevel(base + (part.text and TEXT_PART_LEVEL or 0) + count)
+			button:Show()
+		end
+	end
+	for index = count + 1, #layer.buttons do
+		layer.buttons[index]:Hide()
+	end
+	-- The hovered part keeps its outline across the redraw; the engine sends OnLeave if it moved away.
+	local hover = layer.hover
+	if hover:IsShown() and hover.button:IsShown() then
+		ShowOutline(hover, hover.button)
+	end
+	Handlers.PlaceChosen(page)
+
+	return count
+end
+
+function Handlers.PlaceChosen(page)
+	local layer = page.partLayer
+	if not layer then
+		return
+	end
+	local key = page.previewChosen
+	for _, button in ipairs(layer.buttons) do
+		if key ~= nil and button:IsShown() and button.part.key == key then
+			ShowOutline(layer.chosen, button)
+			return
+		end
+	end
+	layer.chosen:Hide()
+end
+
+function Handlers.PartEnter(button)
+	ShowOutline(button:GetParent().hover, button)
+end
+
+function Handlers.PartLeave(button)
+	local hover = button:GetParent().hover
+	if hover.button == button then
+		hover:Hide()
+	end
+end
+
+-- A part's setting: by id on its page, "page/id" on another, or from a function at click time.
+local function PartSetting(page, target)
+	if type(target) == "function" then
+		target = lib.CallAdopter(target, page.preview)
+	end
+	if type(target) ~= "string" then
+		return nil
+	end
+	local pageId, id = target:match("^(.-)/(.+)$")
+	local owner = pageId and page.window.pages[pageId] or page
+	local setting = owner and owner.settings and owner.settings[id or target]
+	if not setting then
+		lib:Report(page.window.addonName, ("%s: a preview part names unknown setting %q"):format(page.id, target))
+	end
+
+	return setting
+end
+
+-- A click chooses a keyed part (redrawing the page for it), then lands on the part's setting.
+function Handlers.PartClick(button)
+	local part, page, window = button.part, button.page, button.window
+	if part.key ~= nil then
+		page.previewChosen = part.key
+		if page.preview.pick then
+			lib.CallAdopter(page.preview.pick, part.key, page.preview)
+		end
+		window:Refresh()
+	end
+	local setting = PartSetting(page, part.target)
+	if setting then
+		window:LandOn(setting)
+	end
+end
+
+---Ends the shown page's sample animations (or `page`'s) through its `stop`, once until it is refreshed again. With
+---no `page`, the page is also left: its chosen part is cleared, as when another page is shown or the window closes.
+function lib.Window:StopPreview(page)
+	local view = self.pageView
+	local leaving = page == nil
+	page = page or (view and view.previewPage)
+	if not page then
+		return
+	end
+	if page.previewRunning then
+		page.previewRunning = nil
+		if page.preview and page.preview.stop then
+			lib.CallAdopter(page.preview.stop, page.previewCanvas, page.preview)
+		end
+	end
+	if leaving then
+		page.previewChosen = nil
+		view.previewPage = nil
 	end
 end
