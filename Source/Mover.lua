@@ -15,6 +15,8 @@ local WHITE = { 1, 1, 1 }
 local TEXT_PLATE_ALPHA = 0.7
 local TEXT_PLATE_PADDING_X, TEXT_PLATE_PADDING_Y = 8, 3
 local TEXT_INSET_X, TEXT_INSET_Y = 10, 6 -- the label's offset from the mover's top left
+local MIN_LABEL_WIDTH = 32  -- narrowest room for a truncated label; a smaller mover shows it only while expanded
+local SUBTITLE_GAP = 2      -- space between the label and the subtitle
 local REFUSED = { 1, 0.25, 0.2 }
 local HOVER_INTENT = 0.12   -- seconds the cursor rests on a mover before it expands
 local COG_SIZE = 22
@@ -95,9 +97,12 @@ local function CreateMover(parent)
 	lib:OutlineText(mover.name)
 	mover.name:SetPoint("TOPLEFT", mover, "TOPLEFT", TEXT_INSET_X, -TEXT_INSET_Y)
 	mover.name:SetJustifyH("LEFT")
+	mover.name:SetWordWrap(false)
 	mover.subtitle = mover.text:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
 	lib:OutlineText(mover.subtitle)
-	mover.subtitle:SetPoint("TOPLEFT", mover.name, "BOTTOMLEFT", 0, -2)
+	mover.subtitle:SetPoint("TOPLEFT", mover.name, "BOTTOMLEFT", 0, -SUBTITLE_GAP)
+	mover.subtitle:SetJustifyH("LEFT")
+	mover.subtitle:SetWordWrap(false)
 	mover.coordinates = mover.text:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 	lib:OutlineText(mover.coordinates)
 	mover.coordinates:SetPoint("BOTTOMLEFT", mover, "TOPLEFT", 3, 4)
@@ -204,6 +209,43 @@ function Handlers.Animate(animator)
 	end
 end
 
+---Fits the label, subtitle and their plate inside a mover of the given size. Text wider than the room is truncated;
+---the subtitle, then the label, is hidden when the mover is too small to hold it.
+local function FitText(mover, width, height, expanded, linksWidth)
+	local showLinks = expanded and linksWidth > 0
+	local room = width - TEXT_INSET_X - (expanded and COG_SIZE + 10 or TEXT_INSET_X)
+	local nameHeight = mover.name:GetStringHeight()
+	local textBottom = TEXT_INSET_Y + nameHeight + TEXT_PLATE_PADDING_Y
+	local showName = room >= MIN_LABEL_WIDTH and height >= textBottom
+	local showSubtitle = false
+	if showName and not showLinks and (mover.subtitle:GetText() or "") ~= "" then
+		local subtitleHeight = mover.subtitle:GetStringHeight()
+		showSubtitle = height >= textBottom + SUBTITLE_GAP + subtitleHeight
+	end
+	mover.name:SetShown(showName)
+	mover.subtitle:SetShown(showSubtitle)
+	mover.plate:SetShown(showName)
+	if not showName then
+		return
+	end
+	mover.name:SetWidth(room)
+	mover.subtitle:SetWidth(room)
+
+	local textWidth = math.min(mover.name:GetUnboundedStringWidth(), room)
+	local textHeight = nameHeight
+	if showLinks then
+		textWidth = math.max(textWidth, linksWidth)
+		textHeight = textHeight + LINKS_HEIGHT + 1
+	elseif showSubtitle then
+		textWidth = math.max(textWidth, math.min(mover.subtitle:GetUnboundedStringWidth(), room))
+		textHeight = textHeight + SUBTITLE_GAP + mover.subtitle:GetStringHeight()
+	end
+	mover.plate:ClearAllPoints()
+	mover.plate:SetPoint("TOPLEFT", mover, "TOPLEFT", TEXT_INSET_X - TEXT_PLATE_PADDING_X,
+		-TEXT_INSET_Y + TEXT_PLATE_PADDING_Y)
+	mover.plate:SetSize(textWidth + 2 * TEXT_PLATE_PADDING_X, textHeight + 2 * TEXT_PLATE_PADDING_Y)
+end
+
 ---Centers a mover on its target's frame and sizes it, growing or shrinking over EXPAND_DURATION when its
 ---expansion changes; any other change applies at once.
 local function LayoutMover(mover, target, expanded, linksWidth)
@@ -216,10 +258,15 @@ local function LayoutMover(mover, target, expanded, linksWidth)
 	if expanded then
 		local expandedHeight = EXPANDED_HEIGHT + (linksWidth > 0 and LINKS_HEIGHT or 0)
 		-- Room for the label or link row from the left inset, and for the cog on the right.
-		local textWidth = math.max(linksWidth, mover.name:GetStringWidth())
+		local textWidth = math.max(linksWidth, mover.name:GetUnboundedStringWidth())
+		if linksWidth == 0 then
+			textWidth = math.max(textWidth, mover.subtitle:GetUnboundedStringWidth())
+		end
 		moverWidth = math.max(moverWidth, EXPANDED_WIDTH, TEXT_INSET_X + textWidth + COG_SIZE + 10)
 		moverHeight = math.max(moverHeight, expandedHeight)
 	end
+	-- Text fits the size the mover ends at, so it never spills past the mover while it grows or shrinks.
+	FitText(mover, moverWidth, moverHeight, expanded, linksWidth)
 	mover:ClearAllPoints()
 	mover:SetPoint("CENTER", UIParent, "BOTTOMLEFT", left + width / 2, bottom + height / 2)
 
@@ -277,14 +324,6 @@ function lib:RefreshMovers()
 						mover.subtitle:SetText(target.subtitle or "")
 						local position = registration:Current(target)
 						local linksWidth = lib:LayoutLinks(mover, target, position, expanded)
-						-- The name moves up to make room for the link row.
-						local showLinks = expanded and linksWidth > 0
-						local textWidth = math.max(mover.name:GetStringWidth(), showLinks and linksWidth or 0)
-						local textHeight = mover.name:GetStringHeight() + (showLinks and 17 or 0)
-						mover.plate:ClearAllPoints()
-						mover.plate:SetPoint("TOPLEFT", mover.name, "TOPLEFT", -TEXT_PLATE_PADDING_X, TEXT_PLATE_PADDING_Y)
-						mover.plate:SetSize(textWidth + 2 * TEXT_PLATE_PADDING_X, textHeight + 2 * TEXT_PLATE_PADDING_Y)
-						mover.subtitle:SetShown(not showLinks)
 						LayoutMover(mover, target, expanded, linksWidth)
 
 						local state = "idle"
