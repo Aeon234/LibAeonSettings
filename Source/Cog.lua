@@ -14,6 +14,9 @@ local PICK_DIM = 0.5
 ---Moves a target, as a pending position, to a rectangle in UIParent units (clamped to the screen). An anchored
 ---target stays anchored, with its offsets measured again. `skipRefresh` leaves redrawing the movers to the caller.
 function lib:MoveTargetTo(addonName, target, left, bottom, width, height, skipRefresh)
+	if self:PinnedReason(target) then
+		return
+	end
 	left, bottom = Geometry.ClampInto(left, bottom, width, height, UIParent:GetWidth(), UIParent:GetHeight())
 	self:SetPending(addonName, target.key, self:PositionForRect(addonName, target, left, bottom, width, height),
 		skipRefresh)
@@ -142,6 +145,14 @@ function lib:ToggleCogMenu(mover)
 					self:RefreshMenu()
 				end)
 			end
+		end
+
+		-- A pinned target keeps its size and settings entries; where it sits is not its to change.
+		local pinned = self:PinnedReason(target)
+		if pinned then
+			menu:Separator()
+			menu:Hint(pinned)
+			return
 		end
 
 		local left, bottom, frameWidth, frameHeight = self:FrameRect(target.frame)

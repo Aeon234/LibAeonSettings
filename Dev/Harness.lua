@@ -50,6 +50,13 @@ function Harness:CreateFrames()
 		icon = SampleFrame("Icon", 40, 40, "Icon", 0.45, 0.3, 0.1),
 	}
 	self.frames.icon:SetScale(1.5)
+	-- A border drawn 6 outside the unit frame, as Levelbound's bar border is: its mover covers the border.
+	local border = CreateFrame("Frame", nil, self.frames.unit, "BackdropTemplate")
+	border:SetPoint("TOPLEFT", -6, 6)
+	border:SetPoint("BOTTOMRIGHT", 6, -6)
+	border:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8x8", edgeSize = 2 })
+	border:SetBackdropBorderColor(0.9, 0.75, 0.3, 0.9)
+	self.frames.unit.border = border
 	-- A protected frame: a secure action button that targets the player when clicked.
 	local secure = CreateFrame("Button", "LibAeonSettingsDevSecure", UIParent, "SecureActionButtonTemplate")
 	secure:SetSize(140, 32)
@@ -73,9 +80,10 @@ function Harness:CreateFrames()
 			default = { point = "CENTER", x = -280, y = -120 },
 			sample = function(shown) self.frames.unit.text:SetText(shown and "Harness Unit (sample)" or "Harness Unit") end,
 			size = StoredSize(self.frames.unit, "unitSize", 20), attach = true, match = "both",
-			settings = { page = "controls", section = "sliders" } },
+			outline = self.frames.unit.border, settings = { page = "controls", section = "sliders" } },
 		{ key = "icon", label = "Harness Icon", frame = self.frames.icon, default = { point = "TOPRIGHT", x = -240, y = -200 },
-			attach = true, settings = { page = "appearance", section = "look" } },
+			attach = true, settings = { page = "appearance", section = "look" },
+			pinned = function() return Harness.pinIcon and "Pinned: /lasdev pin frees it." or nil end },
 		{ key = "secure", label = "Secure Button", subtitle = "Protected", frame = self.frames.secure,
 			default = { point = "LEFT", x = 240, y = -60 }, attach = true,
 			settings = function(target) Print("Element Options for %s: an addon's own function runs instead", target.key) end },
@@ -1166,13 +1174,19 @@ function Harness:Write(path, value)
 	end
 end
 
+function COMMANDS.pin()
+	Harness.pinIcon = not Harness.pinIcon
+	Print("Harness Icon is %s.", Harness.pinIcon and "pinned" or "free")
+	lib:RefreshMovers()
+end
+
 function COMMANDS.writes()
 	Harness.echoWrites = not Harness.echoWrites
 	Print("Echoing writes %s (%d so far).", Harness.echoWrites and "on" or "off", Harness.writeCount or 0)
 end
 
 function COMMANDS.help()
-	Print("/lasdev edit [second] | hide <key> | pend <key> <dx> <dy> | move | show | set <key> <POINT> <x> <y> | reset [key] | profile <name> | off <key> | scale <key> <n> | bad | media | tip | combat [key] [dx] [dy] | settings | status [text] | block | lock | shadow [on|off|size n|red|below|probe] | sound <kit> | icons | tint <percent> | writes")
+	Print("/lasdev edit [second] | hide <key> | pend <key> <dx> <dy> | move | show | set <key> <POINT> <x> <y> | reset [key] | profile <name> | off <key> | scale <key> <n> | bad | media | tip | combat [key] [dx] [dy] | settings | status [text] | block | lock | shadow [on|off|size n|red|below|probe] | sound <kit> | icons | tint <percent> | writes | pin")
 end
 
 SLASH_LIBAEONSETTINGSDEV1 = "/lasdev"

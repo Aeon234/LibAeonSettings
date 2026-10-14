@@ -35,11 +35,13 @@ local Geometry = lib.Geometry
 ---@field frame Frame
 ---@field default LibAeonSettingsPosition
 ---@field fixedEdge string? "TOP", "BOTTOM", "LEFT" or "RIGHT"
+---@field outline (Region|fun(target: table): Region?)? what the mover covers when it is larger than the frame
+---@field pinned (string|fun(target: table): string?)? why the target cannot be moved now, or nil
 
 local DECLARATION_FIELDS = { title = true, store = true, get = true, set = true, targets = true, account = true }
 local TARGET_FIELDS = {
 	key = true, label = true, subtitle = true, frame = true, default = true, fixedEdge = true, sample = true,
-	settings = true, size = true, attach = true, match = true, grow = true,
+	settings = true, size = true, attach = true, match = true, grow = true, outline = true, pinned = true,
 }
 local FIXED_EDGES = { TOP = true, BOTTOM = true, LEFT = true, RIGHT = true }
 -- `settings` is a function, or where the target's settings are: { page, section?, setting?, select? }.
@@ -100,9 +102,31 @@ local function CheckTarget(addonName, target, seen)
 	if target.fixedEdge ~= nil and not FIXED_EDGES[target.fixedEdge] then
 		lib:Report(addonName, ("target %s: fixedEdge must be TOP, BOTTOM, LEFT or RIGHT"):format(target.key))
 	end
+	local outline = target.outline
+	if outline ~= nil and type(outline) ~= "function"
+		and not (type(outline) == "table" and type(outline.GetObjectType) == "function") then
+		lib:Report(addonName, ("target %s: outline must be a region or a function"):format(target.key))
+		target.outline = nil
+	end
+	if target.pinned ~= nil and type(target.pinned) ~= "string" and type(target.pinned) ~= "function" then
+		lib:Report(addonName, ("target %s: pinned must be a reason or a function"):format(target.key))
+		target.pinned = nil
+	end
 	seen[target.key] = true
 
 	return true
+end
+
+---Why a target cannot be moved now (its `pinned` reason), or nil when it can.
+---@return string?
+function lib:PinnedReason(target)
+	local pinned = target.pinned
+	if type(pinned) == "function" then
+		local ok, reason = pcall(pinned, target)
+		pinned = ok and reason or nil
+	end
+
+	return type(pinned) == "string" and pinned or nil
 end
 
 ---Registers what an addon can move. Calling it again for the same addon replaces the earlier registration.

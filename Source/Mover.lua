@@ -67,6 +67,31 @@ function lib:FrameRect(frame)
 	return FrameRect(frame)
 end
 
+-- What a target's mover covers, in UIParent units: its `outline` while that is shown and laid out (a border drawn
+-- outside the frame), else its frame.
+local function TargetRect(target)
+	local outline = target.outline
+	if type(outline) == "function" then
+		local ok, region = pcall(outline, target)
+		outline = ok and region or nil
+	end
+	if type(outline) == "table" and outline.IsShown and outline:IsShown() then
+		local left, bottom = outline:GetLeft(), outline:GetBottom()
+		if left and bottom then
+			local owner = outline.GetEffectiveScale and outline or outline:GetParent()
+			local scale = owner:GetEffectiveScale() / UIParent:GetEffectiveScale()
+
+			return left * scale, bottom * scale, outline:GetWidth() * scale, outline:GetHeight() * scale
+		end
+	end
+
+	return FrameRect(target.frame)
+end
+
+function lib:TargetRect(target)
+	return TargetRect(target)
+end
+
 local function PixelSize()
 	return PixelUtil.GetNearestPixelSize(1, UIParent:GetEffectiveScale(), 1)
 end
@@ -249,7 +274,7 @@ end
 ---Centers a mover on its target's frame and sizes it, growing or shrinking over EXPAND_DURATION when its
 ---expansion changes; any other change applies at once.
 local function LayoutMover(mover, target, expanded, linksWidth)
-	local left, bottom, width, height = FrameRect(target.frame)
+	local left, bottom, width, height = TargetRect(target)
 	if not left then
 		mover:Hide()
 		return
@@ -389,12 +414,24 @@ function Handlers.MouseDown(mover, button, linkAction)
 	if not target then
 		return
 	end
+	-- A pinned target is not dragged; a click still selects it.
+	local pinned = not linkAction and lib:PinnedReason(target) ~= nil
 	local left, bottom, width, height = FrameRect(target.frame)
+	if not left then
+		return
+	end
+	-- The mover's edges snap: where its outline sits around the frame.
+	local outerLeft, outerBottom, outerWidth, outerHeight = TargetRect(target)
+	if not outerLeft then
+		outerLeft, outerBottom, outerWidth, outerHeight = left, bottom, width, height
+	end
 	local cursorX, cursorY = CursorPosition()
 	lib.session.drag = {
 		id = mover.id, registration = registration, target = target, started = false,
 		cursorX = cursorX, cursorY = cursorY, left = left, bottom = bottom, width = width, height = height,
-		link = linkAction, threshold = linkAction and 1 or DRAG_THRESHOLD,
+		insetLeft = left - outerLeft, insetBottom = bottom - outerBottom,
+		extraWidth = outerWidth - width, extraHeight = outerHeight - height,
+		link = linkAction, threshold = linkAction and 1 or pinned and math.huge or DRAG_THRESHOLD,
 	}
 	mover:SetScript("OnUpdate", function(self) Handlers.DragUpdate(self) end)
 end
@@ -432,7 +469,7 @@ function Handlers.DragUpdate(mover)
 			end
 		end
 		drag.moving = moving
-		drag.xs, drag.ys = lib:SnapCandidates(drag.id, FrameRect, followers)
+		drag.xs, drag.ys = lib:SnapCandidates(drag.id, TargetRect, followers)
 		drag.threshold = lib:SnapThreshold()
 		drag.snap = lib:GetPreference("snap")
 		drag.redraw = true
@@ -458,11 +495,15 @@ function Handlers.DragUpdate(mover)
 	local left, bottom, width, height = drag.left + dx, drag.bottom + dy, drag.width, drag.height
 	local snapX, snapY
 	if drag.snap and not altDown then
+		local outerLeft, outerBottom = left - drag.insetLeft, bottom - drag.insetBottom
+		local outerWidth, outerHeight = width + drag.extraWidth, height + drag.extraHeight
 		if drag.axis ~= "y" then
-			snapX = Geometry.NearestSnap({ left, left + width / 2, left + width }, drag.xs, drag.threshold)
+			snapX = Geometry.NearestSnap({ outerLeft, outerLeft + outerWidth / 2, outerLeft + outerWidth }, drag.xs,
+				drag.threshold)
 		end
 		if drag.axis ~= "x" then
-			snapY = Geometry.NearestSnap({ bottom, bottom + height / 2, bottom + height }, drag.ys, drag.threshold)
+			snapY = Geometry.NearestSnap({ outerBottom, outerBottom + outerHeight / 2, outerBottom + outerHeight },
+				drag.ys, drag.threshold)
 		end
 	end
 	left = left + (snapX and snapX.delta or 0)
@@ -567,7 +608,7 @@ function lib:NudgeSelected(key)
 	end
 	local registration, target = TargetOf(mover)
 	local left, bottom, width, height = FrameRect(target.frame)
-	if not left then
+	if not left or lib:PinnedReason(target) then
 		return false
 	end
 	local step = (IsShiftKeyDown() and NUDGE_SHIFT or NUDGE) * PixelSize()

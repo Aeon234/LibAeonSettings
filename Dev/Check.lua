@@ -174,6 +174,26 @@ do
 	lib.session.pending.Check = nil
 end
 
+-- Placement: outlines and pinned targets
+
+do
+	local frame, border = NewFrame(100, 20), NewFrame(112, 32)
+	local pinned = false
+	local before = #errors
+	local registration = lib:Placement("CheckPin", { store = {}, targets = {
+		{ key = "bar", frame = frame, default = { point = "CENTER", x = 0, y = 0 }, outline = border,
+			pinned = function() return pinned and "Pinned to the top edge." or nil end },
+		{ key = "bad", frame = NewFrame(), default = { point = "CENTER", x = 0, y = 0 }, outline = "border", pinned = 3 },
+	} })
+	local bar = registration:Target("bar")
+	Check("pinned: a target is free while pinned gives no reason", lib:PinnedReason(bar) == nil)
+	pinned = true
+	Check("pinned: a target is pinned while pinned gives a reason", lib:PinnedReason(bar) == "Pinned to the top edge.")
+	Check("pinned: a bad outline and a bad pinned are reported and dropped", #errors == before + 2
+		and registration:Target("bad").outline == nil and registration:Target("bad").pinned == nil)
+	Check("pinned: a fixed reason pins", lib:PinnedReason({ pinned = "Fixed." }) == "Fixed.")
+end
+
 -- The settings model
 
 local function Register(kind, fields)

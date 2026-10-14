@@ -18,10 +18,10 @@ end
 ---centers of every other shown mover's frame, or only the chosen snap target's when the mover has one. Movers in
 ---`followers` (those attached to the dragged one) are left out.
 ---@param dragId string
----@param frameRect fun(frame: Frame): number?, number?, number?, number?
+---@param targetRect fun(target: table): number?, number?, number?, number? what each other mover covers
 ---@param followers table<string, boolean>
 ---@return table xs, table ys
-function lib:SnapCandidates(dragId, frameRect, followers)
+function lib:SnapCandidates(dragId, targetRect, followers)
 	local width, height = UIParent:GetWidth(), UIParent:GetHeight()
 	local xs, ys = {}, {}
 	local only = self.session.snapTargets and self.session.snapTargets[dragId]
@@ -47,7 +47,7 @@ function lib:SnapCandidates(dragId, frameRect, followers)
 
 	for id, mover in pairs(self.ui and self.ui.movers or {}) do
 		if id ~= dragId and mover:IsShown() and mover.target and (not only or only == id) and not followers[id] then
-			local left, bottom, frameWidth, frameHeight = frameRect(mover.target.frame)
+			local left, bottom, frameWidth, frameHeight = targetRect(mover.target)
 			if left then
 				for _, value in ipairs({ left, left + frameWidth / 2, left + frameWidth }) do
 					table.insert(xs, { value = value, from = id })

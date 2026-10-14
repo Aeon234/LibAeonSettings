@@ -373,7 +373,11 @@ end
 
 local LINK_KINDS = { "matchWidth", "matchHeight", "anchor", "grow" }
 
+-- A pinned target neither attaches nor grows, which would move it; it still matches sizes.
 local function LinkAllowed(target, kind)
+	if (kind == "anchor" or kind == "grow") and lib:PinnedReason(target) then
+		return false
+	end
 	if kind == "matchWidth" then
 		return HasSize(target) and (target.match == "width" or target.match == "both")
 	elseif kind == "matchHeight" then
