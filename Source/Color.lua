@@ -145,7 +145,7 @@ local function Request(view, r, g, b, a)
 	if Same(r, g, b, a, sr, sg, sb, sa) then
 		return
 	end
-	setting:Request({ r = r, g = g, b = b, a = setting.hasOpacity and a or nil })
+	setting:Request({ r = r, g = g, b = b, a = setting.hasOpacity and a or nil }, view.picking)
 end
 
 ---Ends this swatch's pick. As Cancel (`cancel`), the color from before the pick is asked for again and the picker

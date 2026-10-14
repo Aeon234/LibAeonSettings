@@ -654,7 +654,7 @@ function lib.Window:LandOn(setting)
 		page.tab = tab.id
 	end
 	self:SelectPage(page.id)
-	local half = setting.boundHalf
+	local half = self:RowOf(setting)
 	local view = self.pageView
 	if not half or not view or not half:IsShown() then
 		return

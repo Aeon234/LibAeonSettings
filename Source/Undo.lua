@@ -63,23 +63,22 @@ local function Push(window, step)
 	window:RefreshUndo()
 end
 
----Records a saved value for Undo (Setting:Request calls it). A slider or swatch saved again within moments joins
----the step before; a step that ends where it began is dropped.
-function lib.Window:RecordUndo(setting, before, after)
+---Records a saved value for Undo (Setting:Request calls it). Saves passing the same `gesture` (a color pick, from
+---its first save to its close) are one step; a slider or swatch saved again within moments without one joins the
+---step before. A step that ends where it began is dropped.
+function lib.Window:RecordUndo(setting, before, after, gesture)
 	if setting.noUndo or Same(before, after) then
 		return
 	end
 	local history = History(self)
 	local last = history[#history]
 	local now = GetTime()
-	-- A color pick is one step from first save to close; other merges go by time.
-	local pick = setting.boundView and setting.boundView.picking or nil
 	local joins
 	if last and not last.group and last.changes[1].setting == setting and MERGES[setting.kind] then
-		if pick then
-			joins = last.pick == pick
+		if gesture then
+			joins = last.gesture == gesture
 		else
-			joins = not last.pick and now - last.time < MERGE_SECONDS
+			joins = not last.gesture and now - last.time < MERGE_SECONDS
 		end
 	end
 	if joins then
@@ -90,7 +89,7 @@ function lib.Window:RecordUndo(setting, before, after)
 		self:RefreshUndo()
 		return
 	end
-	Push(self, { time = now, pick = pick, changes = { { setting = setting, before = Copy(before) } } })
+	Push(self, { time = now, gesture = gesture, changes = { { setting = setting, before = Copy(before) } } })
 end
 
 ---Records several values put back at once (Clear Overrides) as one step; `changes` is { { setting, before }, ... }.

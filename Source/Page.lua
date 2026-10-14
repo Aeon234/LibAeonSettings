@@ -146,9 +146,6 @@ local function ResetHalf(half)
 		half.view:Release()
 		half.view.frame:Hide()
 	end
-	if half.setting then
-		half.setting.boundView, half.setting.boundHalf = nil, nil
-	end
 	half.setting, half.view = nil, nil
 end
 
@@ -251,7 +248,7 @@ local function BindHalf(view, setting)
 		other.frame:SetShown(other == control)
 	end
 	half.setting, half.view = setting, control
-	setting.boundView, setting.boundHalf = control, half
+	view.halfOf[setting] = half
 	control.frame:ClearAllPoints()
 	if control.Place then
 		control:Place(half)
@@ -278,9 +275,6 @@ function lib.Window:ShowPage()
 	if view.shownKey then
 		self.offsets[view.shownKey] = view.scroll.target
 	end
-	if view.shownPage and view.shownPage.switch then
-		view.shownPage.switch.boundView = nil
-	end
 	if view.flash then
 		view.flash:Hide()
 	end
@@ -289,6 +283,10 @@ function lib.Window:ShowPage()
 	ReleaseAll(view.notes)
 	ReleaseAll(view.lines)
 	wipe(view.items)
+	-- The shown page's rows by setting and section headers by section; settings and sections hold no frames.
+	view.halfOf, view.headerOf = view.halfOf or {}, view.headerOf or {}
+	wipe(view.halfOf)
+	wipe(view.headerOf)
 	view.shownPage = page
 
 	view.title:SetText(page.title)
@@ -299,7 +297,6 @@ function lib.Window:ShowPage()
 	view.switchLabel:SetShown(hasSwitch)
 	if hasSwitch then
 		view.switch:Bind(page.switch)
-		page.switch.boundView = view.switch
 	else
 		view.switch:Release()
 	end
@@ -318,7 +315,7 @@ function lib.Window:ShowPage()
 		local header = Acquire(view.sectionHeaders)
 		header.title:SetText(section.title or "")
 		header.section = section
-		section.boundHeader = header
+		view.headerOf[section] = header
 		self:RefreshSectionLink(header, section)
 		view.items[#view.items + 1] = { header = header }
 		for _, line in ipairs(section.lines) do
@@ -536,14 +533,43 @@ function lib.Window:LayoutPage()
 	view.scroll:SetContentHeight(y + BOTTOM_PADDING)
 end
 
+---The row drawing a setting on the shown page, or nil.
+function lib.Window:RowOf(setting)
+	local view = self.pageView
+
+	return view and view.halfOf and view.halfOf[setting]
+end
+
+---The header drawn for a section on the shown page, or nil.
+function lib.Window:HeaderOf(section)
+	local view = self.pageView
+
+	return view and view.headerOf and view.headerOf[section]
+end
+
+---The control drawing a setting on the shown page (a row's control, or the page's switch), or nil.
+function lib.Window:ControlOf(setting)
+	local view = self.pageView
+	if not view or not view.halfOf then
+		return nil
+	end
+	if view.shownPage and setting == view.shownPage.switch then
+		return view.switch
+	end
+	local half = view.halfOf[setting]
+
+	return half and half.view
+end
+
 ---Called when a setting's value changed: redraws its view at once (sliding unless `instant`; shaking when
 ---`refused`). The rest of the shown page follows on the next frame, once however many values change before it.
 function lib.Window:SettingChanged(setting, instant, refused)
 	if not self:IsShown() then
 		return
 	end
-	if setting.boundView then
-		setting.boundView:Update(instant, refused)
+	local control = self:ControlOf(setting)
+	if control then
+		control:Update(instant, refused)
 	end
 	self.changedSettings = self.changedSettings or {}
 	self.changedSettings[setting] = true

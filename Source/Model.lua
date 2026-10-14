@@ -286,12 +286,13 @@ end
 
 ---Saves a value the user chose, recorded for Undo. A refusal shows "Couldn't save <label>: <reason>" at the top of
 ---the screen.
+---@param gesture any? the same value for every save of one continuous gesture (a color pick), kept as one Undo step
 ---@return boolean ok
-function lib.Setting:Request(value)
+function lib.Setting:Request(value, gesture)
 	local before = self:StoredValue()
 	local ok, reason = Write(self, value)
 	if ok then
-		self.window:RecordUndo(self, before, value)
+		self.window:RecordUndo(self, before, value, gesture)
 	else
 		self:ShowRefusal(reason)
 	end

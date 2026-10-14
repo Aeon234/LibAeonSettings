@@ -154,7 +154,7 @@ function lib.Window:LandOnSection(section)
 		page.tab = section.tab.id
 	end
 	self:SelectPage(page.id)
-	local header = section.boundHeader
+	local header = self:HeaderOf(section)
 	local view = self.pageView
 	if not view or not header or header.section ~= section or not header:IsShown() or not header.top then
 		return
