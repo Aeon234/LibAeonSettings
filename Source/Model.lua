@@ -22,7 +22,8 @@ local settingMeta = { __index = function(_, name) return lib.Setting[name] end }
 lib.EMPTY = lib.EMPTY or { empty = true }
 
 local SETTING_FIELDS = { id = true, label = true, description = true, path = true, default = true, get = true,
-	set = true, depends = true, blocked = true, show = true, wide = true, inherits = true, keywords = true }
+	set = true, depends = true, blocked = true, show = true, wide = true, inherits = true, keywords = true,
+	tooltip = true }
 local MAX_CHAIN = 16
 
 ---Registers a control kind: `section:<Kind>(info)` declares a setting drawn with it. `info.fields` lists the fields

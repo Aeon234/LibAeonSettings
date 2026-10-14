@@ -388,6 +388,9 @@ do
 		description = "Puts the label in the middle." })
 	local hidden = section:Toggle({ id = "hidden", label = "Hidden Thing", path = "hidden",
 		show = function() return false end })
+	section:Toggle({ id = "channels", label = "Announce", path = "announce",
+		tooltip = "Posts to |cff40c0ffParty|r and |cff40ff40Guild|r chat." })
+	section:Toggle({ id = "live", label = "Live Tip", path = "live", tooltip = function() return "Zeppelin" end })
 
 	local function First(text)
 		local found = window:FindSettings(text)
@@ -415,6 +418,9 @@ do
 	Check("search: a section is found", Finds("appearance", "Appearance"))
 	Check("search: a hidden setting is not listed", not Finds("hidden", hidden.label))
 	Check("search: nothing matches nonsense", First("zzqx") == nil)
+	Check("search: a tooltip given as text is searched without its color codes",
+		Finds("guild", "Announce") and not Finds("cff40ff40", "Announce"))
+	Check("search: a tooltip given as a function is not searched", not Finds("zeppelin", "Live Tip"))
 end
 
 print(("%d passed, %d failed"):format(passed, failed))

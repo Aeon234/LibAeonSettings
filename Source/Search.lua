@@ -174,6 +174,11 @@ local function BuildIndex(window)
 					local setting = line[slot]
 					if type(setting) == "table" and setting.label then
 						local description = type(setting.description) == "string" and setting.description or nil
+						-- A tooltip given as text is searched with the description, without its color codes.
+						if type(setting.tooltip) == "string" then
+							local tooltip = setting.tooltip:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
+							description = description and (description .. " " .. tooltip) or tooltip
+						end
 						local entry = Entry("setting", page, setting.label, settingWhere, settingWhere, setting.keywords,
 							description)
 						entry.setting = setting

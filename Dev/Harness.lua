@@ -489,6 +489,21 @@ function Harness:DeclareControls(page)
 		description = "Everything in the Inactive section depends on this." })
 	checkboxes:Checkbox({ id = "refuseCheck", label = "Refuses to Save", get = function() return false end,
 		set = function() return false, "The harness refuses this one." end })
+	-- Tooltips on the label: text with line breaks and colors, one worked out on each hover, and cut-off lines.
+	checkboxes:Checkbox({ id = "announce", label = "Announce Level-Ups", path = "controls.announce",
+		tooltip = "Posts your level-ups to chat.\nChannels: |cffaaaaffParty|r, |cff40ff40Guild|r.", keywords = "chat" })
+	checkboxes:Checkbox({ id = "liveTip", label = "Live Tooltip", path = "controls.liveTip",
+		tooltip = function(setting)
+			return ("Built on hover: it is %s, and the box is %s."):format(date("%H:%M:%S"),
+				setting:GetValue() and "ticked" or "unticked")
+		end })
+	checkboxes:Checkbox({ id = "longLabel", label = "A Label Long Enough That The Row Has To Cut It Off Somewhere",
+		path = "controls.longLabel",
+		description = "A description long enough that the line under the label is cut off too, so hovering shows it whole." })
+	checkboxes:Checkbox({ id = "longReason", label = "Long Reason", path = "controls.longReason",
+		blocked = function()
+			return "Unavailable while the harness pretends something long and complicated is going on somewhere."
+		end })
 
 	local sliders = page:Section("sliders", "Sliders")
 	sliders:Slider({ id = "size", label = "Font Size", path = "controls.size", default = 12, min = 8, max = 32 })

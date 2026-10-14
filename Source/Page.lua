@@ -38,6 +38,8 @@ local GUTTER_RIGHT, GUTTER_WIDTH, GUTTER_HEIGHT = 20, 44, 16
 local DIAMOND_SIZE, UNDO_SIZE, UNDO_ALPHA = 14, 16, 0.85
 local INHERITED_COLOR = { 0.961, 0.824, 0.478, 0.85 }
 local RESET_SOUND = SOUNDKIT and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON
+local HOVER_MARGIN = 4 -- the label's hover region reaches this far past its text lines
+local TOOLTIP_REASON = { 1, 0.25, 0.25 }
 
 lib.PageHandlers = lib.PageHandlers or {}
 local Handlers = lib.PageHandlers
@@ -109,6 +111,12 @@ local function CreateHalf(view)
 	half.inherited:SetWordWrap(false)
 	half.inherited:SetHeight(SMALL_HEIGHT)
 	half.controls = {}
+	-- Over the label and the lines under it: hovering shows the setting's tooltip (C-03).
+	half.hover = CreateFrame("Frame", nil, half)
+	half.hover:EnableMouse(true)
+	half.hover:SetScript("OnEnter", function() Handlers.LabelEnter(half) end)
+	half.hover:SetScript("OnLeave", function() Handlers.LabelLeave(half) end)
+	half.hover:SetScript("OnHide", function() Handlers.LabelLeave(half) end)
 
 	local gutter = CreateFrame("Frame", nil, half)
 	gutter:SetSize(GUTTER_WIDTH, GUTTER_HEIGHT)
@@ -438,6 +446,11 @@ local function RefreshHalf(half)
 	half.inherited:ClearAllPoints()
 	half.inherited:SetPoint("TOPLEFT", half.small:IsShown() and half.small or half.label, "BOTTOMLEFT")
 
+	-- An open tooltip follows the row's state under the pointer.
+	if half.tooltipShown then
+		Handlers.LabelEnter(half)
+	end
+
 	return half.shown ~= wasShown or half.lines ~= wasLines
 end
 
@@ -488,6 +501,10 @@ local function PlaceHalf(half, child, left, y, width, height)
 	else
 		half.label:SetPoint("LEFT", half, "LEFT", INSET, 0)
 	end
+	local last = half.inherited:IsShown() and half.inherited or half.small:IsShown() and half.small or half.label
+	half.hover:ClearAllPoints()
+	half.hover:SetPoint("TOPLEFT", half.label, "TOPLEFT", -HOVER_MARGIN, HOVER_MARGIN)
+	half.hover:SetPoint("BOTTOMRIGHT", last, "BOTTOMRIGHT", HOVER_MARGIN, -HOVER_MARGIN)
 end
 
 local function Rule(view, color, left, top, width, height)
@@ -658,6 +675,60 @@ end
 -- Overrides ---------------------------------------------------------------------------------------------------
 
 -- ◆ names the shared value the row overrides.
+-- The label's tooltip (C-03): no title; the full label when it is cut off, the setting's `tooltip`, then the line
+-- under the label (description or inactive reason) and the inherited line when they are cut off. Nothing to show,
+-- no tooltip.
+function Handlers.LabelEnter(half)
+	local setting = half.setting
+	if not setting then
+		return
+	end
+	local lines = {}
+	if half.label:IsTruncated() then
+		lines[#lines + 1] = { half.label:GetText(), 1, 1, 1 }
+	end
+	local tooltip = setting.tooltip
+	if type(tooltip) == "function" then
+		tooltip = lib.CallAdopter(tooltip, setting)
+	end
+	if type(tooltip) == "string" and tooltip ~= "" then
+		lines[#lines + 1] = { tooltip, 1, 1, 1 }
+	end
+	if half.small:IsShown() and half.small:IsTruncated() then
+		local reason = select(2, setting:Activity())
+		local red = reason and half.small:GetText() == reason
+		lines[#lines + 1] = { half.small:GetText(), unpack(red and TOOLTIP_REASON or { 1, 1, 1 }) }
+	end
+	if half.inherited:IsShown() and half.inherited:IsTruncated() then
+		lines[#lines + 1] = { half.inherited:GetText(), unpack(INHERITED_COLOR, 1, 3) }
+	end
+	if #lines == 0 then
+		Handlers.LabelLeave(half)
+		return
+	end
+	GameTooltip:SetOwner(half.hover, "ANCHOR_TOP")
+	for _, line in ipairs(lines) do
+		GameTooltip:AddLine(line[1], line[2], line[3], line[4], true)
+	end
+	GameTooltip:Show()
+	-- Every line is body text: the first takes the body font while this tooltip shows.
+	GameTooltipTextLeft1:SetFontObject(GameTooltipText)
+	GameTooltipTextRight1:SetFontObject(GameTooltipText)
+	half.tooltipShown = true
+end
+
+function Handlers.LabelLeave(half)
+	if not half.tooltipShown then
+		return
+	end
+	half.tooltipShown = nil
+	GameTooltipTextLeft1:SetFontObject(GameTooltipHeaderText)
+	GameTooltipTextRight1:SetFontObject(GameTooltipHeaderText)
+	if GameTooltip:IsOwned(half.hover) then
+		GameTooltip:Hide()
+	end
+end
+
 function Handlers.MenuBlockerEnter(header)
 	local menu = header.menu
 	if not menu or not menu.reason then
