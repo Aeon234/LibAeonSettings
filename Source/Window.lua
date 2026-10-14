@@ -181,7 +181,8 @@ end
 
 local function Build(window)
 	local declaration = window.declaration
-	local frame = lib:CreateSettingsShell(FrameName(window), UIParent, "HIGH", function() Handlers.Moved(window) end)
+	local name = FrameName(window)
+	local frame = lib:CreateSettingsShell(name, UIParent, "HIGH", function() Handlers.Moved(window) end)
 	frame:SetSize(declaration.width or WINDOW_WIDTH, declaration.height or WINDOW_HEIGHT)
 	frame:SetScript("OnHide", function() Handlers.Hidden(window) end)
 	frame.ClosePanelButton:SetScript("OnClick", function() window:Close() end)
