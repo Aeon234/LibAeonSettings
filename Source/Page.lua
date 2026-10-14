@@ -348,8 +348,10 @@ end
 
 -- States and layout ------------------------------------------------------------------------------------------
 
+---Redraws one row's state. Returns true when its visibility or height changed, so the page needs laying out again.
 local function RefreshHalf(half)
 	local setting, control = half.setting, half.view
+	local wasShown, wasLines = half.shown, half.lines
 	half.shown = setting:IsShown()
 	local active, reason, cause = setting:Activity()
 	local rowInactive = not active and cause ~= "page" and cause ~= "class"
@@ -397,25 +399,31 @@ local function RefreshHalf(half)
 	half.tall = half.lines > 0
 	half.inherited:ClearAllPoints()
 	half.inherited:SetPoint("TOPLEFT", half.small:IsShown() and half.small or half.label, "BOTTOMLEFT")
+
+	return half.shown ~= wasShown or half.lines ~= wasLines
 end
 
 ---Redraws which settings on the shown page are active, hidden or explained, and dims the body while the page's
----switch is off.
+---switch is off. Returns true when a row's visibility or height changed.
+---@return boolean layoutChanged
 function lib.Window:RefreshStates()
 	local view = self.pageView
 	local page = view and view.shownPage
 	if not page then
-		return
+		return false
 	end
 	local pageOff = page.switch ~= nil and not page.switch:GetValue()
 	view.scroll.frame:SetAlpha(pageOff and PAGE_OFF_ALPHA or 1)
+	local layoutChanged = false
 	for _, item in ipairs(view.items) do
 		for index = 1, 2 do
-			if item[index] then
-				RefreshHalf(item[index])
+			if item[index] and RefreshHalf(item[index]) then
+				layoutChanged = true
 			end
 		end
 	end
+
+	return layoutChanged
 end
 
 local function PlaceHalf(half, child, left, y, width, height)
@@ -528,8 +536,8 @@ function lib.Window:LayoutPage()
 	view.scroll:SetContentHeight(y + BOTTOM_PADDING)
 end
 
----Called when a setting's value changed: redraws its view (sliding unless `instant`; shaking when `refused`),
----then the states and layout of the shown page.
+---Called when a setting's value changed: redraws its view at once (sliding unless `instant`; shaking when
+---`refused`). The rest of the shown page follows on the next frame, once however many values change before it.
 function lib.Window:SettingChanged(setting, instant, refused)
 	if not self:IsShown() then
 		return
@@ -537,18 +545,39 @@ function lib.Window:SettingChanged(setting, instant, refused)
 	if setting.boundView then
 		setting.boundView:Update(instant, refused)
 	end
-	-- Rows following a shared value redraw it, in case this was the shared value.
-	for _, item in ipairs(self.pageView.items) do
-		for index = 1, 2 do
-			local half = item[index]
-			if half and half.setting ~= setting and half.setting.inherits and not half.setting:IsOverridden() then
-				half.view:Update(true)
+	self.changedSettings = self.changedSettings or {}
+	self.changedSettings[setting] = true
+	if not self.flushQueued then
+		self.flushQueued = true
+		C_Timer.After(0, function() self:FlushChanges() end)
+	end
+end
+
+---Redraws what follows from the values changed since the last call: rows following a shared value, the shown page's
+---states, its layout when a row's visibility or height changed, and the fixed area.
+function lib.Window:FlushChanges()
+	self.flushQueued = nil
+	local changed = self.changedSettings
+	if not changed or not next(changed) then
+		return
+	end
+	local view = self.pageView
+	if self:IsShown() and view and view.shownPage then
+		-- Rows following a shared value redraw it, in case one of the changes was the shared value.
+		for _, item in ipairs(view.items) do
+			for index = 1, 2 do
+				local half = item[index]
+				if half and not changed[half.setting] and half.setting.inherits and not half.setting:IsOverridden() then
+					half.view:Update(true)
+				end
 			end
 		end
+		if self:RefreshStates() then
+			self:LayoutPage()
+		end
+		self:RefreshFixedArea()
 	end
-	self:RefreshStates()
-	self:LayoutPage()
-	self:RefreshFixedArea()
+	wipe(changed)
 end
 
 -- Overrides ---------------------------------------------------------------------------------------------------
@@ -604,4 +633,8 @@ function lib.Window:Refresh()
 	self:RefreshStates()
 	self:LayoutPage()
 	self:RefreshFixedArea()
+	-- Everything a queued flush would redraw is current now.
+	if self.changedSettings then
+		wipe(self.changedSettings)
+	end
 end
