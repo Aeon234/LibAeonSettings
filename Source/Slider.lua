@@ -1,5 +1,6 @@
 -- C-10, the slider: Blizzard's MinimalSliderWithSteppersTemplate (168 with its step arrows) and a 44-wide number
 -- box beside it, 220 in all. A drag saves at every step it passes; the step arrows and Enter in the box save at once.
+-- `min`, `max` and `step` may be functions of the setting, worked out whenever the slider draws (a screen-wide range).
 
 local lib = LibStub("LibAeonSettings-1.0")
 if not lib.loading then
@@ -49,16 +50,36 @@ function lib:CreateSlider(parent)
 	return view
 end
 
+-- A range field: a number, or a function of the setting worked out now; `fallback` when it gives no number.
+local function Field(setting, name, fallback)
+	local value = setting[name]
+	if type(value) == "function" then
+		value = lib.CallAdopter(value, setting)
+	end
+
+	return tonumber(value) or fallback
+end
+
+---@return number minimum
+---@return number maximum
+---@return number step
+local function Range(setting)
+	local minimum = Field(setting, "min", 0)
+	local maximum = math.max(minimum, Field(setting, "max", 100))
+	local step = Field(setting, "step", 1)
+
+	return minimum, maximum, step > 0 and step or 1
+end
+
 local function Format(setting, value)
 	local format = setting.format
-	value = tonumber(value) or setting.min or 0
+	value = tonumber(value) or (Range(setting))
 
 	return type(format) == "function" and format(value) or (FORMATS[format] or FORMATS.integer)(value)
 end
 
 local function Round(setting, value)
-	local step = setting.step or 1
-	local minimum = setting.min or 0
+	local minimum, _, step = Range(setting)
 	value = minimum + math.floor((value - minimum) / step + 0.5) * step
 
 	return tonumber(("%.4f"):format(value))
@@ -70,7 +91,7 @@ function lib.Slider:ShowValue()
 	if not setting then
 		return
 	end
-	local value = tonumber(setting:GetValue()) or setting.min or 0
+	local value = tonumber(setting:GetValue()) or (Range(setting))
 	self.saved = value
 	if not self.dragging then
 		self.updating = true
@@ -83,18 +104,32 @@ function lib.Slider:ShowValue()
 	end
 end
 
+-- Sets the bar's range when it differs from the one it has.
+local function ApplyRange(view)
+	local setting = view.setting
+	local minimum, maximum, step = Range(setting)
+	if view.range and view.range[1] == minimum and view.range[2] == maximum and view.range[3] == step then
+		return
+	end
+	view.range = { minimum, maximum, step }
+	local value = tonumber(setting:GetValue()) or minimum
+	view.updating = true
+	view.slider:Init(value, minimum, maximum, math.max(1, math.floor((maximum - minimum) / step + 0.5)))
+	view.updating = nil
+end
+
 function lib.Slider:Bind(setting)
 	self.setting = setting
-	self.dragging, self.dragRefused = nil, nil
-	local minimum, maximum, step = setting.min or 0, setting.max or 100, setting.step or 1
-	local value = tonumber(setting:GetValue()) or minimum
-	self.updating = true
-	self.slider:Init(value, minimum, maximum, math.max(1, math.floor((maximum - minimum) / step + 0.5)))
-	self.updating = nil
+	self.dragging, self.dragRefused, self.range = nil, nil, nil
+	ApplyRange(self)
 	self:ShowValue()
 end
 
+-- A range worked out by functions is checked again on each redraw, except mid-drag.
 function lib.Slider:Update(_, refused)
+	if not self.dragging then
+		ApplyRange(self)
+	end
 	self:ShowValue()
 	if refused then
 		lib:Shake(self.frame)
@@ -146,7 +181,11 @@ function Handlers.Typed(view)
 	local text = view.box:GetText():gsub("%%", ""):gsub("^%s+", ""):gsub("%s+$", "")
 	local value = tonumber(text)
 	view.box:ClearFocus()
-	if not setting or not value or value < (setting.min or 0) or value > (setting.max or 100) then
+	local minimum, maximum = 0, 100
+	if setting then
+		minimum, maximum = Range(setting)
+	end
+	if not setting or not value or value < minimum or value > maximum then
 		view:ShowValue()
 		return
 	end

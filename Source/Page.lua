@@ -655,6 +655,13 @@ function lib.Window:FlushChanges()
 	end
 	local view = self.pageView
 	if self:IsShown() and view and view.shownPage then
+		-- A setting marked `redraws` may change what other rows show (a picked slot): every row redraws.
+		for setting in pairs(changed) do
+			if setting.redraws then
+				self:Refresh()
+				return
+			end
+		end
 		-- Rows following a shared value redraw it, in case one of the changes was the shared value.
 		for _, item in ipairs(view.items) do
 			for index = 1, 2 do

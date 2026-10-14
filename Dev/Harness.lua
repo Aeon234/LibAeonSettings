@@ -521,6 +521,38 @@ function Harness:DeclareControls(page)
 			Harness:Profile().controls.capped = value
 		end, get = function() return Value("capped") or 20 end })
 
+	sliders:Slider({ id = "screenWidth", label = "Bar Width", path = "controls.screenWidth", default = 400, min = 100,
+		max = function() return math.floor(UIParent:GetWidth()) end, step = 10,
+		description = "Up to the screen's width, worked out on each redraw." })
+
+	-- One set of rows for whichever slot is picked: the Slot dropdown is session state marked `redraws`, so picking
+	-- a slot redraws the rows below with that slot's values.
+	local slots = page:Section("slots", "Picked Slot")
+	local function SlotValues()
+		local controls = Harness:Profile().controls or {}
+		Harness:Profile().controls = controls
+		controls.slots = controls.slots or {}
+		local key = Harness.pickedSlot or "left"
+		controls.slots[key] = controls.slots[key] or {}
+		return controls.slots[key]
+	end
+	slots:Dropdown({ id = "slot", label = "Slot", redraws = true, titleCase = false,
+		options = function()
+			local list = {}
+			for _, key in ipairs({ "left", "center", "right" }) do
+				local values = (Harness:Profile().controls or {}).slots
+				local text = values and values[key] and values[key].text
+				list[#list + 1] = { value = key, text = ("%s: %s"):format(key:gsub("^%l", string.upper), text or "empty") }
+			end
+			return list
+		end,
+		get = function() return Harness.pickedSlot or "left" end,
+		set = function(value) Harness.pickedSlot = value end })
+	slots:TextInput({ id = "slotText", label = "Text", default = "", allowEmpty = true,
+		get = function() return SlotValues().text end, set = function(value) SlotValues().text = value end })
+	slots:Slider({ id = "slotSize", label = "Size", default = 12, min = 6, max = 32,
+		get = function() return SlotValues().size end, set = function(value) SlotValues().size = value end })
+
 	local dropdowns = page:Section("dropdowns", "Dropdowns")
 	dropdowns:Dropdown({ id = "format", label = "Text Format", path = "controls.format", default = "current",
 		description = "Choices written in lower case show in Title Case.",
