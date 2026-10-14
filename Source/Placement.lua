@@ -269,6 +269,10 @@ function lib.Registration:ApplyTarget(target)
 		end
 	end
 
+	-- The frames this target follows are recorded again below, as its matches and anchor are applied.
+	if lib.ForgetParents then
+		lib:ForgetParents(target)
+	end
 	if lib.ApplyMatches then
 		lib:ApplyMatches(self.addonName, target, position)
 	end
@@ -282,7 +286,7 @@ function lib.Registration:ApplyTarget(target)
 			frame:ClearAllPoints()
 			frame:SetPoint(childPoint, parent.frame, parentPoint, anchor.x / scale, anchor.y / scale)
 			if lib.WatchParent then
-				lib:WatchParent(parent.frame)
+				lib:WatchParent(parent.frame, self, target)
 			end
 			return
 		end

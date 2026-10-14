@@ -111,7 +111,7 @@ function lib:ApplyMatches(addonName, target, position)
 		local other = self:ResolveTarget(match.addon, match.key)
 		local _, _, otherWidth, otherHeight = other and self:FrameRect(other.frame)
 		if otherWidth then
-			self:WatchParent(other.frame)
+			self:WatchParent(other.frame, self.registrations[addonName], target)
 			local value = ((dimension == "width" and otherWidth or otherHeight) + (match.extra or 0)) / scale
 			if dimension == "width" then
 				newWidth = value
@@ -126,26 +126,90 @@ function lib:ApplyMatches(addonName, target, position)
 end
 
 -- A frame others are anchored to or matched with is watched for size changes, so they follow it outside edit
--- mode as well. The reapply runs once on the next frame however many changes arrive.
-function lib:WatchParent(frame)
+-- mode as well. Each watched frame keeps the targets that follow it (frame -> target -> registration), and each
+-- target the frames it follows (target -> frame -> true), so a resize applies only its own followers. A hook cannot
+-- be removed; a frame nothing follows any more returns at once. The apply runs once on the next frame however many
+-- changes arrive, and a follower whose own size changes passes the change on through its own hook.
+lib.followers = lib.followers or {}
+lib.followed = lib.followed or {}
+
+---Records that `target` follows `frame`, and watches the frame's size.
+function lib:WatchParent(frame, registration, target)
 	self.watched = self.watched or {}
+	if registration and target then
+		self.followers[frame] = self.followers[frame] or {}
+		self.followers[frame][target] = registration
+		self.followed[target] = self.followed[target] or {}
+		self.followed[target][frame] = true
+	end
 	if self.watched[frame] then
 		return
 	end
 	self.watched[frame] = true
-	frame:HookScript("OnSizeChanged", function() lib:OnWatchedResized() end)
+	frame:HookScript("OnSizeChanged", function(watched) lib:OnWatchedResized(watched) end)
 end
 
-function lib:OnWatchedResized()
+---Forgets the frames a target follows, before its position is applied again.
+function lib:ForgetParents(target)
+	local frames = self.followed[target]
+	if not frames then
+		return
+	end
+	for frame in pairs(frames) do
+		local followers = self.followers[frame]
+		if followers then
+			followers[target] = nil
+		end
+		frames[frame] = nil
+	end
+end
+
+---@param frame Frame? nil from a hook set by an older copy, which applies every target
+function lib:OnWatchedResized(frame)
+	if frame then
+		local followers = self.followers[frame]
+		if not followers or not next(followers) then
+			return
+		end
+		self.resized = self.resized or {}
+		self.resized[frame] = true
+	else
+		self.resizedAll = true
+	end
 	if self.reapplyQueued then
 		return
 	end
 	self.reapplyQueued = true
-	C_Timer.After(0, function()
-		lib.reapplyQueued = nil
-		lib:ApplyAll()
-		lib:RefreshMovers()
-	end)
+	C_Timer.After(0, function() lib:ApplyResized() end)
+end
+
+---Applies the followers of every frame resized since the last call, each once.
+function lib:ApplyResized()
+	self.reapplyQueued = nil
+	local frames, all = self.resized, self.resizedAll
+	self.resized, self.resizedAll = nil, nil
+	if all then
+		self:ApplyAll()
+	elseif frames then
+		-- Applying a target records its frames again, so the followers are gathered before any is applied.
+		local due = {}
+		for frame in pairs(frames) do
+			for target, registration in pairs(self.followers[frame] or {}) do
+				due[target] = registration
+			end
+		end
+		for target, registration in pairs(due) do
+			-- A target dropped by its addon's latest declaration is forgotten instead.
+			if registration:Target(target.key) == target then
+				registration:ApplyTarget(target)
+			else
+				self:ForgetParents(target)
+			end
+		end
+	end
+	if self.session.open then
+		self:RefreshMovers()
+	end
 end
 
 -- Refusal --------------------------------------------------------------------------------------------------------
