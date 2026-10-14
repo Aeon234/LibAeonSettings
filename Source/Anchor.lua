@@ -488,6 +488,24 @@ function Handlers.Pulse(layer)
 	end
 end
 
+local function PlaceLine(line)
+	line.fromX, line.fromY = line.fromMover:GetCenter()
+	line.toX, line.toY = line.toMover:GetCenter()
+	line:SetStartPoint("BOTTOMLEFT", UIParent, line.fromX, line.fromY)
+	line:SetEndPoint("BOTTOMLEFT", UIParent, line.toX, line.toY)
+end
+
+---Moves the shown anchor lines to their movers' current centers, without choosing the lines again.
+function lib:MoveLines()
+	local layer = self.ui and self.ui.lineLayer
+	if not layer or not layer:IsShown() then
+		return
+	end
+	for index = 1, layer.count do
+		PlaceLine(layer.lines[index])
+	end
+end
+
 ---Draws a line from each anchored mover to the mover it is anchored to while either is hovered, expanded or
 ---dragged, with a pulse running from the anchored one to the other. The layer's OnUpdate runs only while lines show.
 function lib:RefreshLines()
@@ -525,10 +543,8 @@ function lib:RefreshLines()
 						pulse:SetBlendMode("ADD")
 						layer.pulses[count] = pulse
 					end
-					line.fromX, line.fromY = mover:GetCenter()
-					line.toX, line.toY = parentMover:GetCenter()
-					line:SetStartPoint("BOTTOMLEFT", UIParent, line.fromX, line.fromY)
-					line:SetEndPoint("BOTTOMLEFT", UIParent, line.toX, line.toY)
+					line.fromMover, line.toMover = mover, parentMover
+					PlaceLine(line)
 					line:Show()
 					layer.pulses[count]:Show()
 				end

@@ -140,6 +140,7 @@ function lib:Placement(addonName, declaration)
 	registration.addonName = addonName
 	registration.title = declaration.title or addonName
 	registration.declaration = declaration
+	registration.targetList, registration.targetsByKey = nil, nil
 
 	if self.loggedIn then
 		registration:Apply()
@@ -153,34 +154,43 @@ function lib:GetRegistration(addonName)
 	return self.registrations[addonName]
 end
 
----The registration's checked targets, read fresh from the declaration.
+---Reads and checks the declaration's targets and keeps them for later lookups. Runs on first use, at login, when
+---edit mode opens and from Apply; an adopter whose `targets` function would now return a different list calls Apply.
 ---@return LibAeonSettingsTarget[]
-function lib.Registration:Targets()
+function lib.Registration:RefreshTargets()
 	local source = self.declaration.targets
 	if type(source) == "function" then
 		source = source()
 	end
-	local targets, seen = {}, {}
+	local targets, byKey, seen = {}, {}, {}
 	if type(source) ~= "table" then
 		lib:Report(self.addonName, "targets did not return a list")
-		return targets
-	end
-	for _, target in ipairs(source) do
-		if CheckTarget(self.addonName, target, seen) then
-			table.insert(targets, target)
+	else
+		for _, target in ipairs(source) do
+			if CheckTarget(self.addonName, target, seen) then
+				table.insert(targets, target)
+				byKey[target.key] = target
+			end
 		end
 	end
+	self.targetList, self.targetsByKey = targets, byKey
 
 	return targets
 end
 
+---The registration's checked targets, as last read by RefreshTargets.
+---@return LibAeonSettingsTarget[]
+function lib.Registration:Targets()
+	return self.targetList or self:RefreshTargets()
+end
+
 ---@return LibAeonSettingsTarget?
 function lib.Registration:Target(key)
-	for _, target in ipairs(self:Targets()) do
-		if target.key == key then
-			return target
-		end
+	if not self.targetsByKey then
+		self:RefreshTargets()
 	end
+
+	return self.targetsByKey[key]
 end
 
 local function PositionTable(registration)
@@ -293,9 +303,9 @@ function lib.Registration:ApplyTarget(target)
 	frame:SetPoint(point, UIParent, point, x / scale, y / scale)
 end
 
----Applies every target's position. Adopters call it after their active profile changes.
+---Reads the targets again and applies every target's position. Adopters call it after their active profile changes.
 function lib.Registration:Apply()
-	for _, target in ipairs(self:Targets()) do
+	for _, target in ipairs(self:RefreshTargets()) do
 		self:ApplyTarget(target)
 	end
 end
@@ -399,16 +409,23 @@ function lib:RunDeferred()
 	end
 end
 
-function lib:ApplyAll()
+---Applies every addon's positions; `refresh` reads each addon's targets again first.
+function lib:ApplyAll(refresh)
 	for _, addonName in ipairs(self.order) do
-		self.registrations[addonName]:Apply()
+		local registration = self.registrations[addonName]
+		if refresh then
+			registration:RefreshTargets()
+		end
+		for _, target in ipairs(registration:Targets()) do
+			registration:ApplyTarget(target)
+		end
 	end
 end
 
 function lib:OnEvent(event)
 	if event == "PLAYER_LOGIN" then
 		self.loggedIn = true
-		self:ApplyAll()
+		self:ApplyAll(true)
 	elseif event == "PLAYER_REGEN_ENABLED" then
 		self:RunDeferred()
 	elseif self.loggedIn then

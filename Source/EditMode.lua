@@ -80,9 +80,11 @@ function lib:GetPending(addonName, key)
 	return pending and pending[key]
 end
 
----Records an unsaved position and draws the frame there.
+---Records an unsaved position and draws the frame there, then redraws the movers unless `skipRefresh` is true (the
+---caller redraws the ones that changed).
 ---@param position LibAeonSettingsPosition?
-function lib:SetPending(addonName, key, position)
+---@param skipRefresh boolean?
+function lib:SetPending(addonName, key, position, skipRefresh)
 	local registration = self.registrations[addonName]
 	local target = registration and registration:Target(key)
 	if not target or not self.session.open then
@@ -91,7 +93,9 @@ function lib:SetPending(addonName, key, position)
 	self.session.pending[addonName] = self.session.pending[addonName] or {}
 	self.session.pending[addonName][key] = position
 	registration:ApplyTarget(target)
-	self:RefreshMovers()
+	if not skipRefresh then
+		self:RefreshMovers()
+	end
 end
 
 ---Shows or hides one addon's sample content.
@@ -201,6 +205,10 @@ function lib:OpenEditMode(addonName)
 	session.hidden = {}
 	session.selected, session.hovered, session.drag = nil, nil, nil
 	session.expanded, session.pick, session.snapTargets, session.sizeOriginals = nil, nil, nil, nil
+	-- Targets declared by a function are read again as editing begins.
+	for _, registration in pairs(self.registrations) do
+		registration:RefreshTargets()
+	end
 	ShowSamples(session, true)
 	self:ShowEditUI(true)
 	PlaySound(OPEN_SOUND)

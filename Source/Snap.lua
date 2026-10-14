@@ -15,11 +15,13 @@ function lib:SnapThreshold()
 end
 
 ---Lines a drag can snap to: the screen's edges and center, the grid lines while the grid shows, and the edges and
----centers of every other shown mover's frame, or only the chosen snap target's when the mover has one.
+---centers of every other shown mover's frame, or only the chosen snap target's when the mover has one. Movers in
+---`followers` (those attached to the dragged one) are left out.
 ---@param dragId string
 ---@param frameRect fun(frame: Frame): number?, number?, number?, number?
+---@param followers table<string, boolean>
 ---@return table xs, table ys
-function lib:SnapCandidates(dragId, frameRect)
+function lib:SnapCandidates(dragId, frameRect, followers)
 	local width, height = UIParent:GetWidth(), UIParent:GetHeight()
 	local xs, ys = {}, {}
 	local only = self.session.snapTargets and self.session.snapTargets[dragId]
@@ -44,8 +46,7 @@ function lib:SnapCandidates(dragId, frameRect)
 	end
 
 	for id, mover in pairs(self.ui and self.ui.movers or {}) do
-		if id ~= dragId and mover:IsShown() and mover.target and (not only or only == id)
-			and not (self.DependsOn and self:DependsOn(id, dragId)) then
+		if id ~= dragId and mover:IsShown() and mover.target and (not only or only == id) and not followers[id] then
 			local left, bottom, frameWidth, frameHeight = frameRect(mover.target.frame)
 			if left then
 				for _, value in ipairs({ left, left + frameWidth / 2, left + frameWidth }) do

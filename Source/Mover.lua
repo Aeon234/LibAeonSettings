@@ -11,6 +11,7 @@ local MIN_SIZE = 18         -- smallest mover side
 local EXPANDED_WIDTH, EXPANDED_HEIGHT = 64, 40 -- smallest mover while hovered, with room for the cog
 local LINKS_HEIGHT = 16     -- extra height an expanded mover takes for its link row
 local ANCHORED_NAME = { 1, 0.7, 0.3 }
+local WHITE = { 1, 1, 1 }
 local TEXT_PLATE_ALPHA = 0.7
 local TEXT_PLATE_PADDING_X, TEXT_PLATE_PADDING_Y = 8, 3
 local TEXT_INSET_X, TEXT_INSET_Y = 10, 6 -- the label's offset from the mover's top left
@@ -184,7 +185,7 @@ local function PaintMover(mover, state, hovered, fill, showCoordinates, snapTarg
 	for _, piece in ipairs(PIECES) do
 		mover.selection[piece]:SetVertexColor(r, g, b)
 	end
-	mover.name:SetTextColor(unpack(anchored and ANCHORED_NAME or { 1, 1, 1 }))
+	mover.name:SetTextColor(unpack(anchored and ANCHORED_NAME or WHITE))
 	-- The snap target shows Blizzard's hover art, pulsed while the drag lasts.
 	mover.hover:SetShown((hovered and state ~= "dragging") or snapTarget)
 	if not snapTarget then
@@ -395,8 +396,20 @@ function Handlers.DragUpdate(mover)
 		if IsShiftKeyDown() then
 			drag.axis = math.abs(dx) >= math.abs(dy) and "x" or "y"
 		end
-		drag.xs, drag.ys = lib:SnapCandidates(drag.id, FrameRect)
+		-- Movers attached to or matched with the dragged one, directly or through others, are redrawn with it on
+		-- each step and are not snap candidates.
+		local followers, moving = {}, { mover }
+		for id, other in pairs(lib.ui.movers) do
+			if id ~= drag.id and other:IsShown() and other.target and lib:DependsOn(id, drag.id) then
+				followers[id] = true
+				table.insert(moving, other)
+			end
+		end
+		drag.moving = moving
+		drag.xs, drag.ys = lib:SnapCandidates(drag.id, FrameRect, followers)
 		drag.threshold = lib:SnapThreshold()
+		drag.snap = lib:GetPreference("snap")
+		drag.redraw = true
 	end
 
 	local snapMover = drag.snapFrom and lib.ui.movers[drag.snapFrom]
@@ -418,7 +431,7 @@ function Handlers.DragUpdate(mover)
 	end
 	local left, bottom, width, height = drag.left + dx, drag.bottom + dy, drag.width, drag.height
 	local snapX, snapY
-	if lib:GetPreference("snap") and not altDown then
+	if drag.snap and not altDown then
 		if drag.axis ~= "y" then
 			snapX = Geometry.NearestSnap({ left, left + width / 2, left + width }, drag.xs, drag.threshold)
 		end
@@ -428,9 +441,25 @@ function Handlers.DragUpdate(mover)
 	end
 	left = left + (snapX and snapX.delta or 0)
 	bottom = bottom + (snapY and snapY.delta or 0)
-	drag.snapFrom = (snapX and snapX.from) or (snapY and snapY.from)
+	local snapFrom = (snapX and snapX.from) or (snapY and snapY.from)
+	if snapFrom ~= drag.snapFrom then
+		drag.snapFrom = snapFrom
+		drag.redraw = true
+	end
 	lib:ShowGuides(snapX and snapX.value, snapY and snapY.value)
-	lib:MoveTargetTo(drag.registration.addonName, drag.target, left, bottom, width, height)
+	lib:MoveTargetTo(drag.registration.addonName, drag.target, left, bottom, width, height, true)
+
+	-- A step only moves the dragged mover and its followers; every mover is redrawn when the drag starts and when the
+	-- snap target changes, since those change how movers are painted.
+	if drag.redraw then
+		drag.redraw = nil
+		lib:RefreshMovers()
+	else
+		for _, moved in ipairs(drag.moving) do
+			LayoutMover(moved, moved.target, false, 0)
+		end
+		lib:MoveLines()
+	end
 end
 
 function Handlers.EndDrag(mover)

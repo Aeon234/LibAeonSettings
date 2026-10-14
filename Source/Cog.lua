@@ -12,10 +12,11 @@ local SNAP_TARGET_COLOR = { 0.31, 0.82, 0.42 }
 local PICK_DIM = 0.5
 
 ---Moves a target, as a pending position, to a rectangle in UIParent units (clamped to the screen). An anchored
----target stays anchored, with its offsets measured again.
-function lib:MoveTargetTo(addonName, target, left, bottom, width, height)
+---target stays anchored, with its offsets measured again. `skipRefresh` leaves redrawing the movers to the caller.
+function lib:MoveTargetTo(addonName, target, left, bottom, width, height, skipRefresh)
 	left, bottom = Geometry.ClampInto(left, bottom, width, height, UIParent:GetWidth(), UIParent:GetHeight())
-	self:SetPending(addonName, target.key, self:PositionForRect(addonName, target, left, bottom, width, height))
+	self:SetPending(addonName, target.key, self:PositionForRect(addonName, target, left, bottom, width, height),
+		skipRefresh)
 end
 
 -- Size changes are applied live through the target's `size.set` and undone with the first size seen in the session
