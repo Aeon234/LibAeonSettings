@@ -511,12 +511,26 @@ function Harness:DeclareControls(page)
 		picker = "sound", options = SAMPLE_SOUNDS })
 
 	local texts = page:Section("texts", "Text Inputs")
-	texts:TextInput({ id = "nameFormat", label = "Name Format", path = "controls.nameFormat", default = "[name]",
+	local nameFormat = texts:TextInput({ id = "nameFormat", label = "Name Format", path = "controls.nameFormat",
+		default = "[name]",
 		validate = function(text)
 			if not text:find("%[%a+%]") then
 				return "It needs a tag in brackets, such as [name]."
 			end
 		end })
+	-- Acts instead of keeping a choice: puts the tag where Name Format's cursor last was. Undo records the insertion
+	-- on Name Format, not the pick, as the Profiles page's dropdown does.
+	local insertTag = texts:Dropdown({ id = "insertTag", label = "Insert Tag", placeholder = "Insert Tag", titleCase = false,
+		options = {
+			{ title = true, text = "Unit" },
+			{ value = "[name]", text = "[name]", tooltip = "The unit's name." },
+			{ value = "[level]", text = "[level]", tooltip = "The unit's level." },
+			{ title = true, text = "Text" },
+			{ value = "[Ñame]", text = "[Ñame]", tooltip = "A tag with a two-byte letter, for counting characters." },
+		},
+		get = function() return nil end,
+		set = function(tag) nameFormat:InsertText(tag) end })
+	insertTag.noUndo = true
 	texts:TextInput({ id = "welcome", label = "Welcome Message", path = "controls.welcome",
 		default = "Welcome back!", allowEmpty = true, description = "May be empty: the default shows gray." })
 	texts:TextInput({ id = "profileName", label = "Profile Name", path = "controls.profileName", default = "Default",

@@ -1,5 +1,5 @@
 -- Offline checks of the library's rules that need no client: positions, target lists and size matching, the
--- media pickers' choices, the settings model, Undo and search. Loads the real source files under small stand-ins for the WoW API.
+-- media pickers' choices, the settings model, Undo, search and text insertion. Loads the real source files under small stand-ins for the WoW API.
 -- Run from anywhere with Lua 5.1: ~/.local/lua51/bin/lua Dev/Check.lua
 
 local root = (arg and arg[0] or ""):match("^(.*)[/\\]Dev[/\\]Check%.lua$") or "."
@@ -95,7 +95,12 @@ end
 function lib:RefreshMovers() end
 function lib:FrameRect(frame) return frame.left, frame.bottom, frame.width, frame.height end
 lib.Window = {}
-for _, file in ipairs({ "Model", "Search", "Undo" }) do
+function strlenutf8(text)
+	local _, count = text:gsub("[^\128-\191]", "")
+
+	return count
+end
+for _, file in ipairs({ "Model", "Search", "Undo", "TextInput" }) do
 	dofile(root .. "/Source/" .. file .. ".lua")
 end
 
@@ -275,6 +280,34 @@ do
 		#sounds == 3 and sounds[1] == own[1] and sounds[2] == own[2] and sounds[3].value == "Bell"
 		and sounds[3].soundFile == "Interface\\bell.ogg")
 	libraries["LibSharedMedia-3.0"] = nil
+end
+
+-- The text cursor
+
+do
+	local store = {}
+	local window = NewWindow(store)
+	window.RecordUndo = function() end
+	local page = NewPage(window, "text", "Text")
+	local section = page:Section("slot", "Slot")
+	local input = section:TextInput({ id = "text", label = "Text", path = "slot.text", default = "", allowEmpty = true })
+	local short = section:TextInput({ id = "short", label = "Short", path = "slot.short", default = "ab", maxLetters = 4 })
+	Check("cursor: without a cursor, text goes at the end", input:InsertText("[name]") and store.slot.text == "[name]")
+	input:SetTextCursor(0)
+	input:InsertText("Lv ")
+	Check("cursor: text goes where the cursor was, and the cursor follows it",
+		store.slot.text == "Lv [name]" and input:TextCursor() == 3)
+	store.slot.text = "Ñö [x]"
+	input:SetTextCursor(2)
+	input:InsertText("é")
+	Check("cursor: positions count UTF-8 characters", store.slot.text == "Ñöé [x]" and input:TextCursor() == 3)
+	input:SetTextCursor(99)
+	input:InsertText("!")
+	Check("cursor: a position past the end inserts at the end", store.slot.text == "Ñöé [x]!")
+	Check("cursor: an insertion the input's rules refuse is not saved", not short:InsertText("cde") and store.slot.short == nil)
+	local before = #errors
+	section:Toggle({ id = "plain", label = "Plain", path = "slot.plain" }):InsertText("x")
+	Check("cursor: InsertText on another control is reported", #errors == before + 1)
 end
 
 -- Undo
