@@ -1,6 +1,16 @@
 <Ui xmlns="http://www.blizzard.com/wow/ui/">
 	<Script file="Source\Core.lua" />
 	<Script file="Source\Locale.lua" />
+	<Script file="Source\Locale\deDE.lua" />
+	<Script file="Source\Locale\esES.lua" />
+	<Script file="Source\Locale\esMX.lua" />
+	<Script file="Source\Locale\frFR.lua" />
+	<Script file="Source\Locale\itIT.lua" />
+	<Script file="Source\Locale\koKR.lua" />
+	<Script file="Source\Locale\ptBR.lua" />
+	<Script file="Source\Locale\ruRU.lua" />
+	<Script file="Source\Locale\zhCN.lua" />
+	<Script file="Source\Locale\zhTW.lua" />
 	<Script file="Source\Fonts.lua" />
 	<Script file="Source\Media.lua" />
 	<Script file="Source\Geometry.lua" />

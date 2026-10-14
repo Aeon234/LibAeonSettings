@@ -476,6 +476,54 @@ do
 	Check("search: a tooltip given as a function is not searched", not Finds("zeppelin", "Live Tip"))
 end
 
+-- Translations: every locale file names only keys Locale.lua has, keeps their format specifiers in order, and
+-- translates every key the client does not translate itself (those take a Blizzard global).
+
+do
+	local english, blizzard = {}, {}
+	for line in io.lines(root .. "/Source/Locale.lua") do
+		local key, rest = line:match("^L%.([%w_]+) = (.*)$")
+		if key then
+			english[key] = lib.L[key]
+			blizzard[key] = not rest:match('^"') or nil
+		end
+	end
+	local function Specifiers(text)
+		local list = {}
+		for specifier in tostring(text):gmatch("%%[%%%a]") do
+			list[#list + 1] = specifier
+		end
+
+		return table.concat(list, " ")
+	end
+	local saved = lib.L
+	for _, code in ipairs({ "deDE", "esES", "esMX", "frFR", "itIT", "koKR", "ptBR", "ruRU", "zhCN", "zhTW" }) do
+		lib.L = {}
+		GetLocale = function() return code end
+		local loaded = pcall(dofile, root .. "/Source/Locale/" .. code .. ".lua")
+		local unknown, mismatched, missing = {}, {}, {}
+		for key, text in pairs(lib.L) do
+			if english[key] == nil then
+				unknown[#unknown + 1] = key
+			elseif Specifiers(text) ~= Specifiers(english[key]) then
+				mismatched[#mismatched + 1] = key
+			end
+		end
+		for key in pairs(english) do
+			if not blizzard[key] and lib.L[key] == nil then
+				missing[#missing + 1] = key
+			end
+		end
+		Check(("locale %s: loads"):format(code), loaded)
+		Check(("locale %s: names only English keys (%s)"):format(code, table.concat(unknown, ", ")), #unknown == 0)
+		Check(("locale %s: keeps the format specifiers (%s)"):format(code, table.concat(mismatched, ", ")),
+			#mismatched == 0)
+		Check(("locale %s: translates every key (%d missing: %s)"):format(code, #missing,
+			table.concat(missing, ", ")), #missing == 0)
+	end
+	lib.L, GetLocale = saved, nil
+end
+
 print(("%d passed, %d failed"):format(passed, failed))
 if failed > 0 then
 	os.exit(1)

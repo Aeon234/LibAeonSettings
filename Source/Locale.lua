@@ -1,4 +1,5 @@
--- Player-facing strings, keyed by their English text. Blizzard's global strings are used where the client has them.
+-- Player-facing strings in English; Source/Locale/ holds the other client languages, which replace these on their
+-- clients. Blizzard's global strings are used where the client has them, already translated.
 
 local lib = LibStub("LibAeonSettings-1.0")
 if not lib.loading then

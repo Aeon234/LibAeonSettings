@@ -293,8 +293,14 @@ local function Write(setting, value)
 end
 lib.WriteSetting = Write
 
--- Title Case for the refusal message (C-01): every word's first letter capitalized, the rest as written.
+-- Title Case (C-01): every word's first letter capitalized, the rest as written. It is an English convention, so other
+-- client languages keep their text as written.
+local ENGLISH = not GetLocale or GetLocale():sub(1, 2) == "en"
 local function TitleCase(text)
+	if not ENGLISH then
+		return text
+	end
+
 	return (text:gsub("(%a)([%w']*)", function(first, rest) return first:upper() .. rest end))
 end
 lib.TitleCase = TitleCase
