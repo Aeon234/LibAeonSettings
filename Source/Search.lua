@@ -30,6 +30,7 @@ local FLASH_SECONDS, FLASH_HOLD, FLASH_EDGE = 2.4, 0.6, 2
 local FLASH_FILL = 0.12
 local GOLD = { 1, 0.82, 0 }
 local CLOSE_DELAY = 0.1
+local MAX_RESULTS = 50 -- the list draws at most this many matches, best first
 
 lib.SearchHandlers = lib.SearchHandlers or {}
 local Handlers = lib.SearchHandlers
@@ -366,6 +367,19 @@ local function Score(entry, query, phrase, squeezed, respelled)
 	end
 end
 
+local KIND_RANK = { page = 3, section = 2, setting = 1 }
+
+-- Best score first; at a tie pages, then sections, then settings; then declaration order.
+local function Better(a, b)
+	if a.score ~= b.score then
+		return a.score > b.score
+	elseif KIND_RANK[a.kind] ~= KIND_RANK[b.kind] then
+		return KIND_RANK[a.kind] > KIND_RANK[b.kind]
+	end
+
+	return a.order < b.order
+end
+
 ---Finds what the search text names, in American or British spelling, best first: pages, sections and settings, by
 ---how well each matches.
 ---@return table entries
@@ -392,16 +406,7 @@ function lib.Window:FindSettings(text)
 			scored[#scored + 1] = entry
 		end
 	end
-	local rank = { page = 3, section = 2, setting = 1 }
-	table.sort(scored, function(a, b)
-		if a.score ~= b.score then
-			return a.score > b.score
-		elseif rank[a.kind] ~= rank[b.kind] then
-			return rank[a.kind] > rank[b.kind]
-		end
-
-		return a.order < b.order
-	end)
+	table.sort(scored, Better)
 
 	return scored, query, phrase
 end
@@ -564,8 +569,8 @@ function Handlers.Changed(window, userInput)
 		return
 	end
 	local found, query = window:FindSettings(text)
-	for index, entry in ipairs(found) do
-		hits[index] = entry
+	for index = 1, math.min(#found, MAX_RESULTS) do
+		hits[index] = found[index]
 	end
 	search.at = 1
 	for index, entry in ipairs(hits) do
