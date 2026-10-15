@@ -363,6 +363,7 @@ function lib.Window:ShowPage()
 		local header = Acquire(view.sectionHeaders)
 		header.title:SetText(section.title or "")
 		header.section = section
+		header.shown = nil
 		view.headerOf[section] = header
 		BindSectionMenu(view, header, section)
 		self:RefreshSectionLink(header, section)
@@ -465,9 +466,10 @@ function lib.Window:RefreshStates()
 	end
 	local pageOff = page.switch ~= nil and not page.switch:GetValue()
 	view.scroll.frame:SetAlpha(pageOff and PAGE_OFF_ALPHA or 1)
-	-- Section menus: dimmed and closed while inactive, their reason on hover.
+	-- Section menus: dimmed and closed while inactive, their reason on hover; closed while their section is hidden.
 	for setting, menu in pairs(view.menuOf) do
 		local active, reason = setting:Activity()
+		active = active and setting.section:IsShown()
 		menu:SetActive(active)
 		menu.frame:SetAlpha(active and 1 or INACTIVE_ALPHA)
 		menu.blocker:SetShown(not active)
@@ -475,6 +477,14 @@ function lib.Window:RefreshStates()
 	end
 	local layoutChanged = false
 	for _, item in ipairs(view.items) do
+		local header = item.header
+		if header then
+			local shown = header.section:IsShown()
+			if shown ~= header.shown then
+				header.shown = shown
+				layoutChanged = true
+			end
+		end
 		for index = 1, 2 do
 			if item[index] and RefreshHalf(item[index]) then
 				layoutChanged = true
@@ -514,8 +524,9 @@ local function Rule(view, color, left, top, width, height)
 	texture:SetSize(width, height)
 end
 
----Places the shown page's sections, lines and notes: a line both of whose halves are hidden is left out; a hidden
----half alone keeps its place; a line is taller while either half has a second line.
+---Places the shown page's sections, lines and notes: a hidden section is left out with its notes (its rows are
+---hidden through their settings); a line both of whose halves are hidden is left out; a hidden half alone keeps its
+---place; a line is taller while either half has a second line.
 function lib.Window:LayoutPage()
 	local view = self.pageView
 	if not view or not view.shownPage then
@@ -530,12 +541,26 @@ function lib.Window:LayoutPage()
 	ReleaseAll(view.lines)
 	local y, previousLine = 0, false
 	local open -- the section header whose rows are being laid out, so each section knows where it ends
+	local hidden = false -- the section being laid out is hidden
 	for _, item in ipairs(view.items) do
 		if item.header then
 			if open then
 				open.bottom = y
 			end
-			open = item.header
+			hidden = item.header.shown == false
+			item.header:SetShown(not hidden)
+			open = not hidden and item.header or nil
+		end
+		if hidden then
+			if item.note then
+				item.note:Hide()
+			end
+			for index = 1, 2 do
+				if item[index] then
+					item[index]:Hide()
+				end
+			end
+		elseif item.header then
 			y = y + SECTION_GAP
 			item.header.top = y
 			item.header:SetPoint("TOPLEFT", child, "TOPLEFT", 0, -y)
@@ -547,6 +572,7 @@ function lib.Window:LayoutPage()
 			note.text:SetWidth(width - 2 * INSET)
 			note.small:SetWidth(width - 2 * INSET)
 			local height = NOTE_TOP + note.text:GetStringHeight() + (note.small:IsShown() and note.small:GetStringHeight() or 0)
+			note:Show()
 			note:SetPoint("TOPLEFT", child, "TOPLEFT", 0, -y)
 			note:SetSize(width, height)
 			y = y + height

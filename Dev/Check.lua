@@ -1,5 +1,6 @@
 -- Offline checks of the library's rules that need no client: positions, target lists and size matching, the
--- media pickers' choices, the settings model, Undo, search, text insertion and section menus. Loads the real source files under small stand-ins for the WoW API.
+-- media pickers' choices, targets that place themselves, the settings model, hidden sections, Undo, search, text
+-- insertion and section menus. Loads the real source files under small stand-ins for the WoW API.
 -- Run from anywhere with Lua 5.1: ~/.local/lua51/bin/lua Dev/Check.lua
 
 local root = (arg and arg[0] or ""):match("^(.*)[/\\]Dev[/\\]Check%.lua$") or "."
@@ -192,6 +193,53 @@ do
 	Check("pinned: a bad outline and a bad pinned are reported and dropped", #errors == before + 2
 		and registration:Target("bad").outline == nil and registration:Target("bad").pinned == nil)
 	Check("pinned: a fixed reason pins", lib:PinnedReason({ pinned = "Fixed." }) == "Fixed.")
+end
+
+-- Placement: targets that place themselves
+
+do
+	local frame = NewFrame(100, 20)
+	local placed = {}
+	local stored = {}
+	local before = #errors
+	local registration = lib:Placement("CheckPlace", { store = { positions = stored }, targets = {
+		{ key = "bar", frame = frame, default = { point = "TOP", x = 0, y = -10 },
+			place = function(position, target) placed[#placed + 1] = { position = position, target = target } end },
+		{ key = "both", frame = NewFrame(), default = { point = "CENTER", x = 0, y = 0 }, attach = true,
+			place = function() end },
+		{ key = "bad", frame = NewFrame(), default = { point = "CENTER", x = 0, y = 0 }, place = "self" },
+	} })
+	local bar = registration:Target("bar")
+	Check("place: a bad place, and place with attach, are reported and dropped", #errors == before + 2
+		and registration:Target("bad").place == nil and registration:Target("both").attach == nil
+		and registration:Target("both").place ~= nil)
+	frame.point = nil
+	registration:ApplyTarget(bar)
+	Check("place: the target places its frame itself, with its default", #placed == 1 and frame.point == nil
+		and placed[1].target == bar and placed[1].position == bar.default)
+	stored.bar = { point = "BOTTOMLEFT", x = 40, y = 30 }
+	registration:ApplyTarget(bar)
+	Check("place: a stored position is handed over", placed[2].position == stored.bar)
+	lib.session.pending.CheckPlace = { bar = { point = "LEFT", x = 5, y = 0 } }
+	registration:ApplyTarget(bar)
+	Check("place: a pending position wins", placed[3].position.point == "LEFT" and placed[3].position.x == 5)
+	lib.session.pending.CheckPlace = nil
+	stored.bar = { point = "BOTTOMLEFT", x = -500, y = 30 }
+	registration:ApplyTarget(bar)
+	local left = lib.Geometry.FromStored(placed[4].position.point, placed[4].position.x, placed[4].position.y, 100,
+		20, 1920, 1080)
+	Check("place: an off-screen position is moved in view first, and the store is untouched",
+		placed[4].position ~= stored.bar and Near(left, 0) and stored.bar.x == -500)
+	stored.bar = { point = "CENTER", x = 0, y = 0, anchor = { addon = "Check", key = "first", side = "TOP", x = 0, y = 0 } }
+	registration:ApplyTarget(bar)
+	Check("place: an anchor is left out of the position handed over",
+		placed[5].position.anchor == nil and placed[5].position.point == "CENTER" and stored.bar.anchor ~= nil)
+	registration:Apply()
+	Check("place: Apply places every target that has place", #placed == 6)
+	bar.place = function() error("boom") end
+	before = #errors
+	registration:ApplyTarget(bar)
+	Check("place: an error in place is reported", #errors == before + 1)
 end
 
 -- The settings model
@@ -474,6 +522,25 @@ do
 	Check("search: a tooltip given as text is searched without its color codes",
 		Finds("guild", "Announce") and not Finds("cff40ff40", "Announce"))
 	Check("search: a tooltip given as a function is not searched", not Finds("zeppelin", "Live Tip"))
+
+	local mode = "markers"
+	local markers = page:Section("markers", "Markers", { show = function() return mode == "markers" end })
+	local markerSize = markers:Slider({ id = "markerSize", label = "Marker Size", path = "markerSize" })
+	local party = page:Section("party", "Party Bars", { show = function() return mode == "party" end })
+	local partyHeight = party:Slider({ id = "partyHeight", label = "Party Height", path = "partyHeight" })
+	Check("section show: settings follow their section's show",
+		markerSize:IsShown() and not partyHeight:IsShown() and markers:IsShown() and not party:IsShown())
+	Check("section show: a hidden section and its settings are not searched",
+		Finds("marker", "Marker Size") and Finds("markers", "Markers")
+		and not Finds("party", "Party Height") and not Finds("party", "Party Bars"))
+	mode = "party"
+	Check("section show: changing the mode swaps what search finds",
+		not Finds("marker", "Marker Size") and Finds("party", "Party Height") and Finds("party", "Party Bars"))
+	Check("section show: a section without show is shown", section:IsShown())
+	local before = #errors
+	local odd = page:Section("odd", "Odd", { show = true, hidden = true })
+	Check("section show: an unknown field and a show that is not a function are reported",
+		#errors == before + 2 and odd.show == nil and odd:IsShown())
 end
 
 -- Translations: every locale file names only keys Locale.lua has, keeps their format specifiers in order, and

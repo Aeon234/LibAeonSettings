@@ -24,6 +24,7 @@ lib.EMPTY = lib.EMPTY or { empty = true }
 local SETTING_FIELDS = { id = true, label = true, description = true, path = true, default = true, get = true,
 	set = true, depends = true, blocked = true, show = true, wide = true, inherits = true, keywords = true,
 	tooltip = true, redraws = true }
+local SECTION_FIELDS = { show = true }
 local MAX_CHAIN = 16
 
 ---Registers a control kind: `section:<Kind>(info)` declares a setting drawn with it. `info.fields` lists the fields
@@ -64,10 +65,30 @@ function lib:InitPage(window, page, info)
 	end
 end
 
----Adds a section with a gold title and a rule; its settings follow it.
+---Adds a section with a gold title and a rule; its settings follow it. `info.show(section)`, when given, hides the
+---whole section (title, rule, rows, notes and menu) and leaves it out of search while it returns false.
+---@param info table? { show? }
 ---@return table? section
-function lib.PageModel:Section(id, title)
+function lib.PageModel:Section(id, title, info)
 	local section = setmetatable({ id = id, title = title, page = self, lines = {} }, sectionMeta)
+	if info ~= nil then
+		local addonName = self.window.addonName
+		if type(info) ~= "table" then
+			lib:Report(addonName, ("%s/%s: section info must be a table"):format(self.id, tostring(id)))
+		else
+			for field in pairs(info) do
+				if not SECTION_FIELDS[field] then
+					lib:Report(addonName, ("%s/%s: unknown section field %q"):format(self.id, tostring(id),
+						tostring(field)))
+				end
+			end
+			if type(info.show) == "function" then
+				section.show = info.show
+			elseif info.show ~= nil then
+				lib:Report(addonName, ("%s/%s: section show must be a function"):format(self.id, tostring(id)))
+			end
+		end
+	end
 	table.insert(self.sections, section)
 
 	return section
@@ -164,6 +185,15 @@ function lib.Section:Menu(info)
 	end
 
 	return setting
+end
+
+---@return boolean shown false while the section's `show()` hides it
+function lib.Section:IsShown()
+	if not self.show then
+		return true
+	end
+
+	return Call(self.show, self) and true or false
 end
 
 ---Adds a line of text across the section, with an optional smaller second part.
@@ -404,8 +434,12 @@ function lib.Setting:Activity()
 	return true
 end
 
----@return boolean shown false while the setting's `show()` hides it
+---@return boolean shown false while the setting's `show()` or its section's hides it
 function lib.Setting:IsShown()
+	local section = self.section
+	if section and section.show and not section:IsShown() then
+		return false
+	end
 	if not self.show then
 		return true
 	end

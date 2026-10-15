@@ -37,11 +37,14 @@ local Geometry = lib.Geometry
 ---@field fixedEdge string? "TOP", "BOTTOM", "LEFT" or "RIGHT"
 ---@field outline (Region|fun(target: table): Region?)? what the mover covers when it is larger than the frame
 ---@field pinned (string|fun(target: table): string?)? why the target cannot be moved now, or nil
+---@field place fun(position: LibAeonSettingsPosition, target: table)? places the frame itself, in place of the
+---library's SetPoint; runs on every frame of a drag, so it must be cheap
 
 local DECLARATION_FIELDS = { title = true, store = true, get = true, set = true, targets = true, account = true }
 local TARGET_FIELDS = {
 	key = true, label = true, subtitle = true, frame = true, default = true, fixedEdge = true, sample = true,
 	settings = true, size = true, attach = true, match = true, grow = true, outline = true, pinned = true,
+	place = true,
 }
 local FIXED_EDGES = { TOP = true, BOTTOM = true, LEFT = true, RIGHT = true }
 -- `settings` is a function, or where the target's settings are: { page, section?, setting?, select? }.
@@ -111,6 +114,16 @@ local function CheckTarget(addonName, target, seen)
 	if target.pinned ~= nil and type(target.pinned) ~= "string" and type(target.pinned) ~= "function" then
 		lib:Report(addonName, ("target %s: pinned must be a reason or a function"):format(target.key))
 		target.pinned = nil
+	end
+	if target.place ~= nil and type(target.place) ~= "function" then
+		lib:Report(addonName, ("target %s: place must be a function"):format(target.key))
+		target.place = nil
+	end
+	-- A target that places itself keeps to the screen: anchoring it to another target would need the library's
+	-- SetPoint.
+	if target.place and target.attach then
+		lib:Report(addonName, ("target %s: place and attach cannot be combined; attach is dropped"):format(target.key))
+		target.attach = nil
 	end
 	seen[target.key] = true
 
@@ -275,9 +288,38 @@ function lib.Registration:Current(target)
 	return lib:GetPending(self.addonName, target.key) or self:Read(target.key) or target.default
 end
 
+---The screen position a target that places itself is given: its position in force without an anchor, moved in
+---view when the frame would lie wholly off-screen. Pure, so it can be checked offline. Returns `position` itself
+---when nothing changes; otherwise a copy.
+---@param position LibAeonSettingsPosition
+---@param width number the frame's size in UIParent units
+---@param height number
+---@return LibAeonSettingsPosition
+function lib.PlacedPosition(position, width, height, parentWidth, parentHeight, fixedEdge)
+	local point, x, y = position.point, position.x, position.y
+	local left, bottom = Geometry.FromStored(point, x, y, width, height, parentWidth, parentHeight)
+	local clamped = Geometry.IsOffScreen(left, bottom, width, height, parentWidth, parentHeight)
+	if not clamped and position.anchor == nil then
+		return position
+	end
+	local placed = {}
+	for field, value in pairs(position) do
+		placed[field] = value
+	end
+	placed.anchor = nil
+	if clamped then
+		left, bottom = Geometry.ClampInto(left, bottom, width, height, parentWidth, parentHeight)
+		placed.point, placed.x, placed.y = Geometry.ToStored(left, bottom, width, height, parentWidth, parentHeight,
+			fixedEdge, position.grow)
+	end
+
+	return placed
+end
+
 ---Anchors a target's frame to its position in force: attached to another target's frame when the position says so
 ---and that frame exists, else to the screen. A frame that would lie wholly off-screen is drawn in view instead,
 ---without changing what is stored. Matched sizes are applied first. A protected frame waits until combat ends.
+---A target with `place` is handed its screen position (lib.PlacedPosition) and anchors its frame itself.
 ---@param target LibAeonSettingsTarget
 function lib.Registration:ApplyTarget(target)
 	local frame = target.frame
@@ -301,6 +343,16 @@ function lib.Registration:ApplyTarget(target)
 		lib:ApplyMatches(self.addonName, target, position)
 	end
 	local scale = ScaleOf(frame)
+
+	if target.place then
+		local placed = lib.PlacedPosition(position, frame:GetWidth() * scale, frame:GetHeight() * scale,
+			UIParent:GetWidth(), UIParent:GetHeight(), target.fixedEdge)
+		local ok, err = pcall(target.place, placed, target)
+		if not ok then
+			lib:Report(self.addonName, ("place for %s failed: %s"):format(target.key, tostring(err)))
+		end
+		return
+	end
 
 	local anchor = position.anchor
 	local parent = anchor and lib.ResolveTarget and lib:ResolveTarget(anchor.addon, anchor.key)

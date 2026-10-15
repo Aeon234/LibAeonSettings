@@ -43,11 +43,34 @@ local function RestoreSize(frame, name)
 	end
 end
 
+-- Harness Strip anchors its frame itself, as Levelbound's bar group does: to whole pixels while free, and to both
+-- top corners of the screen while `/lasdev strip` makes it full width (then it is pinned). `/lasdev places` echoes
+-- each call.
+local STRIP_WIDTH = 300
+
+function Harness:PlaceStrip(position, target)
+	local frame = target.frame
+	frame:ClearAllPoints()
+	if self.stripFull then
+		frame:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 0, 0)
+		frame:SetPoint("TOPRIGHT", UIParent, "TOPRIGHT", 0, 0)
+	else
+		local scale = frame:GetEffectiveScale() / UIParent:GetEffectiveScale()
+		PixelUtil.SetPoint(frame, position.point, UIParent, position.point, position.x / scale, position.y / scale)
+	end
+	self.placeCount = (self.placeCount or 0) + 1
+	if self.echoPlaces then
+		Print("place %d: %s %s %.1f %.1f%s", self.placeCount, target.key, position.point, position.x, position.y,
+			self.stripFull and " (full width)" or "")
+	end
+end
+
 function Harness:CreateFrames()
 	self.frames = {
 		bar = SampleFrame("Bar", 600, 26, "Harness Bar (fixed edge: BOTTOM)", 0.08, 0.08, 0.1),
 		unit = SampleFrame("Unit", 220, 48, "Harness Unit", 0.1, 0.35, 0.12),
 		icon = SampleFrame("Icon", 40, 40, "Icon", 0.45, 0.3, 0.1),
+		strip = SampleFrame("Strip", STRIP_WIDTH, 18, "Harness Strip (places itself)", 0.1, 0.2, 0.4),
 	}
 	self.frames.icon:SetScale(1.5)
 	-- A border drawn 6 outside the unit frame, as Levelbound's bar border is: its mover covers the border.
@@ -87,6 +110,10 @@ function Harness:CreateFrames()
 		{ key = "secure", label = "Secure Button", subtitle = "Protected", frame = self.frames.secure,
 			default = { point = "LEFT", x = 240, y = -60 }, attach = true,
 			settings = function(target) Print("Element Options for %s: an addon's own function runs instead", target.key) end },
+		{ key = "strip", label = "Harness Strip", subtitle = "Places itself", frame = self.frames.strip,
+			default = { point = "TOP", x = 0, y = -60 }, fixedEdge = "TOP",
+			place = function(position, target) Harness:PlaceStrip(position, target) end,
+			pinned = function() return Harness.stripFull and "Full width: /lasdev strip frees it." or nil end },
 	}
 end
 
@@ -136,6 +163,8 @@ function Harness:DeclarePages()
 		description = "W6: a preview shared by tabs that set the same things for different panels; its parts find their settings." }))
 	self:DeclareBar(window:Page("bar", { title = "Bar", switch = { path = "bar.enabled", default = true },
 		description = "A page with a switch: turning it off dims and desaturates everything below the header." }))
+	self:DeclareParty(window:Page("party", { title = "Party Progress",
+		description = "Display swaps two sets of sections: each section hides as a whole, title, notes and menu included." }))
 	window:Divider()
 	window:Header("modules", "Modules")
 	local groups = {
@@ -474,6 +503,44 @@ function Harness:DeclareBar(page)
 		set = function() return false, "The harness refuses this one." end })
 	behavior:Checkbox({ id = "otherPage", label = "Follows General", path = "bar.otherPage",
 		depends = "general/plain" })
+end
+
+-- Levelbound's Party Progress page: the Display choice shows the marker sections or the party-bar sections.
+function Harness:DeclareParty(page)
+	local function Display()
+		local party = Harness:Profile().party
+		return party and party.display or "markers"
+	end
+	local function Markers() return Display() == "markers" end
+	local function Bars() return Display() == "bars" end
+
+	local display = page:Section("display", "Display")
+	display:Dropdown({ id = "display", label = "Display", path = "party.display", default = "markers",
+		options = { { value = "markers", text = "Markers on My Bar" }, { value = "bars", text = "Party Bars" } } })
+	display:Checkbox({ id = "partyEnabled", label = "Show Party Progress", path = "party.enabled", default = true })
+
+	local markers = page:Section("markers", "Markers", { show = Markers })
+	markers:Note("Markers sit on your own bar at each party member's progress.")
+	markers:Slider({ id = "markerSize", label = "Marker Size", path = "party.markerSize", default = 12, min = 6, max = 32 })
+	markers:Checkbox({ id = "markerNames", label = "Marker Names", path = "party.markerNames", default = true })
+	local markerText = page:Section("markerText", "Marker Text", { show = Markers })
+	markerText:Dropdown({ id = "markerFont", label = "Font", path = "party.markerFont", default = "Expressway",
+		picker = "font" })
+
+	local bars = page:Section("bars", "Party Bars", { show = Bars })
+	bars:Menu({ id = "barsCopy", placeholder = "Copy From", width = 170, action = true, options = {
+		{ value = "player", text = "My Bar" } },
+		set = function() Print("Party Bars: Copy From ran.") end })
+	bars:Slider({ id = "barHeight", label = "Bar Height", path = "party.barHeight", default = 14, min = 6, max = 40 })
+	bars:Slider({ id = "barSpacing", label = "Spacing", path = "party.barSpacing", default = 2, min = 0, max = 20 })
+	local barText = page:Section("barText", "Party Bar Text", { show = Bars })
+	barText:Note("Each bar shows its member's name and progress.")
+	barText:Checkbox({ id = "barNames", label = "Member Names", path = "party.barNames", default = true })
+	barText:Dropdown({ id = "barFont", label = "Font", path = "party.barFont", default = "Expressway", picker = "font" })
+
+	local after = page:Section("after", "Always Shown")
+	after:Checkbox({ id = "partyCombat", label = "Hide in Combat", path = "party.hideInCombat", default = false,
+		description = "Follows whichever set is shown." })
 end
 
 -- A sound picker's own sounds, Blizzard sound kits; LibSharedMedia's sounds follow them in the list.
@@ -1180,13 +1247,28 @@ function COMMANDS.pin()
 	lib:RefreshMovers()
 end
 
+function COMMANDS.strip()
+	Harness.stripFull = not Harness.stripFull
+	if not Harness.stripFull then
+		Harness.frames.strip:SetWidth(STRIP_WIDTH)
+	end
+	Harness.registration:Apply()
+	Print("Harness Strip is %s.", Harness.stripFull and "full width (pinned)" or "free")
+	lib:RefreshMovers()
+end
+
+function COMMANDS.places()
+	Harness.echoPlaces = not Harness.echoPlaces
+	Print("Echoing places %s (%d so far).", Harness.echoPlaces and "on" or "off", Harness.placeCount or 0)
+end
+
 function COMMANDS.writes()
 	Harness.echoWrites = not Harness.echoWrites
 	Print("Echoing writes %s (%d so far).", Harness.echoWrites and "on" or "off", Harness.writeCount or 0)
 end
 
 function COMMANDS.help()
-	Print("/lasdev edit [second] | hide <key> | pend <key> <dx> <dy> | move | show | set <key> <POINT> <x> <y> | reset [key] | profile <name> | off <key> | scale <key> <n> | bad | media | tip | combat [key] [dx] [dy] | settings | status [text] | block | lock | shadow [on|off|size n|red|below|probe] | sound <kit> | icons | tint <percent> | writes | pin")
+	Print("/lasdev edit [second] | hide <key> | pend <key> <dx> <dy> | move | show | set <key> <POINT> <x> <y> | reset [key] | profile <name> | off <key> | scale <key> <n> | bad | media | tip | combat [key] [dx] [dy] | settings | status [text] | block | lock | shadow [on|off|size n|red|below|probe] | sound <kit> | icons | tint <percent> | writes | pin | strip | places")
 end
 
 SLASH_LIBAEONSETTINGSDEV1 = "/lasdev"

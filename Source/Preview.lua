@@ -99,7 +99,7 @@ function lib.PreviewModel:Chosen()
 	return self.page.previewChosen
 end
 
----Adds a tab to the page; its sections are declared with `tab:Section(id, title)`. `info.countOverrides` shows
+---Adds a tab to the page; its sections are declared with `tab:Section(id, title, info?)`. `info.countOverrides` shows
 ---how many of the tab's settings are overridden.
 function lib.PageModel:Tab(id, title, info)
 	self.tabs = self.tabs or {}
@@ -110,8 +110,8 @@ function lib.PageModel:Tab(id, title, info)
 	return tab
 end
 
-function lib.Tab:Section(id, title)
-	local section = self.page:Section(id, title)
+function lib.Tab:Section(id, title, info)
+	local section = self.page:Section(id, title, info)
 	section.tab = self
 	table.insert(self.sections, section)
 
