@@ -2,7 +2,7 @@
 
 -- MINOR goes up by one with every tag that changes the library's code (AGENTS.md, Release): LibStub keeps the copy
 -- with the highest MINOR, whatever its tag.
-local MAJOR, MINOR = "LibAeonSettings-1.0", 2
+local MAJOR, MINOR = "LibAeonSettings-1.0", 3
 
 local lib = LibStub:NewLibrary(MAJOR, MINOR)
 if not lib then

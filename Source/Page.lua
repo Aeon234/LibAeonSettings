@@ -141,7 +141,7 @@ local function CreateHalf(view)
 	undo:SetScript("OnClick", function() Handlers.Undo(half) end)
 	undo:SetScript("OnEnter", function() Handlers.UndoEnter(half) end)
 	undo:SetScript("OnLeave", GameTooltip_Hide)
-	half.gutter, half.undo = gutter, undo
+	half.gutter, half.diamond, half.undo = gutter, diamond, undo
 	-- Over an inactive control: takes its clicks and hover.
 	half.blocker = CreateFrame("Frame", nil, half)
 	half.blocker:EnableMouse(true)
@@ -418,9 +418,12 @@ local function RefreshHalf(half)
 	half.blocker:SetShown(not active)
 	half.label:SetAlpha(rowInactive and INACTIVE_ALPHA or 1)
 	-- A row following the shared value looks ordinary; changing it overrides it (◆, ↺, the inherited line).
+	-- A resettable row changed from its default shows ↺ alone, in the same place.
 	local overridden = setting:IsOverridden()
+	local changed = not overridden and setting:IsChangedFromDefault()
 	control.frame:SetAlpha(controlDimmed and INACTIVE_ALPHA or 1)
-	half.gutter:SetShown(overridden)
+	half.gutter:SetShown(overridden or changed)
+	half.diamond:SetShown(overridden)
 	half.gutter:SetAlpha(rowInactive and INACTIVE_ALPHA or 1)
 	half.undo:SetEnabled(active)
 	if overridden then
@@ -785,21 +788,28 @@ end
 
 function Handlers.UndoEnter(half)
 	local setting = half.setting
-	if not setting or not setting.inherits then
+	if not setting or not (setting.inherits or setting.resettable) then
 		return
 	end
 	GameTooltip:SetOwner(half.gutter, "ANCHOR_TOP")
-	GameTooltip:SetText(L.RESET_TO:format(setting.inherits.from), 1, 1, 1)
+	GameTooltip:SetText(L.RESET_TO:format(setting.inherits and setting.inherits.from or DEFAULT or "Default"), 1, 1, 1)
 	GameTooltip:Show()
 end
 
--- ↺ returns the row to the shared value.
+-- ↺ returns the row to the shared value, or a resettable row to its default.
 function Handlers.Undo(half)
 	local setting = half.setting
-	if setting and setting:IsOverridden() then
+	if not setting then
+		return
+	end
+	if setting:IsOverridden() then
 		PlaySound(RESET_SOUND)
 		GameTooltip:Hide()
 		setting:Reset()
+	elseif setting:IsChangedFromDefault() then
+		PlaySound(RESET_SOUND)
+		GameTooltip:Hide()
+		setting:ResetToDefault()
 	end
 end
 

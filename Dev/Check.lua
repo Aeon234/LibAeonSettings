@@ -404,6 +404,35 @@ do
 		picked == "other" and #(window.undoHistory or {}) == 0)
 end
 
+-- Resettable settings
+
+do
+	local store = {}
+	local window = NewWindow(store)
+	window.RefreshUndo = function() end
+	local page = NewPage(window, "reset", "Reset")
+	local section = page:Section("look", "Look")
+	local color = section:Color({ id = "color", label = "Color", path = "color", resettable = true,
+		default = { r = 0, g = 0, b = 0, a = 0.618 }, hasOpacity = true })
+	local plain = section:Slider({ id = "plain", label = "Plain", path = "plain", default = 4 })
+	local shared = section:Slider({ id = "shared", label = "Shared", path = "shared", default = 1, resettable = true,
+		inherits = "base" })
+	Check("resettable: nothing stored is not changed", not color:IsChangedFromDefault())
+	color:Request({ r = 0, g = 0, b = 0, a = 0.6182 })
+	Check("resettable: a value within rounding of the default is not changed", not color:IsChangedFromDefault())
+	color:Request({ r = 1, g = 0, b = 0, a = 0.618 })
+	Check("resettable: another value is changed", color:IsChangedFromDefault())
+	color:ResetToDefault()
+	Check("resettable: reset writes a copy of the default", store.color and store.color.r == 0
+		and store.color ~= color.default and not color:IsChangedFromDefault())
+	Check("resettable: the reset is recorded for Undo", window:CanUndo())
+	plain:Request(8)
+	Check("resettable: a setting without the field never shows it", not plain:IsChangedFromDefault())
+	shared:Request(3)
+	Check("resettable: an inheriting setting keeps its override marker instead",
+		not shared:IsChangedFromDefault() and shared:IsOverridden())
+end
+
 -- The declaration's write hook
 
 do

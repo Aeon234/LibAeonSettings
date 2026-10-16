@@ -692,7 +692,8 @@ function Harness:DeclareControls(page)
 	colors:Color({ id = "textColor", label = "Text Color", path = "controls.textColor",
 		default = { r = 1, g = 0.82, b = 0 }, classColor = { path = "controls.textClass", default = false } })
 	colors:Color({ id = "background", label = "Background", path = "controls.background", hasOpacity = true,
-		default = { r = 0, g = 0, b = 0, a = 0.5 }, description = "With opacity: the checkerboard shows through." })
+		default = { r = 0, g = 0, b = 0, a = 0.5 }, resettable = true,
+		description = "With opacity: the checkerboard shows through. Resettable: shows the reset arrow once changed." })
 	colors:Color({ id = "noRed", label = "Refuses Red", path = "controls.noRed", default = { r = 0.2, g = 0.6, b = 1 },
 		set = function(value)
 			if value.r > 0.6 and value.g < 0.4 then

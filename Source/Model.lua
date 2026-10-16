@@ -23,7 +23,7 @@ lib.EMPTY = lib.EMPTY or { empty = true }
 
 local SETTING_FIELDS = { id = true, label = true, description = true, path = true, default = true, get = true,
 	set = true, depends = true, blocked = true, show = true, wide = true, inherits = true, keywords = true,
-	tooltip = true, redraws = true }
+	tooltip = true, redraws = true, resettable = true }
 local SECTION_FIELDS = { show = true }
 local MAX_CHAIN = 16
 
@@ -273,6 +273,59 @@ end
 ---@return boolean overridden true while a setting that inherits holds its own value (◆)
 function lib.Setting:IsOverridden()
 	return self.inherits ~= nil and self:StoredValue() ~= nil
+end
+
+-- Numbers this close count as the same, so a color picked back to its default is the default.
+local SAME = 0.0005
+
+local function SameValue(a, b)
+	if type(a) == "number" and type(b) == "number" then
+		return math.abs(a - b) <= SAME
+	end
+	if type(a) ~= "table" or type(b) ~= "table" then
+		return a == b
+	end
+	for key, inner in pairs(a) do
+		if not SameValue(inner, b[key]) then
+			return false
+		end
+	end
+	for key in pairs(b) do
+		if a[key] == nil then
+			return false
+		end
+	end
+
+	return true
+end
+
+local function CopyValue(value)
+	if type(value) ~= "table" then
+		return value
+	end
+	local copy = {}
+	for key, inner in pairs(value) do
+		copy[key] = CopyValue(inner)
+	end
+
+	return copy
+end
+
+---@return boolean changed true while a `resettable` setting that does not inherit holds a value other than its
+---default (↺ without ◆)
+function lib.Setting:IsChangedFromDefault()
+	if not self.resettable or self.inherits then
+		return false
+	end
+	local value = self:StoredValue()
+
+	return value ~= nil and not SameValue(value, self.default)
+end
+
+---Saves a copy of the default as the user's choice (↺ on a `resettable` setting), recorded for Undo. The default is
+---written rather than cleared, so a store that fills in defaults still holds a value.
+function lib.Setting:ResetToDefault()
+	return self:Request(CopyValue(self.default))
 end
 
 ---@return any value the stored value; else, for a setting that inherits, the shared value; else the default
