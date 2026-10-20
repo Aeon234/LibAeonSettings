@@ -207,7 +207,7 @@ function Handlers.Opened(view)
 	local menu = view.dropdown.menu
 	local scrollBox = menu and menu.ScrollBox
 	if view.selectedIndex and scrollBox and scrollBox.ScrollToElementDataIndex and scrollBox:HasDataProvider() then
-		scrollBox:ScrollToElementDataIndex(view.selectedIndex, ScrollBoxConstants.AlignCenter,
+		scrollBox:ScrollToElementDataIndex(view.selectedIndex, ScrollBoxConstants.AlignCenter, 0,
 			ScrollBoxConstants.NoScrollInterpolation)
 	end
 end
