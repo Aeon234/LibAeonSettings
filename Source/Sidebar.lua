@@ -75,10 +75,11 @@ function lib.Window:Divider()
 	return AddNode(self, { kind = "divider", id = "\0divider" .. self.dividers })
 end
 
-local PAGE_FIELDS = { title = true, description = true, under = true, icon = true, slot = true, switch = true }
+local PAGE_FIELDS = { title = true, description = true, under = true, icon = true, iconCrop = true, slot = true,
+	switch = true }
 
 ---Adds a page: at the top level, under a header, or under a group. `info.icon` (a file or atlas) or `info.slot`
----reserves the 16-unit icon slot before its title. `info.switch` (true, or a setting's fields such as `path` and
+---reserves the 16-unit icon slot before its title; `info.iconCrop` cuts that share of a file icon from each edge. `info.switch` (true, or a setting's fields such as `path` and
 ---`default`) gives the page an Enabled toggle that dims the page body while off.
 ---@return table? page
 function lib.Window:Page(id, info)
@@ -94,7 +95,7 @@ function lib.Window:Page(id, info)
 	end
 	local kind = not parent and "top" or parent.kind == "header" and "sub" or "item"
 	local page = AddNode(self, { kind = kind, id = id, title = info.title or id, description = info.description,
-		parent = parent, icon = info.icon, slot = info.slot or info.icon ~= nil, isPage = true })
+		parent = parent, icon = info.icon, iconCrop = info.iconCrop, slot = info.slot or info.icon ~= nil, isPage = true })
 	if page then
 		self.pages[id] = page
 		table.insert(self.pageOrder, page)
@@ -212,7 +213,9 @@ local function SetUpRow(window, row, node)
 			if C_Texture.GetAtlasInfo(node.icon) then
 				row.icon:SetAtlas(node.icon)
 			else
+				local crop = node.iconCrop or 0
 				row.icon:SetTexture(node.icon)
+				row.icon:SetTexCoord(crop, 1 - crop, crop, 1 - crop)
 			end
 			row.icon:Show()
 		end
