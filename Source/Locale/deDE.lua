@@ -101,6 +101,7 @@ L.EDIT_POSITION_TIP = "Öffnet den Bearbeitungsmodus und wählt %s aus. Beim Sch
 L.NOTHING_TO_UNDO = "Nichts rückgängig zu machen."
 L.UNDO_TO = "%s zurück auf %s."
 L.UNDO_SETTINGS = "%d Einstellungen zurück auf ihre vorherigen Werte."
+L.UNDO_CHANGE = "Die letzte Änderung, zurückgenommen."
 L.UNAVAILABLE_IN_COMBAT = "Im Kampf nicht verfügbar."
 L.ENABLED = "Aktiviert"
 L.REQUIRES = "Erfordert aktivierte Option \"%s\"."

@@ -102,6 +102,7 @@ L.EDIT_POSITION_TIP = "Открывает режим редактировани�
 L.NOTHING_TO_UNDO = "Нечего отменять."
 L.UNDO_TO = "«%s»: вернуть значение %s."
 L.UNDO_SETTINGS = "Настроек, возвращаемых к прежним значениям: %d."
+L.UNDO_CHANGE = "Последнее изменение отменено."
 L.UNAVAILABLE_IN_COMBAT = "Недоступно в бою."
 L.ENABLED = "Включено"
 L.REQUIRES = "Требуется включить «%s»."

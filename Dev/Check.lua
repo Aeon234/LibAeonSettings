@@ -506,6 +506,38 @@ do
 	Check("undo: the merged slider steps go back to the start", store.size == nil and #window.undoHistory == 0)
 end
 
+-- Undo of a change made outside a setting
+
+do
+	local store = { order = { "a", "b" }, gaps = {} }
+	local window = NewWindow(store)
+	window.declaration.write = function(path, value)
+		store[path] = value
+	end
+	local before = store.order
+	store.order = { "b", "a" }
+	window:RecordChange({ path = "order", before = before, text = "Order back." })
+	before[1] = "changed"
+	Check("change: the earlier value is copied", window.undoHistory[1].before[1] == "a")
+	window:RecordChange({ path = "gaps", before = {}, merge = "x" })
+	now = now + 0.5
+	window:RecordChange({ path = "gaps", before = { x = 4 }, merge = "x" })
+	Check("change: the same path and merge moments later join one step", #window.undoHistory == 2)
+	window:RecordChange({ path = "gaps", before = {}, merge = "y" })
+	Check("change: another merge value is a new step", #window.undoHistory == 3)
+	local page = NewPage(window, "after", "After")
+	local slider = page:Section("one", "One"):Slider({ id = "size", label = "Size", path = "size", default = 1 })
+	slider:Request(2)
+	Check("change: a setting saved after one is its own step", #window.undoHistory == 4)
+	window:Undo()
+	window:Undo()
+	window:Undo()
+	Check("change: Undo writes the first earlier value back", next(store.gaps) == nil)
+	window:Undo()
+	Check("change: through the declaration's write", store.order[1] == "a" and store.order[2] == "b"
+		and #window.undoHistory == 0)
+end
+
 -- Search
 
 do

@@ -103,6 +103,7 @@ L.EDIT_POSITION_TIP = "Opens edit mode with %s selected. Closing edit mode comes
 L.NOTHING_TO_UNDO = "Nothing to undo."
 L.UNDO_TO = "%s back to %s."
 L.UNDO_SETTINGS = "%d settings back to their earlier values."
+L.UNDO_CHANGE = "The last change, put back."
 L.UNAVAILABLE_IN_COMBAT = "Unavailable in combat."
 L.ENABLED = "Enabled"
 L.REQUIRES = "Requires %s to be enabled."

@@ -98,6 +98,7 @@ L.EDIT_POSITION_TIP = "Apre la Modalità modifica con %s selezionato. Chiudendo 
 L.NOTHING_TO_UNDO = "Niente da annullare."
 L.UNDO_TO = "%s riportato a %s."
 L.UNDO_SETTINGS = "%d impostazioni riportate ai valori precedenti."
+L.UNDO_CHANGE = "L'ultima modifica, annullata."
 L.UNAVAILABLE_IN_COMBAT = "Non disponibile in combattimento."
 L.ENABLED = "Attivo"
 L.REQUIRES = "Richiede che %s sia attivo."

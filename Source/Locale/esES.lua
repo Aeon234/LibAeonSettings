@@ -103,6 +103,7 @@ L.EDIT_POSITION_TIP = "Abre el modo de edición con %s seleccionado. Al cerrar e
 L.NOTHING_TO_UNDO = "No hay nada que deshacer."
 L.UNDO_TO = "%s vuelve a %s."
 L.UNDO_SETTINGS = "%d opciones vuelven a sus valores anteriores."
+L.UNDO_CHANGE = "El último cambio, deshecho."
 L.UNAVAILABLE_IN_COMBAT = "No disponible en combate."
 L.ENABLED = "Activado"
 L.REQUIRES = "Requiere activar %s."

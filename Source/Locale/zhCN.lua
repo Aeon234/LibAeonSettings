@@ -99,6 +99,7 @@ L.EDIT_POSITION_TIP = "打开编辑模式并选中%s。关闭编辑模式后会�
 L.NOTHING_TO_UNDO = "没有可撤销的操作。"
 L.UNDO_TO = "%s恢复为%s。"
 L.UNDO_SETTINGS = "%d项设置恢复为之前的值。"
+L.UNDO_CHANGE = "撤销上一次更改。"
 L.UNAVAILABLE_IN_COMBAT = "战斗中不可用。"
 L.ENABLED = "已启用"
 L.REQUIRES = "需要启用%s。"

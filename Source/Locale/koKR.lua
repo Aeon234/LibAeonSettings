@@ -102,6 +102,7 @@ L.EDIT_POSITION_TIP = "%s을(를) 선택한 상태로 편집 모드를 엽니다
 L.NOTHING_TO_UNDO = "실행 취소할 항목이 없습니다."
 L.UNDO_TO = "%s을(를) %s(으)로 되돌립니다."
 L.UNDO_SETTINGS = "설정 %d개를 이전 값으로 되돌립니다."
+L.UNDO_CHANGE = "마지막 변경을 되돌립니다."
 L.UNAVAILABLE_IN_COMBAT = "전투 중에는 사용할 수 없습니다."
 L.ENABLED = "사용"
 L.REQUIRES = "%s 활성화가 필요합니다."

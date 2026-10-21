@@ -1,7 +1,8 @@
 -- Undo (Q69, Q86): one history for the whole window, kept for the game session, behind the footer's Undo button.
 -- Every value the user saves is recorded, Clear Overrides as one step; a slider's drag or a color pick in progress
 -- (until the picker closes) is one step. Undo puts the earlier value back and lands on its row. Profile actions are not undoable and empty the
--- history (`window:ClearUndo()`); values saved from code (`setting:SetValue`) are not recorded.
+-- history (`window:ClearUndo()`); values saved from code (`setting:SetValue`) are not recorded. An adopter records a
+-- change it made outside a setting, such as a drag in its own preview, with `window:RecordChange`.
 
 local lib = LibStub("LibAeonSettings-1.0")
 if not lib.loading then
@@ -74,7 +75,7 @@ function lib.Window:RecordUndo(setting, before, after, gesture)
 	local last = history[#history]
 	local now = GetTime()
 	local joins
-	if last and not last.group and last.changes[1].setting == setting and MERGES[setting.kind] then
+	if last and last.changes and not last.group and last.changes[1].setting == setting and MERGES[setting.kind] then
 		if gesture then
 			joins = last.gesture == gesture
 		else
@@ -103,6 +104,29 @@ function lib.Window:RecordUndoGroup(changes)
 	Push(self, { time = GetTime(), group = true, changes = changes })
 end
 
+---Records a change the adopter made outside a setting, for Undo. `info.path`: the stored path it changed (written
+---back through the declaration's `write`, else the store); `info.before`: the value there before (a table is copied);
+---`info.text`: the Undo tooltip's line, what Undo puts back ("Clock back to its place."); `info.page`: the page shown
+---when it is undone; `info.merge`: any value, so a change to the same path with the same `merge` moments after the
+---last one joins it (a slider's drag).
+function lib.Window:RecordChange(info)
+	if type(info) ~= "table" or type(info.path) ~= "string" then
+		lib:Report(self.addonName, "RecordChange needs a path")
+		return
+	end
+	local history = History(self)
+	local last = history[#history]
+	local now = GetTime()
+	if info.merge ~= nil and last and last.path == info.path and last.merge == info.merge
+		and now - last.time < MERGE_SECONDS then
+		last.time, last.text = now, info.text
+		self:RefreshUndo()
+		return
+	end
+	Push(self, { time = now, path = info.path, before = Copy(info.before), text = info.text, page = info.page,
+		merge = info.merge })
+end
+
 ---Empties the history. Profile actions call it: they are not undoable, and a step recorded before one would change a
 ---different profile.
 function lib.Window:ClearUndo()
@@ -123,6 +147,15 @@ function lib.Window:Undo()
 	local history = self.undoHistory
 	local step = history and table.remove(history)
 	if not step then
+		return
+	end
+	if step.path then
+		lib.WriteSetting({ window = self, path = step.path, keys = { strsplit(".", step.path) } }, Copy(step.before))
+		self:RefreshUndo()
+		self:Refresh()
+		if step.page and self:IsShown() then
+			self:SelectPage(step.page)
+		end
 		return
 	end
 	for index = #step.changes, 1, -1 do
@@ -197,6 +230,8 @@ function Handlers.Enter(window)
 	GameTooltip:SetText(L.UNDO, 1, 1, 1)
 	if not step then
 		GameTooltip:AddLine(L.NOTHING_TO_UNDO, 1, 0.82, 0)
+	elseif step.path then
+		GameTooltip:AddLine(step.text or L.UNDO_CHANGE, 1, 0.82, 0, true)
 	elseif step.group then
 		GameTooltip:AddLine(L.UNDO_SETTINGS:format(#step.changes), 1, 0.82, 0)
 	else

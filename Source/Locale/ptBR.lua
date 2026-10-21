@@ -98,6 +98,7 @@ L.EDIT_POSITION_TIP = "Abre o Modo de Edição com %s selecionado. Ao fechar o M
 L.NOTHING_TO_UNDO = "Nada para desfazer."
 L.UNDO_TO = "%s voltou para %s."
 L.UNDO_SETTINGS = "%d configurações voltaram aos valores anteriores."
+L.UNDO_CHANGE = "A última alteração, desfeita."
 L.UNAVAILABLE_IN_COMBAT = "Indisponível em combate."
 L.ENABLED = "Ativado"
 L.REQUIRES = "Requer %s ativado."

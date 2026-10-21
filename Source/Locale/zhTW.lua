@@ -99,6 +99,7 @@ L.EDIT_POSITION_TIP = "開啟編輯模式並選取%s。關閉編輯模式後會�
 L.NOTHING_TO_UNDO = "沒有可復原的操作。"
 L.UNDO_TO = "%s還原為%s。"
 L.UNDO_SETTINGS = "%d 項設定還原為先前的值。"
+L.UNDO_CHANGE = "復原上一次變更。"
 L.UNAVAILABLE_IN_COMBAT = "戰鬥中無法使用。"
 L.ENABLED = "啟用"
 L.REQUIRES = "需要啟用%s。"

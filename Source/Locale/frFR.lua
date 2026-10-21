@@ -101,6 +101,7 @@ L.EDIT_POSITION_TIP = "Ouvre le Mode Édition avec %s sélectionné. Fermer le M
 L.NOTHING_TO_UNDO = "Rien à annuler."
 L.UNDO_TO = "%s : retour à %s."
 L.UNDO_SETTINGS = "%d réglages reviennent à leurs valeurs précédentes."
+L.UNDO_CHANGE = "La dernière modification, annulée."
 L.UNAVAILABLE_IN_COMBAT = "Indisponible en combat."
 L.ENABLED = "Activé"
 L.REQUIRES = "Nécessite d'activer %s."
