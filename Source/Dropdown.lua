@@ -64,7 +64,7 @@ function lib:CreateDropdown(parent)
 	dropdown:EnableMouseWheel(false)
 	lib:SetFont(dropdown.Text, "body", TEXT_SIZE)
 	dropdown:SetupMenu(function(_, root) Handlers.Generate(view, root) end)
-	-- Measures choices for a dropdown that fits them, in the closed button's font.
+	-- Measures choices for a dropdown that fits them.
 	view.measure = dropdown:CreateFontString(nil, "ARTWORK")
 	lib:SetFont(view.measure, "body", TEXT_SIZE)
 	view.measure:Hide()
@@ -265,7 +265,8 @@ function lib.Dropdown:ShowValue()
 end
 
 -- The width that fits the longest choice (and the placeholder): its text, the radio mark, the entry's padding and
--- the menu's insets, plus the scroll bar for a list that scrolls; at least 90.
+-- the menu's insets, plus the scroll bar for a list that scrolls; at least 90. Each choice is measured in the font
+-- its entry draws in (the menu's GameFontHighlight, or the picker's font), the placeholder in the button's.
 local function FitWidth(view, setting)
 	local measure = view.measure
 	local widest = 0
@@ -273,9 +274,11 @@ local function FitWidth(view, setting)
 	local isPicker = setting.picker ~= nil or setting.titleCase == false
 	for _, choice in ipairs(choices) do
 		local text = isPicker and choice.text or lib.TitleCase(tostring(choice.text or choice.value))
+		measure:SetFontObject(choice.font and lib:PickerFont(choice.font) or "GameFontHighlight")
 		measure:SetText(text or "")
 		widest = math.max(widest, measure:GetUnboundedStringWidth())
 	end
+	lib:SetFont(measure, "body", TEXT_SIZE)
 	if setting.placeholder then
 		measure:SetText(setting.placeholder)
 		widest = math.max(widest, measure:GetUnboundedStringWidth())
