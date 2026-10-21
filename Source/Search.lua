@@ -394,11 +394,11 @@ function lib.Window:FindSettings(text)
 	for _, entry in ipairs(self.searchIndex or BuildIndex(self)) do
 		local visible = true
 		if entry.kind == "setting" then
-			visible = entry.setting:IsShown()
+			visible = entry.setting:IsShown() or entry.setting:Revealable()
 		elseif entry.kind == "section" then
 			entry.setting = nil
 			for _, setting in ipairs(entry.settings) do
-				if setting:IsShown() then
+				if setting:IsShown() or setting:Revealable() then
 					entry.setting = setting
 					break
 				end
@@ -656,14 +656,22 @@ function Handlers.Choose(window, entry)
 	window:LandOn(entry.setting)
 end
 
----Opens a setting's page (and tab), glides its row into view and flashes it gold.
+---Opens a setting's page (and tab), reveals its section when search found it hidden, glides its row into view and
+---flashes it gold.
 function lib.Window:LandOn(setting)
 	local page = setting.page
 	local tab = setting.section and setting.section.tab
 	if tab then
 		page.tab = tab.id
 	end
+	local reveal = not setting:IsShown() and setting:Revealable()
+	if reveal then
+		lib.CallAdopter(setting.section.reveal, setting.section)
+	end
 	self:SelectPage(page.id)
+	if reveal then
+		self:Refresh()
+	end
 	local half = self:RowOf(setting)
 	local view = self.pageView
 	if not half or not view or not half:IsShown() then

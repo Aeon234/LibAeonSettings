@@ -602,6 +602,24 @@ do
 	local odd = page:Section("odd", "Odd", { show = true, hidden = true })
 	Check("section show: an unknown field and a show that is not a function are reported",
 		#errors == before + 2 and odd.show == nil and odd:IsShown())
+
+	local chosen
+	local panel = page:Section("panel", "Panel", { show = function() return chosen ~= nil end,
+		reveal = function() chosen = "left" end })
+	local panelGap = panel:Slider({ id = "panelGap", label = "Panel Gap", path = "panelGap" })
+	local panelOnly = panel:Slider({ id = "panelOnly", label = "Panel Only", path = "panelOnly",
+		show = function() return false end })
+	Check("section reveal: a revealable section's hidden rows are searched",
+		not panelGap:IsShown() and panelGap:Revealable() and Finds("panel gap", "Panel Gap"))
+	Check("section reveal: a row its own show hides is not", not panelOnly:Revealable()
+		and not Finds("panel only", "Panel Only"))
+	Check("section reveal: a section without reveal stays out of search", not partyHeight:Revealable()
+		or mode == "party")
+	window.SelectPage = function() end
+	window.Refresh = function() end
+	window.RowOf = function() end
+	lib.Window.LandOn(window, panelGap)
+	Check("section reveal: landing reveals the section first", chosen == "left" and panelGap:IsShown())
 end
 
 -- Translations: every locale file names only keys Locale.lua has, keeps their format specifiers in order, and

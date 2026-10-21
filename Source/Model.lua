@@ -24,7 +24,7 @@ lib.EMPTY = lib.EMPTY or { empty = true }
 local SETTING_FIELDS = { id = true, label = true, description = true, path = true, default = true, get = true,
 	set = true, depends = true, blocked = true, show = true, wide = true, inherits = true, keywords = true,
 	tooltip = true, redraws = true, resettable = true }
-local SECTION_FIELDS = { show = true }
+local SECTION_FIELDS = { show = true, reveal = true }
 local MAX_CHAIN = 16
 
 ---Registers a control kind: `section:<Kind>(info)` declares a setting drawn with it. `info.fields` lists the fields
@@ -67,7 +67,9 @@ end
 
 ---Adds a section with a gold title and a rule; its settings follow it. `info.show(section)`, when given, hides the
 ---whole section (title, rule, rows, notes and menu) and leaves it out of search while it returns false.
----@param info table? { show? }
+---`info.reveal(section)`, with `show`, keeps a hidden section's rows in search: landing on one calls it first, to
+---make the section show (selecting what it edits).
+---@param info table? { show?, reveal? }
 ---@return table? section
 function lib.PageModel:Section(id, title, info)
 	local section = setmetatable({ id = id, title = title, page = self, lines = {} }, sectionMeta)
@@ -86,6 +88,11 @@ function lib.PageModel:Section(id, title, info)
 				section.show = info.show
 			elseif info.show ~= nil then
 				lib:Report(addonName, ("%s/%s: section show must be a function"):format(self.id, tostring(id)))
+			end
+			if type(info.reveal) == "function" then
+				section.reveal = info.reveal
+			elseif info.reveal ~= nil then
+				lib:Report(addonName, ("%s/%s: section reveal must be a function"):format(self.id, tostring(id)))
 			end
 		end
 	end
@@ -491,6 +498,19 @@ end
 function lib.Setting:IsShown()
 	local section = self.section
 	if section and section.show and not section:IsShown() then
+		return false
+	end
+	if not self.show then
+		return true
+	end
+
+	return Call(self.show, self) and true or false
+end
+
+---@return boolean revealable hidden only by its section, which can be revealed (`reveal`) for search to land on it
+function lib.Setting:Revealable()
+	local section = self.section
+	if not (section and section.reveal and not section:IsShown()) then
 		return false
 	end
 	if not self.show then
