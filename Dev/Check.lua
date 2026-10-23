@@ -536,6 +536,13 @@ do
 	window:Undo()
 	Check("change: through the declaration's write", store.order[1] == "a" and store.order[2] == "b"
 		and #window.undoHistory == 0)
+	store.order, store.gaps = { "c" }, { x = 1 }
+	window:RecordChange({ paths = { { path = "order", before = { "a", "b" } }, { path = "gaps", before = {} } },
+		text = "Both back." })
+	Check("change: several paths are one step", #window.undoHistory == 1)
+	window:Undo()
+	Check("change: Undo writes each path back", store.order[2] == "b" and next(store.gaps) == nil
+		and #window.undoHistory == 0)
 end
 
 -- Search

@@ -108,8 +108,27 @@ end
 ---back through the declaration's `write`, else the store); `info.before`: the value there before (a table is copied);
 ---`info.text`: the Undo tooltip's line, what Undo puts back ("Clock back to its place."); `info.page`: the page shown
 ---when it is undone; `info.merge`: any value, so a change to the same path with the same `merge` moments after the
----last one joins it (a slider's drag).
+---last one joins it (a slider's drag). A change to several paths at once gives `info.paths`, `{ { path, before }, ...
+---}`, in place of `path` and `before`; Undo puts them back as one step, last first.
 function lib.Window:RecordChange(info)
+	local paths = type(info) == "table" and info.paths
+	if type(paths) == "table" then
+		for _, change in ipairs(paths) do
+			if type(change) ~= "table" or type(change.path) ~= "string" then
+				lib:Report(self.addonName, "RecordChange needs a path for each of its paths")
+				return
+			end
+		end
+		if #paths == 0 then
+			return
+		end
+		local copies = {}
+		for index, change in ipairs(paths) do
+			copies[index] = { path = change.path, before = Copy(change.before) }
+		end
+		Push(self, { time = GetTime(), path = copies[1].path, paths = copies, text = info.text, page = info.page })
+		return
+	end
 	if type(info) ~= "table" or type(info.path) ~= "string" then
 		lib:Report(self.addonName, "RecordChange needs a path")
 		return
@@ -150,7 +169,12 @@ function lib.Window:Undo()
 		return
 	end
 	if step.path then
-		lib.WriteSetting({ window = self, path = step.path, keys = { strsplit(".", step.path) } }, Copy(step.before))
+		local changes = step.paths or { step }
+		for index = #changes, 1, -1 do
+			local change = changes[index]
+			lib.WriteSetting({ window = self, path = change.path, keys = { strsplit(".", change.path) } },
+				Copy(change.before))
+		end
 		self:RefreshUndo()
 		self:Refresh()
 		if step.page and self:IsShown() then
