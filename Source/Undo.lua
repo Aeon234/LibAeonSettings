@@ -241,7 +241,8 @@ function Handlers.Enter(window)
 		if value == nil then
 			value = setting.inherits and setting:InheritedValue() or setting.default
 		end
-		GameTooltip:AddLine(L.UNDO_TO:format(setting.label or tostring(setting.id), setting:FormatValue(value)), 1, 0.82,
+		GameTooltip:AddLine(L.UNDO_TO:format(setting.label or setting.title or tostring(setting.id),
+			setting:FormatValue(value)), 1, 0.82,
 			0, true)
 	end
 	GameTooltip:Show()

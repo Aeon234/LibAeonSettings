@@ -187,6 +187,26 @@ local function BuildIndex(window)
 							table.insert(sectionEntry.settings, setting)
 						end
 					end
+					-- An ordered list is found by its title and by each of its items' text, landing on the list.
+					if type(setting) == "table" and setting.kind == "OrderedList" then
+						local listWhere = setting.title and (settingWhere .. " › " .. setting.title) or settingWhere
+						if setting.title and not setting.label then
+							local entry = Entry("setting", page, setting.title, settingWhere, settingWhere, setting.keywords)
+							entry.setting = setting
+							index[#index + 1] = entry
+							if sectionEntry then
+								table.insert(sectionEntry.settings, setting)
+							end
+						end
+						for _, item in ipairs(setting:OrderedItems()) do
+							local entry = Entry("setting", page, item.text, listWhere, listWhere)
+							entry.setting = setting
+							index[#index + 1] = entry
+						end
+						if sectionEntry and not setting.label and not setting.title then
+							table.insert(sectionEntry.settings, setting)
+						end
+					end
 				end
 			end
 			if sectionEntry and #sectionEntry.settings == 0 then

@@ -37,6 +37,7 @@
 	<Script file="Source\Button.lua" />
 	<Script file="Source\Color.lua" />
 	<Script file="Source\Custom.lua" />
+	<Script file="Source\OrderedList.lua" />
 	<Script file="Source\Page.lua" />
 	<Script file="Source\Preview.lua" />
 	<Script file="Source\Search.lua" />

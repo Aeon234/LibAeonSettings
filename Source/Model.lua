@@ -232,6 +232,11 @@ local function ReadPath(window, keys)
 	return value
 end
 
+---@return any value what the store holds at a dot-separated path, or nil
+function lib.ReadStorePath(window, path)
+	return ReadPath(window, { strsplit(".", path) })
+end
+
 -- What the setting holds itself: nil when nothing is stored (a setting that inherits then follows the shared value).
 function lib.Setting:StoredValue()
 	if self.get then
