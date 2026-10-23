@@ -2,7 +2,7 @@
 
 -- MINOR goes up by one with every tag that changes the library's code (AGENTS.md, Release): LibStub keeps the copy
 -- with the highest MINOR, whatever its tag.
-local MAJOR, MINOR = "LibAeonSettings-1.0", 3
+local MAJOR, MINOR = "LibAeonSettings-1.0", 4
 
 local lib = LibStub:NewLibrary(MAJOR, MINOR)
 if not lib then
@@ -25,7 +25,7 @@ lib.reported = lib.reported or {}
 -- Media lives beside this copy's files, wherever the embedding addon put them.
 local function FindMediaPath()
 	local trace = debugstack(1, 1, 0) or ""
-	local folder = trace:match("([^\"%[%]@]-)[/\\]Source[/\\]Core%.lua")
+	local folder = trace:match('([^"%[%]@]-)[/\\]Source[/\\]Core%.lua')
 	if not folder then
 		return
 	end
