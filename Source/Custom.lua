@@ -50,9 +50,15 @@ function lib.Custom:Bind(setting)
 	self:Update()
 end
 
+-- An adopter whose area grows or shrinks changes `setting.height` in its refresh and lays the page out again; the
+-- frame follows, so it stays the row's height rather than centered in it.
 function lib.Custom:Update()
-	if self.setting and self.setting.refresh then
-		lib.CallAdopter(self.setting.refresh, self.setting.area, self.setting)
+	local setting = self.setting
+	if setting and setting.refresh then
+		lib.CallAdopter(setting.refresh, setting.area, setting)
+	end
+	if setting then
+		self.frame:SetHeight(setting.height or DEFAULT_HEIGHT)
 	end
 end
 
