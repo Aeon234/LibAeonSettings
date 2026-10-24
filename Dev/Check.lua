@@ -134,6 +134,15 @@ do
 	local snap = Geometry.NearestSnap({ 98 }, { { value = 100, from = "a" }, { value = 110 } }, 5)
 	Check("geometry: the nearest candidate in range snaps", snap and Near(snap.delta, 2) and snap.from == "a")
 	Check("geometry: nothing out of range snaps", Geometry.NearestSnap({ 98 }, { { value = 120 } }, 5) == nil)
+	-- At 1.25 units a pixel, the grid's 32-unit steps fall 25.6 pixels apart; each line still starts on a pixel.
+	local pixel, thickness = 1.25, 1.25
+	for _, center in ipairs({ 32, 64, 96, 960, 991.4 }) do
+		local start = Geometry.PixelLineStart(center, thickness, pixel)
+		local pixels = start / pixel
+		Check("geometry: a line starts on a screen pixel (" .. center .. ")", Near(pixels, math.floor(pixels + 0.5)))
+		Check("geometry: and covers its center (" .. center .. ")", start <= center and center <= start + thickness)
+	end
+	Check("geometry: a line already on pixels stays put", Near(Geometry.PixelLineStart(10.5, 1, 1), 10))
 end
 
 -- Placement: target lists and size matching

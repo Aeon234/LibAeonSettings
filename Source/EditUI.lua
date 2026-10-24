@@ -52,6 +52,11 @@ end
 
 -- Grid ---------------------------------------------------------------------------------------------------------
 
+---@return number pixel one screen pixel in UIParent's units
+function lib:PixelSize()
+	return PixelUtil.GetPixelToUIUnitFactor() / UIParent:GetEffectiveScale()
+end
+
 local function GridLine(grid, index)
 	local line = grid.lines[index]
 	if not line then
@@ -83,17 +88,20 @@ function lib:RefreshGrid()
 	local inset = self:TopInset()
 	local lineHeight = height + 2 * inset
 	local thickness = PixelUtil.GetNearestPixelSize(1, UIParent:GetEffectiveScale(), 1)
+	local pixel = self:PixelSize()
 	local count = 0
+	-- Each line starts on a screen pixel, so every line is equally sharp whatever the UI scale.
 	local function Add(vertical, offset, lineAlpha, length, r, g, b)
 		count = count + 1
 		local line = GridLine(grid, count)
 		line:SetColorTexture(r or ACCENT[1], g or ACCENT[2], b or ACCENT[3], lineAlpha)
+		local start = lib.Geometry.PixelLineStart((vertical and width or height) / 2 + offset, thickness, pixel)
 		if vertical then
 			line:SetSize(thickness, length or lineHeight)
-			line:SetPoint("CENTER", grid, "CENTER", offset, 0)
+			line:SetPoint("LEFT", grid, "LEFT", start, 0)
 		else
 			line:SetSize(length or width, thickness)
-			line:SetPoint("CENTER", grid, "CENTER", 0, offset)
+			line:SetPoint("BOTTOM", grid, "BOTTOM", 0, start)
 		end
 	end
 

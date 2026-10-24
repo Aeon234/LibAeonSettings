@@ -154,6 +154,16 @@ function Geometry.NearestSnap(edges, candidates, threshold)
 	return best
 end
 
+---Where a line meant to be centered on `position` starts so it covers whole screen pixels: its left or bottom edge on
+---the nearest pixel boundary.
+---@param position number the line's intended center, in UI units from its parent's left or bottom edge
+---@param thickness number the line's thickness, a whole number of pixels
+---@param pixel number one screen pixel, in UI units
+---@return number start
+function Geometry.PixelLineStart(position, thickness, pixel)
+	return math.floor((position - thickness / 2) / pixel + 0.5) * pixel
+end
+
 ---The position of one of a rectangle's nine points.
 ---@return number x
 ---@return number y

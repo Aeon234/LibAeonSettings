@@ -84,14 +84,16 @@ function lib:ShowGuides(x, y)
 	local vertical, horizontal = Guide(ui, 1), Guide(ui, 2)
 	vertical:SetShown(x ~= nil)
 	horizontal:SetShown(y ~= nil)
+	-- Started on a screen pixel, as the grid's lines are, so a guide covers the grid line it matches.
+	local pixel = self:PixelSize()
 	if x then
 		vertical:ClearAllPoints()
 		vertical:SetSize(thickness, UIParent:GetHeight())
-		vertical:SetPoint("BOTTOM", UIParent, "BOTTOMLEFT", x, 0)
+		vertical:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", lib.Geometry.PixelLineStart(x, thickness, pixel), 0)
 	end
 	if y then
 		horizontal:ClearAllPoints()
 		horizontal:SetSize(UIParent:GetWidth(), thickness)
-		horizontal:SetPoint("LEFT", UIParent, "BOTTOMLEFT", 0, y)
+		horizontal:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", 0, lib.Geometry.PixelLineStart(y, thickness, pixel))
 	end
 end
