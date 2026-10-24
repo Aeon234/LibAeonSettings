@@ -17,7 +17,7 @@ local SCALE_MIN, SCALE_MAX, SCALE_STEP = 1, 1.5, 0.1
 local SCALE_BUTTON_WIDTH = 28
 local TOOLBAR_CLEARANCE = 6  -- space kept between the toolbar's opening spot and any mover
 local TOOLBAR_SPOT_STEP = 16 -- step when looking down the screen for a free spot
-local TOOLBAR_TOP_HIDDEN = 12 -- how far the toolbar art's top edge sits above the top of the screen
+local TOOLBAR_DOCK_GAP = 4 -- docked, the toolbar's distance below the screen's top: its art's 3-unit border and 1
 local ACCENT = { 0.84, 0.67, 0.36 }
 local TINT = { 0.03, 0.023, 0.018, 0.25 } -- 25 % (Alex, 2026-10-13; EllesmereUI's is 20 %)
 local GRID_MODES = { DIMMED = "BRIGHT", BRIGHT = "OFF", OFF = "DIMMED" }
@@ -206,7 +206,7 @@ local function CreateToolbar()
 	toolbar:SetScript("OnDragStop", function(self) Handlers.ToolbarDragStop(self) end)
 
 	-- The same art as the menus, its top edge raised above the screen so the bar hangs from the top edge.
-	lib:ApplyPanelArt(toolbar, TOOLBAR_TOP_HIDDEN)
+	lib:ApplyPanelArt(toolbar)
 
 	toolbar.exit = CreateButton(toolbar, L.EXIT, function() lib:RequestClose(false) end, L.TIP_EXIT)
 	toolbar.save = CreateButton(toolbar, L.SAVE_AND_EXIT, function() lib:RequestClose(true) end, L.TIP_SAVE)
@@ -402,9 +402,9 @@ function lib:LayoutTopInset()
 	self:PlaceToolbar()
 end
 
----Places the toolbar. Docked, it hangs from the top of the screen with its border's top out of view, or sits
----below a notch strip with its whole border; `ui.toolbarSlide` raises it during the opening sequence. Once placed
----elsewhere or dragged (`ui.toolbarSpot`, its bottom left in UIParent units) it shows its whole border.
+---Places the toolbar. Docked, it hangs just inside the top of the screen (below a notch strip) with its whole
+---border; `ui.toolbarSlide` raises it during the opening sequence. Once placed elsewhere or dragged
+---(`ui.toolbarSpot`, its bottom left in UIParent units) it stays there.
 function lib:PlaceToolbar()
 	local ui = self.ui
 	if not ui then
@@ -413,12 +413,12 @@ function lib:PlaceToolbar()
 	local toolbar = ui.toolbar
 	local scale = toolbar:GetScale()
 	toolbar:ClearAllPoints()
+	-- A toolbar an older copy of the library built may still have its border's top raised.
+	self:SetPanelTopExtra(toolbar, 0)
 	if ui.toolbarSpot then
 		toolbar:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", ui.toolbarSpot.left / scale, ui.toolbarSpot.bottom / scale)
-		self:SetPanelTopExtra(toolbar, 0)
 	else
-		toolbar:SetPoint("TOP", UIParent, "TOP", 0, (ui.toolbarSlide or 0) / scale)
-		self:SetPanelTopExtra(toolbar, self:TopInset() > 0 and 0 or TOOLBAR_TOP_HIDDEN)
+		toolbar:SetPoint("TOP", UIParent, "TOP", 0, (ui.toolbarSlide or 0) / scale - TOOLBAR_DOCK_GAP)
 	end
 end
 
@@ -426,7 +426,7 @@ end
 function lib:ToolbarHiddenOffset()
 	local scale = self.ui.toolbar:GetScale()
 
-	return (TOOLBAR_HEIGHT + TOOLBAR_TOP_HIDDEN + 8) * scale + self:TopInset()
+	return (TOOLBAR_HEIGHT + TOOLBAR_DOCK_GAP + 8) * scale + self:TopInset()
 end
 
 local function Overlaps(aLeft, aBottom, aRight, aTop, bLeft, bBottom, bRight, bTop)
@@ -457,7 +457,7 @@ function lib:FindToolbarSpot()
 
 		return true
 	end
-	if Free(parentHeight - height) then
+	if Free(parentHeight - height - TOOLBAR_DOCK_GAP * scale) then
 		return nil
 	end
 	for bottom = parentHeight - height - TOOLBAR_SPOT_STEP, 0, -TOOLBAR_SPOT_STEP do
