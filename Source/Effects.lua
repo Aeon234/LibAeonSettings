@@ -13,7 +13,7 @@ local HOVER_BAR_SPEED = 4    -- alpha per second
 local SHIFT_FADE = 0.15
 local TIP_GAP, TIP_DROP = 16, 12  -- the tip's distance below the toolbar, and how far above that it starts
 local TIP_FADE_IN, TIP_FADE_OUT = 0.45, 0.2
-local TIP_DELAY = 0.7            -- seconds into the opening sequence, as the toolbar settles
+local TIP_DELAY = 0.5            -- seconds into the opening sequence, as the toolbar settles
 
 lib.EffectHandlers = lib.EffectHandlers or {}
 local Handlers = lib.EffectHandlers
@@ -33,9 +33,9 @@ end
 
 -- The opening timeline, in seconds. One driver sets every alpha and the toolbar's place each frame, so the
 -- first frame is exactly what PrepareOpening set and nothing is shown before its time.
-local TINT_DURATION = 0.75
-local MOVERS_DELAY, MOVERS_DURATION = 0.5, 0.75
-local TOOLBAR_SLIDE_DELAY, TOOLBAR_SLIDE_DURATION = 0.25, 0.6
+local TINT_DURATION = 0.5
+local MOVERS_DELAY, MOVERS_DURATION = 0, 0.5
+local TOOLBAR_SLIDE_DELAY, TOOLBAR_SLIDE_DURATION = 0, 0.5
 local OPENING_LENGTH = math.max(MOVERS_DELAY + MOVERS_DURATION, TOOLBAR_SLIDE_DELAY + TOOLBAR_SLIDE_DURATION)
 
 local function EaseOut(t)
