@@ -255,7 +255,7 @@ local function BuildPageView(window)
 	view.description:SetPoint("TOPLEFT", view.title, "BOTTOMLEFT", 0, -DESCRIPTION_GAP)
 
 	-- The page's switch, top right: "Enabled" and a toggle.
-	view.switch = lib:CreateToggle(header)
+	view.switch = lib:CreateToggle(header, true)
 	view.switch.frame:SetPoint("TOPRIGHT", header, "TOPRIGHT", 0, -SWITCH_TOP)
 	view.switchLabel = header:CreateFontString(nil, "OVERLAY")
 	lib:SetFont(view.switchLabel, "header", SWITCH_SIZE)

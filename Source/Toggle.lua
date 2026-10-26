@@ -1,92 +1,111 @@
--- C-01, the toggle: a bronze track whose pin slides left (off) to right (on), for turning a module, feature or page
--- on and off. Controlled: a click slides the pin and asks the setting; the setting's answer is drawn back.
+-- C-01, the toggle: a slim track whose diamond knob slides left (off) to right (on), for turning a module, feature or
+-- page on and off. Controlled: a click slides the knob and asks the setting; the setting's answer is drawn back. A
+-- settings row draws the slim size; a page's switch draws the large one. Retail draws Plumber's steel art, Forever
+-- the same art in the bronze of its settings controls.
 
 local lib = LibStub("LibAeonSettings-1.0")
 if not lib.loading then
 	return
 end
 
-local WIDTH, HEIGHT = 56, 28
-local CAP = HEIGHT / 2
-local PIN_SIZE, PRESSED_SCALE = 23.2, 0.95
 local SLIDE_SECONDS = 0.2 -- for the full distance, scaled by the distance left; out-cubic
 local SHAKE_SECONDS, SHAKE_PIXELS, SHAKE_CYCLES = 0.25, 3, 3
-local HOVER_ALPHA = 0.2
-local OFF_DOT = { 0.6, 0.6, 0.6, 0.4 }
-local ON_DOT = { 0.620, 0.459, 0.290, 1 } -- color.accent, the brightest bronze of the track's rim
+local PRESSED_SCALE = 0.95
 local SOUND_ON = SOUNDKIT and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON
 local SOUND_OFF = SOUNDKIT and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_OFF
+
+-- Sizes in units; the art is 2 texels per unit. `off` and `on` are the knob's center at each stop, from the frame's
+-- left edge. `body`: the track's size when it is narrower than the frame (centered in it), so the knob's tips, which
+-- overhang the track's ends, stay inside the frame. The large size's stops, 9 units in from the track's ends, line the
+-- diamond's flanks up with the track's chamfered corners.
+local SIZES = {
+	slim = { art = "", width = 40, height = 20, knob = 38, off = 9.5, on = 30.5 },
+	large = { art = "-large", width = 65, height = 30, body = { 56, 30 }, knob = 57, off = 13.5, on = 51.5 },
+}
 
 lib.Toggle = {}
 local toggleMeta = { __index = function(_, name) return lib.Toggle[name] end }
 lib.ToggleHandlers = lib.ToggleHandlers or {}
 local Handlers = lib.ToggleHandlers
 
-local function Track(button, left, right)
-	local texture = button:CreateTexture(nil, "BACKGROUND")
-	texture:SetTexture(lib.mediaPath .. "Textures\\toggle-track")
-	texture:SetTexCoord(left, right, 0, 1)
+local function Art(size, piece)
+	local client = WOW_PROJECT_CAMELOT and WOW_PROJECT_ID == WOW_PROJECT_CAMELOT and "forever" or "retail"
 
-	return texture
+	return ("%sTextures\\toggle-%s%s-%s"):format(lib.mediaPath, client, size.art, piece)
 end
 
----Makes a toggle in `parent`.
-function lib:CreateToggle(parent)
-	local view = setmetatable({ position = 0, value = false }, toggleMeta)
+---Makes a toggle in `parent`: the slim size for a settings row, or the large size for a page's switch with `large`.
+---@param parent Frame
+---@param large boolean?
+function lib:CreateToggle(parent, large)
+	local size = large and SIZES.large or SIZES.slim
+	local view = setmetatable({ size = size, position = 0, value = false }, toggleMeta)
 	local button = CreateFrame("Button", nil, parent)
-	button:SetSize(WIDTH, HEIGHT)
+	button:SetSize(size.width, size.height)
 	button:RegisterForClicks("LeftButtonUp")
 
-	view.left = Track(button, 0, 0.125)
-	view.left:SetPoint("TOPLEFT")
-	view.left:SetSize(CAP, HEIGHT)
-	view.right = Track(button, 0.875, 1)
-	view.right:SetPoint("TOPRIGHT")
-	view.right:SetSize(CAP, HEIGHT)
-	view.middle = Track(button, 0.125, 0.875)
-	view.middle:SetPoint("TOPLEFT", view.left, "TOPRIGHT")
-	view.middle:SetPoint("BOTTOMRIGHT", view.right, "BOTTOMLEFT")
+	view.bodyOff = button:CreateTexture(nil, "BACKGROUND", nil, 0)
+	view.bodyOff:SetTexture(Art(size, "body-off"))
+	view.bodyOn = button:CreateTexture(nil, "BACKGROUND", nil, 1)
+	view.bodyOn:SetTexture(Art(size, "body-on"))
+	for _, body in ipairs({ view.bodyOff, view.bodyOn }) do
+		if size.body then
+			body:SetSize(size.body[1], size.body[2])
+			body:SetPoint("CENTER")
+		else
+			body:SetAllPoints()
+		end
+	end
 
-	local pin = CreateFrame("Frame", nil, button)
-	pin:SetSize(PIN_SIZE, PIN_SIZE)
-	view.circle = pin:CreateTexture(nil, "ARTWORK")
-	view.circle:SetAtlas("common-radiobutton-circle")
-	view.circle:SetAllPoints()
-	view.dot = pin:CreateTexture(nil, "OVERLAY")
-	view.dot:SetAtlas("common-radiobutton-dot")
-	view.dot:SetDesaturated(true)
-	view.dot:SetAllPoints()
-	view.hover = pin:CreateTexture(nil, "OVERLAY", nil, 1)
-	view.hover:SetAtlas("common-radiobutton-circle")
-	view.hover:SetBlendMode("ADD")
-	view.hover:SetAlpha(HOVER_ALPHA)
-	view.hover:SetAllPoints()
-	view.hover:Hide()
+	-- The knob is the parent's child, not the button's: the page dims an inactive control through its frame's alpha,
+	-- which would let the track show through the knob. Window fades still reach it through the parent.
+	local knob = CreateFrame("Frame", nil, parent)
+	knob:SetFrameLevel(button:GetFrameLevel() + 1)
+	knob:SetSize(size.knob, size.knob)
+	view.knobOff = knob:CreateTexture(nil, "ARTWORK", nil, 0)
+	view.knobOff:SetAllPoints()
+	view.knobOn = knob:CreateTexture(nil, "ARTWORK", nil, 1)
+	view.knobOn:SetAllPoints()
 
 	button:SetScript("OnClick", function() Handlers.Click(view) end)
-	button:SetScript("OnEnter", function() view.hover:SetShown(button:IsEnabled()) end)
-	button:SetScript("OnLeave", function() Handlers.Press(view, false); view.hover:Hide() end)
+	button:SetScript("OnEnter", function() Handlers.Hover(view, true) end)
+	button:SetScript("OnLeave", function() Handlers.Press(view, false); Handlers.Hover(view, false) end)
 	button:SetScript("OnMouseDown", function(_, mouse) Handlers.Press(view, mouse == "LeftButton" and button:IsEnabled()) end)
 	button:SetScript("OnMouseUp", function() Handlers.Press(view, false) end)
-	button:SetScript("OnHide", function() view:Stop() end)
+	button:SetScript("OnShow", function() Handlers.Show(view, true) end)
+	button:SetScript("OnHide", function() Handlers.Show(view, false) end)
 
-	view.frame, view.button, view.pin = button, button, pin
+	view.frame, view.button, view.knob = button, button, knob
+	view:Paint()
 	view:Draw()
 
 	return view
 end
 
--- Draws the pin at its position (0 off, 1 on) plus any shake, and the dot's color between gray and bronze.
+-- Draws the knob at its position (0 off, 1 on) plus any shake; the on track and knob fade in with the position.
 function lib.Toggle:Draw()
+	local size = self.size
 	local p = math.max(0, math.min(1, self.position))
-	self.pin:ClearAllPoints()
-	self.pin:SetPoint("CENTER", self.button, "LEFT", CAP + (WIDTH - HEIGHT) * p + (self.shakeOffset or 0), 0)
-	self.dot:SetVertexColor(OFF_DOT[1] + (ON_DOT[1] - OFF_DOT[1]) * p, OFF_DOT[2] + (ON_DOT[2] - OFF_DOT[2]) * p,
-		OFF_DOT[3] + (ON_DOT[3] - OFF_DOT[3]) * p)
-	self.dot:SetAlpha(OFF_DOT[4] + (ON_DOT[4] - OFF_DOT[4]) * p)
+	self.knob:ClearAllPoints()
+	self.knob:SetPoint("CENTER", self.button, "LEFT", size.off + (size.on - size.off) * p + (self.shakeOffset or 0), 0)
+	self.bodyOn:SetAlpha(p)
+	self.knobOn:SetAlpha(p)
+	self.knobOff:SetAlpha(1 - p)
 end
 
----Draws a value: at once with `instant` (or when hidden), else sliding from where the pin is.
+-- Picks the knob art for the hover and active state; an inactive toggle draws the dark knob at either stop.
+function lib.Toggle:Paint()
+	if not self.button:IsEnabled() then
+		local art = Art(self.size, "knob-disabled")
+		self.knobOff:SetTexture(art)
+		self.knobOn:SetTexture(art)
+		return
+	end
+	self.knobOff:SetTexture(Art(self.size, self.hovered and "knob-hover" or "knob"))
+	self.knobOn:SetTexture(Art(self.size, self.hovered and "knob-on-hover" or "knob-on"))
+end
+
+---Draws a value: at once with `instant` (or when hidden), else sliding from where the knob is.
 function lib.Toggle:SetChecked(value, instant)
 	self.value = value and true or false
 	local target = self.value and 1 or 0
@@ -101,6 +120,8 @@ function lib.Toggle:SetChecked(value, instant)
 	end
 	local distance = math.abs(target - self.position)
 	if distance == 0 then
+		-- A refusal answered before the first frame: the knob never left, so the slide just ends.
+		self.slide = nil
 		return
 	end
 	self.slide = { from = self.position, to = target, elapsed = 0, duration = SLIDE_SECONDS * distance }
@@ -108,7 +129,7 @@ function lib.Toggle:SetChecked(value, instant)
 	self.button.view = self
 end
 
----Shakes the pin sideways after a refused save.
+---Shakes the knob sideways after a refused save.
 function lib.Toggle:Reject()
 	if not self.button:IsVisible() then
 		return
@@ -130,20 +151,21 @@ function lib.Toggle:SetActive(active)
 	self.button:SetEnabled(active)
 	if not active then
 		Handlers.Press(self, false)
-		self.hover:Hide()
+		self.hovered = false
 	end
+	self:Paint()
 end
 
--- Inactive: the track and circle lose their color; the dot keeps its color, only dimmed with the control.
+-- Inactive: every piece loses its color; the knob stays opaque (see CreateToggle).
 function lib.Toggle:Desaturate(amount)
-	self.left:SetDesaturation(amount)
-	self.middle:SetDesaturation(amount)
-	self.right:SetDesaturation(amount)
-	self.circle:SetDesaturation(amount)
+	self.bodyOff:SetDesaturation(amount)
+	self.bodyOn:SetDesaturation(amount)
+	self.knobOff:SetDesaturation(amount)
+	self.knobOn:SetDesaturation(amount)
 end
 
 function lib.Toggle:GetWidth()
-	return WIDTH
+	return self.size.width
 end
 
 -- Row binding (the control contract in Page.lua) ----------------------------------------------------------
@@ -176,9 +198,25 @@ function Handlers.Click(view)
 	end
 end
 
+function Handlers.Hover(view, hovered)
+	view.hovered = hovered and view.button:IsEnabled()
+	view:Paint()
+end
+
 function Handlers.Press(view, pressed)
-	local size = pressed and PIN_SIZE * PRESSED_SCALE or PIN_SIZE
-	view.pin:SetSize(size, size)
+	local size = pressed and view.size.knob * PRESSED_SCALE or view.size.knob
+	view.knob:SetSize(size, size)
+end
+
+-- The knob is not the button's child, so it follows the button's visibility here.
+function Handlers.Show(view, shown)
+	if shown then
+		view.knob:SetFrameLevel(view.button:GetFrameLevel() + 1)
+		view.knob:Show()
+	else
+		view.knob:Hide()
+		view:Stop()
+	end
 end
 
 function Handlers.Update(button, elapsed)
