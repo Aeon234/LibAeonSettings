@@ -11,6 +11,7 @@ local DIVIDER_HEIGHT = 19       -- a 1-unit rule with 9 above and below
 local ICON_SIZE = 16
 local CHEVRON_SIZE, GROUP_CHEVRON_SIZE = 14, 12
 local GROUP_ALPHA = 0.9
+local OFF_ALPHA = 0.45 -- a page whose switch is off
 local SELECT_SOUND = SOUNDKIT and SOUNDKIT.IG_CHARACTER_INFO_TAB
 
 -- Text inset and type role by kind; `icon` is the icon's inset and `slotted` the text inset with an icon slot.
@@ -174,6 +175,10 @@ local function PaintRow(window, row)
 	local selected = node.isPage and window.page == node.id
 	row.selected:SetShown(selected)
 	row.hover:SetShown(row.hovered and not selected and node.kind ~= "divider")
+	local page = node.isPage and window.pages[node.id]
+	local off = page and page.switch and not page.switch:GetValue()
+	row.label:SetAlpha(off and OFF_ALPHA or 1)
+	row.icon:SetAlpha(off and OFF_ALPHA or 1)
 	if node.isPage then
 		row.label:SetTextColor(lib:Color(selected and "accent" or "text"))
 	elseif node.kind == "header" then
@@ -272,6 +277,16 @@ function lib.Window:RefreshSidebar()
 	end
 	sidebar:SetContentHeight(y)
 	self.navChanged = nil
+end
+
+---Redraws the shown rows' states (selection, hover, a page switched off) without laying them out again.
+function lib.Window:PaintSidebar()
+	local sidebar = self.sidebar
+	for _, row in ipairs(sidebar and sidebar.rows or {}) do
+		if row:IsShown() and row.node then
+			PaintRow(self, row)
+		end
+	end
 end
 
 ---Builds the sidebar in its region of the window.

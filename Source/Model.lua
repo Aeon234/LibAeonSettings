@@ -61,16 +61,17 @@ function lib:InitPage(window, page, info)
 	if info.switch ~= nil then
 		local switch = type(info.switch) == "table" and info.switch or {}
 		switch.id = switch.id or "enabled"
-		switch.label = switch.label or L.ENABLED
+		switch.label = switch.label or page.title
 		page.switch = page:NewSetting("Toggle", switch)
 	end
 end
 
----Adds a section with a gold title and a rule; its settings follow it. `info.show(section)`, when given, hides the
----whole section (title, rule, rows, notes and menu) and leaves it out of search while it returns false.
+---Adds a section: a heading over a card of its settings, its notes under the card. `info.show(section)`, when given,
+---hides the whole section (heading, rows, notes and menu) and leaves it out of search while it returns false.
+---`info.columns = 2` asks for a choice card (see `lib.ChoiceGrid`).
 ---`info.reveal(section)`, with `show`, keeps a hidden section's rows in search: landing on one calls it first, to
 ---make the section show (selecting what it edits).
----@param info table? { show?, reveal? }
+---@param info table? { show?, reveal?, columns? }
 ---@return table? section
 function lib.PageModel:Section(id, title, info)
 	local section = setmetatable({ id = id, title = title, page = self, lines = {} }, sectionMeta)

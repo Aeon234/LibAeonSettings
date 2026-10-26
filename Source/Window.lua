@@ -276,6 +276,8 @@ function lib.Window:Open()
 	if self.navChanged then
 		self:RefreshSidebar()
 	end
+	-- Pages switched on or off while the window was closed.
+	self:PaintSidebar()
 	if not self.page and self.pageOrder[1] then
 		self.page = self.pageOrder[1].id
 	end

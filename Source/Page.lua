@@ -1,7 +1,7 @@
--- The page body: the page header (title, description, the page's switch), then its sections in a smooth scrolling
--- list. A section is a heading over a card of rows, one setting to a line (or two to a line in a choice card), with
--- its notes under the card. Rows are pooled halves; each half keeps one view per control kind and binds it to the
--- setting it shows.
+-- The page body: the page header (title, description, and the page's switch as a card of its own), then its
+-- preview and tabs and its sections in a smooth scrolling list. A section is a heading over a card of rows, one
+-- setting to a line (or two to a line in a choice card), with its notes under the card. Rows are pooled halves; each
+-- half keeps one view per control kind and binds it to the setting it shows.
 --
 -- Control views (see Toggle.lua) provide: `.frame`, `Bind(setting)` (draw at once), `Update(instant, refused)`,
 -- `Release()`, `SetActive(active)`, `GetWidth()`; optionally `Desaturate(amount)` and `Place(half)`.
@@ -18,7 +18,8 @@ local PAGE_LEFT, PAGE_TOP, PAGE_RIGHT, PAGE_BOTTOM = 284, 42, 42, 58
 local DEFAULT_WIDTH = 674 -- the 1000-wide window less the page's insets
 local TITLE_HEIGHT = 30
 local DESCRIPTION_GAP = 6
-local SWITCH_GAP, SWITCH_TOP = 12, 4
+local SWITCH_GAP, SWITCH_ICON, SWITCH_ICON_GAP = 14, 20, 10 -- the switch card: below the title, its icon
+local BODY_RESPONSE = 0.32 -- the page below its switch fading away while the switch is off, and back
 local SECTION_GAP, SECTION_TITLE_HEIGHT = 18, 30 -- the heading's line also holds a section's menu and link
 local HEADING_INSET, HEADING_BOTTOM = 14, 6 -- the heading's text: in from the card's edge, above the card
 local MENU_CENTER = 15 -- the section title's center line, from the header's top
@@ -29,7 +30,7 @@ local NOTE_TOP, NOTE_LINE = 7, 16 -- a note under its card: the gap above it and
 local BOTTOM_PADDING = 14
 local REVEAL_RESPONSE = 0.32 -- a row growing in under the row it depends on, or shrinking away
 local INACTIVE_ALPHA, INACTIVE_DESATURATION = 0.5, 0.7
-local PAGE_OFF_ALPHA, PAGE_OFF_DESATURATION = 0.5, 0.6
+local PAGE_OFF_DESATURATION = 0.6
 -- Overrides (Q30, Q70): the ◆/↺ gutter, reserved on every half between the control and the inset.
 local GUTTER_RIGHT, GUTTER_WIDTH, GUTTER_HEIGHT = 20, 44, 16
 local DIAMOND_SIZE, UNDO_SIZE, UNDO_ALPHA = 14, 16, 0.85
@@ -246,13 +247,34 @@ local function BuildPageView(window)
 	view.description:SetJustifyH("LEFT")
 	view.description:SetPoint("TOPLEFT", view.title, "BOTTOMLEFT", 0, -DESCRIPTION_GAP)
 
-	-- The page's switch, top right: "Enabled" and a toggle.
-	view.switch = lib:CreateToggle(header, true)
-	view.switch.frame:SetPoint("TOPRIGHT", header, "TOPRIGHT", 0, -SWITCH_TOP)
-	view.switchLabel = header:CreateFontString(nil, "OVERLAY")
-	lib:SetType(view.switchLabel, "body")
-	view.switchLabel:SetPoint("RIGHT", view.switch.frame, "LEFT", -SWITCH_GAP, 0)
-	view.switchLabel:SetText(L.ENABLED)
+	-- The page's switch, a card of its own under the title: the page's icon, its name and what it does, and a toggle.
+	local card = CreateFrame("Frame", nil, header)
+	local fill = card:CreateTexture(nil, "BACKGROUND")
+	fill:SetColorTexture(lib:Color("card"))
+	fill:SetAllPoints()
+	for _, edge in ipairs({ { "TOPLEFT", "TOPRIGHT" }, { "BOTTOMLEFT", "BOTTOMRIGHT" }, { "TOPLEFT", "BOTTOMLEFT" },
+		{ "TOPRIGHT", "BOTTOMRIGHT" } }) do
+		local line = card:CreateTexture(nil, "BORDER")
+		line:SetColorTexture(lib:Color("cardEdge"))
+		line:SetPoint(edge[1])
+		line:SetPoint(edge[2])
+		line:SetSize(1, 1)
+	end
+	card.icon = card:CreateTexture(nil, "ARTWORK")
+	card.icon:SetSize(SWITCH_ICON, SWITCH_ICON)
+	card.icon:SetPoint("LEFT", INSET, 0)
+	card.label = card:CreateFontString(nil, "OVERLAY")
+	lib:SetType(card.label, "body")
+	card.label:SetJustifyH("LEFT")
+	card.label:SetWordWrap(false)
+	card.small = card:CreateFontString(nil, "OVERLAY")
+	lib:SetType(card.small, "secondary", "secondary")
+	card.small:SetJustifyH("LEFT")
+	card.small:SetWordWrap(false)
+	card.small:SetPoint("TOPLEFT", card.label, "BOTTOMLEFT")
+	view.switch = lib:CreateToggle(card)
+	view.switch.frame:SetPoint("RIGHT", -INSET, 0)
+	view.switchCard = card
 
 	-- The preview and tabs, between the header and the scrolling sections (Preview.lua), which places the body.
 	lib:BuildFixedArea(window, view)
@@ -304,7 +326,9 @@ local function BindHalf(view, setting)
 end
 
 ---Shows the selected page: its header, then its sections drawn from pooled views, at the scroll offset it last had.
-function lib.Window:ShowPage()
+---`growIn`: the page was just switched on, so what is below its switch fades in.
+---@param growIn boolean?
+function lib.Window:ShowPage(growIn)
 	local page = self.pages[self.page]
 	if not self.frame or not page then
 		return
@@ -331,23 +355,73 @@ function lib.Window:ShowPage()
 	view.shownPage = page
 
 	view.title:SetText(page.title)
-	view.description:SetText(page.description or "")
-	view.description:SetShown(page.description ~= nil)
-	local hasSwitch = page.switch ~= nil
-	view.switch.frame:SetShown(hasSwitch)
-	view.switchLabel:SetShown(hasSwitch)
-	if hasSwitch then
-		view.switch:Bind(page.switch)
-	else
-		view.switch:Release()
-	end
+	local switch = page.switch
+	-- With a switch, the page's description moves onto the switch's card unless the switch has its own.
+	local switchText = switch and (switch.description or page.description)
+	local description = not (switch and not switch.description) and page.description or nil
+	view.description:SetText(description or "")
+	view.description:SetShown(description ~= nil)
 	local width = view.content:GetWidth()
 	if width <= 1 then
 		width = DEFAULT_WIDTH
 	end
-	view.description:SetWidth(width - (hasSwitch and 200 or 0))
-	view.header:SetHeight(TITLE_HEIGHT
-		+ (page.description and DESCRIPTION_GAP + view.description:GetStringHeight() or 0))
+	view.description:SetWidth(width)
+	local headerHeight = TITLE_HEIGHT + (description and DESCRIPTION_GAP + view.description:GetStringHeight() or 0)
+	local card = view.switchCard
+	card:SetShown(switch ~= nil)
+	if switch then
+		view.switch:Bind(switch)
+		card.label:SetText(switch.label or page.title)
+		card.small:SetText(switchText or "")
+		card.small:SetShown(switchText ~= nil)
+		local hasIcon = page.icon ~= nil
+		card.icon:SetShown(hasIcon)
+		if hasIcon then
+			if C_Texture.GetAtlasInfo(page.icon) then
+				card.icon:SetAtlas(page.icon)
+			else
+				local crop = page.iconCrop or 0
+				card.icon:SetTexture(page.icon)
+				card.icon:SetTexCoord(crop, 1 - crop, crop, 1 - crop)
+			end
+		end
+		local textLeft = INSET + (hasIcon and SWITCH_ICON + SWITCH_ICON_GAP or 0)
+		local textWidth = width - textLeft - INSET - view.switch:GetWidth() - LABEL_GAP
+		card.label:SetWidth(textWidth)
+		card.small:SetWidth(textWidth)
+		card.label:ClearAllPoints()
+		local cardHeight = switchText and TALL_HEIGHT or ROW_HEIGHT
+		if switchText then
+			card.label:SetPoint("TOPLEFT", card, "LEFT", textLeft, (LABEL_HEIGHT + SMALL_HEIGHT) / 2)
+		else
+			card.label:SetPoint("LEFT", textLeft, 0)
+		end
+		card:ClearAllPoints()
+		card:SetPoint("TOPLEFT", view.header, "TOPLEFT", 0, -(headerHeight + SWITCH_GAP))
+		card:SetPoint("TOPRIGHT", view.header, "TOPRIGHT", 0, -(headerHeight + SWITCH_GAP))
+		card:SetHeight(cardHeight)
+		headerHeight = headerHeight + SWITCH_GAP + cardHeight
+	else
+		view.switch:Release()
+	end
+	view.header:SetHeight(headerHeight)
+
+	-- Below a switch that is off, nothing is built until it is first turned on.
+	local on = not switch or switch:GetValue() and true or false
+	view.built = on
+	local presence = Handlers.BodyPresence(view)
+	if growIn then
+		presence:Jump(0)
+		presence:To(1)
+	else
+		presence:Jump(on and 1 or 0)
+	end
+	if not on then
+		self:StopPreview()
+		view.shownKey = page.tab and (page.id .. "/" .. page.tab) or page.id
+		view.scroll:SetContentHeight(0)
+		return
+	end
 
 	local sections = page:ShownSections()
 	view.shownKey = page.tab and (page.id .. "/" .. page.tab) or page.id
@@ -489,7 +563,7 @@ function Handlers.Reveal(half)
 end
 
 ---Redraws which settings on the shown page are active, hidden or explained, and dims the body while the page's
----switch is off. Returns true when a row's visibility or height changed.
+---Returns true when a row's visibility or height changed.
 ---@return boolean layoutChanged
 function lib.Window:RefreshStates()
 	local view = self.pageView
@@ -497,8 +571,6 @@ function lib.Window:RefreshStates()
 	if not page then
 		return false
 	end
-	local pageOff = page.switch ~= nil and not page.switch:GetValue()
-	view.scroll.frame:SetAlpha(pageOff and PAGE_OFF_ALPHA or 1)
 	-- Section menus: dimmed and closed while inactive, their reason on hover; closed while their section is hidden.
 	for setting, menu in pairs(view.menuOf) do
 		local active, reason = setting:Activity()
@@ -636,6 +708,22 @@ function lib.Window:LayoutPage()
 	view.scroll:SetContentHeight(y + BOTTOM_PADDING)
 end
 
+-- What lies below the page's switch (preview, tabs and sections), 0 gone to 1 shown, on a spring: it fades, and
+-- hides at rest at 0.
+function Handlers.BodyPresence(view)
+	if not view.bodyPresence then
+		view.bodyPresence = lib:CreateSpring(1, function(value)
+			local shown = value > 0
+			view.body:SetAlpha(value)
+			view.body:SetShown(shown)
+			view.fixed:SetAlpha(value)
+			view.fixed:SetShown(shown)
+		end, { response = BODY_RESPONSE, epsilon = 0.002 })
+	end
+
+	return view.bodyPresence
+end
+
 -- A card behind a section's rows: a faint fill inside a 1-unit edge.
 function Handlers.Card(view, top, width, height)
 	local fill = Acquire(view.fills)
@@ -741,6 +829,17 @@ function lib.Window:FlushChanges()
 				self:Refresh()
 				return
 			end
+		end
+		-- The page's switch: the rest of the page fades away while it is off, and is built the first time it is on.
+		local switch = view.shownPage.switch
+		if switch and changed[switch] then
+			self:PaintSidebar()
+			if switch:GetValue() and not view.built then
+				wipe(changed)
+				self:ShowPage(true)
+				return
+			end
+			Handlers.BodyPresence(view):To(switch:GetValue() and 1 or 0)
 		end
 		-- Rows following a shared value redraw it, in case one of the changes was the shared value.
 		for _, block in ipairs(view.items) do
@@ -874,8 +973,14 @@ function lib.Window:Refresh()
 	if not self:IsShown() or not view or not view.shownPage then
 		return
 	end
-	if view.shownPage.switch then
+	local switch = view.shownPage.switch
+	if switch then
 		view.switch:Update(true)
+		self:PaintSidebar()
+		if (switch:GetValue() and true or false) ~= view.built then
+			self:ShowPage()
+			return
+		end
 	end
 	for _, menu in pairs(view.menuOf) do
 		menu:Update(true)

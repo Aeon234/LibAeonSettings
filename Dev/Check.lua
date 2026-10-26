@@ -502,6 +502,11 @@ do
 	Check("choice card: one checkbox draws one to a line", not lib.ChoiceGrid(window, single))
 	page:Section("three", "Three", { columns = 3 })
 	Check("choice card: columns other than 1 or 2 are reported", errors[#errors]:find("columns must be 1 or 2") ~= nil)
+
+	local module = NewPage(window, "clock", "Clock", { switch = { path = "clock.on" } })
+	local named = NewPage(window, "broker", "DataBroker", { switch = { path = "broker.on", label = "Broker Hosting" } })
+	Check("page switch: named after its page unless it has a label of its own",
+		module.switch.label == "Clock" and named.switch.label == "Broker Hosting")
 end
 
 -- Media pickers
