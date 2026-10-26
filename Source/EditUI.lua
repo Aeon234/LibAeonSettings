@@ -24,7 +24,7 @@ local GRID_MODES = { DIMMED = "BRIGHT", BRIGHT = "OFF", OFF = "DIMMED" }
 local GRID_LABELS = { DIMMED = L.DIMMED, BRIGHT = L.BRIGHT, OFF = L.OFF }
 -- The outlined grid in gold, its inner lines faint when Dimmed and full when Bright (Alex, 2026-10-13).
 local GRID_ICONS = { DIMMED = "icon-grid-dim", BRIGHT = "icon-grid-bright" }
-local ICON_ON, ICON_OFF = { 1, 0.82, 0 }, { 0.62, 0.62, 0.62 }
+local ICON_ON, ICON_OFF = lib.COLOR.accent, { 0.62, 0.62, 0.62 }
 local ICON_ALPHA_ON, ICON_ALPHA_OFF, ICON_ALPHA_HOVER = 0.8, 0.45, 1
 -- Q151: clicks in edit mode use the checkbox sounds, off when a toggle turns off.
 local SOUND_ON = SOUNDKIT and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON
@@ -139,10 +139,12 @@ local function CreateToggle(toolbar, name, iconName, onClick, tooltip, isOn)
 	toggle.icon = toggle:CreateTexture(nil, "ARTWORK")
 	toggle.icon:SetSize(28, 28)
 	toggle.icon:SetPoint("LEFT", 6, 0)
-	toggle.name = toggle:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	toggle.name = toggle:CreateFontString(nil, "OVERLAY")
+	lib:SetType(toggle.name, "caption")
 	toggle.name:SetPoint("TOPLEFT", toggle.icon, "TOPRIGHT", 8, 0)
 	toggle.name:SetText(name)
-	toggle.state = toggle:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+	toggle.state = toggle:CreateFontString(nil, "OVERLAY")
+	lib:SetType(toggle.state, "caption", "accent")
 	toggle.state:SetPoint("TOPLEFT", toggle.name, "BOTTOMLEFT", 0, -2)
 	toggle:SetScript("OnClick", function(self) Handlers.ToggleClick(self) end)
 	toggle:SetScript("OnEnter", function(self) Handlers.ToggleHover(self, true) end)
@@ -496,11 +498,17 @@ local function RelayoutEditScreen()
 end
 
 ---Shows the edit screen; `opening` plays the opening sequence and offers the first-time tip.
+---Shows edit mode's screen. `opening`: true plays the opening sequence with the toolbar placed afresh; "return"
+---fades it all back in where it was (after combat). A closing still running turns around where it is.
 function lib:ShowEditUI(opening)
 	self.ui = self.ui or BuildEditUI()
 	local ui = self.ui
-	if opening then
+	local resumeAt = self:StopClosing()
+	local placeToolbar = opening == true and not resumeAt
+	if placeToolbar then
 		ui.toolbarSpot = nil
+	end
+	if opening then
 		self:PrepareOpening()
 	else
 		self:StopOpening()
@@ -509,7 +517,7 @@ function lib:ShowEditUI(opening)
 	self:RefreshGrid()
 	self:RefreshToolbar()
 	self:RefreshMovers()
-	if opening then
+	if placeToolbar then
 		ui.toolbarSpot = self:FindToolbarSpot()
 	end
 	self:LayoutTopInset()
@@ -517,20 +525,32 @@ function lib:ShowEditUI(opening)
 	self:RefreshEffects()
 	self:WatchShift(true)
 	if opening then
-		self:PlayOpening()
+		self:PlayOpening(resumeAt, opening == "return" or resumeAt ~= nil)
 	end
 end
 
-function lib:HideEditUI()
-	if not self.ui then
+---Hides edit mode's screen: with `animated`, the opening sequence runs backward first and the movers stay as they
+---were while it does.
+function lib:HideEditUI(animated)
+	local ui = self.ui
+	if not ui then
 		return
 	end
-	self:StopOpening()
 	self:HideFirstTip()
 	self:WatchShift(false)
+	self:CloseAddonsWindow()
+	if animated and ui.screen:IsShown() then
+		self:PlayClosing(function() lib:FinishHideEditUI() end)
+		return
+	end
+	self:StopClosing()
+	self:FinishHideEditUI()
+end
+
+function lib:FinishHideEditUI()
+	self:StopOpening()
 	self.ui.screen:Hide()
 	self.ui.toolbar:Hide()
-	self:CloseAddonsWindow()
 	self:RefreshEffects()
 	self:RefreshMovers()
 end

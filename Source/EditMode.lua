@@ -169,7 +169,7 @@ function lib:OpenEditMode(addonName)
 	end
 	if InCombatLockdown() then
 		session.waitingOpener = nil
-		UIErrorsFrame:AddMessage(L.COMBAT_REFUSED, 1, 0.1, 0.1)
+		UIErrorsFrame:AddMessage(L.COMBAT_REFUSED, lib:Color("destructive"))
 		return
 	end
 	if BlockingPanelShown() then
@@ -208,6 +208,10 @@ function lib:CloseEditMode(save)
 	if not session.open then
 		return
 	end
+	-- A drop still settling lands first, so its position is among the pending ones. The screen starts fading
+	-- before anything else is undone, so the movers stay drawn as they were while it fades.
+	lib.MoverHandlers.EndSettle()
+	self:HideEditUI(true)
 	local pending = session.pending
 	local returnTo = session.returnTo
 	session.returnTo = nil
@@ -221,7 +225,6 @@ function lib:CloseEditMode(save)
 		self:EndPick()
 	end
 	self:RestoreSizes(save)
-	self:HideEditUI()
 	ShowSamples(session, false)
 	session.selected, session.hovered, session.drag = nil, nil, nil
 
@@ -279,17 +282,18 @@ lib.editEvents:SetScript("OnEvent", function(_, event)
 	end
 	if event == "PLAYER_REGEN_DISABLED" then
 		session.paused = true
+		lib.MoverHandlers.EndSettle()
+		lib:HideEditUI(true)
 		lib:CloseMenus()
 		if session.pick then
 			lib:EndPick()
 		end
 		StaticPopup_Hide("LIBAEONSETTINGS_EDIT_EXIT")
-		lib:HideEditUI()
 	elseif event == "PLAYER_REGEN_ENABLED" then
 		C_Timer.After(0.5, function()
 			if session.open and session.paused and not InCombatLockdown() then
 				session.paused = false
-				lib:ShowEditUI()
+				lib:ShowEditUI("return")
 			end
 		end)
 	end

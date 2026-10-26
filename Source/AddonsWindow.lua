@@ -57,7 +57,8 @@ local function CreateWindow()
 	window:SetClampedToScreen(true)
 	window:SetWidth(WINDOW_WIDTH)
 	lib:ApplyPanelArt(window)
-	window.title = window:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+	window.title = window:CreateFontString(nil, "OVERLAY")
+	lib:SetType(window.title, "body", "cream")
 	window.title:SetPoint("TOP", 0, -PADDING)
 	window.title:SetText(L.ADDONS)
 	window.rows = {}
@@ -81,7 +82,8 @@ local function Row(window, index)
 	row.check:SetScript("OnClick", function(self) Handlers.Click(self) end)
 	row.check:SetScript("OnEnter", function(self) Handlers.Enter(self) end)
 	row.check:SetScript("OnLeave", function() GameTooltip:Hide() end)
-	row.label = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+	row.label = row:CreateFontString(nil, "OVERLAY")
+	lib:SetType(row.label, "secondary")
 	row.label:SetPoint("LEFT", row.check, "RIGHT", 6, 0)
 	window.rows[index] = row
 
@@ -115,7 +117,7 @@ function lib:RefreshAddonsWindow()
 		row.check:SetChecked(session.shown[addonName] == true)
 		row.check:SetEnabled(addonName ~= session.opener)
 		row.label:SetText(registration.title or addonName)
-		row.label:SetFontObject(addonName == session.opener and "GameFontDisable" or "GameFontHighlight")
+		row.label:SetTextColor(lib:Color(addonName == session.opener and "tertiary" or "text"))
 		row:Show()
 	end
 	for index = #self.order + 1, #window.rows do

@@ -17,18 +17,24 @@ local TEXT_PLATE_PADDING_X, TEXT_PLATE_PADDING_Y = 8, 3
 local TEXT_INSET_X, TEXT_INSET_Y = 10, 6 -- the label's offset from the mover's top left
 local MIN_LABEL_WIDTH = 32  -- narrowest room for a truncated label; a smaller mover shows it only while expanded
 local SUBTITLE_GAP = 2      -- space between the label and the subtitle
-local REFUSED = { 1, 0.25, 0.2 }
+local REFUSED = lib.COLOR.destructive
 local HOVER_INTENT = 0.12   -- seconds the cursor rests on a mover before it expands
 local COG_SIZE = 22
 local COG_ALPHA = 0.9
 -- Cog states: normal white, hover gold, pressed darker gold, open (its menu showing) gold.
 local COG_NORMAL = { 1, 1, 1 }
-local COG_HOVER = { 1, 0.82, 0 }
+local COG_HOVER = lib.COLOR.accent
 local COG_PRESSED = { 0.8, 0.62, 0.1 }
 local EXPAND_DURATION = 0.15 -- seconds the mover takes to grow or shrink
 local DRAG_THRESHOLD = 3    -- UI units the cursor moves before a press becomes a drag
 local NUDGE, NUDGE_SHIFT = 1, 10 -- physical pixels per arrow key press
 local HOVER_ALPHA = 0.4
+local SNAP_RESPONSE = 0.18 -- the frame easing onto a snap line and off it
+local CAUGHT = 0.5 -- UI units from the line at which the ease ends and the frame follows the cursor again
+local SETTLE_RESPONSE, SETTLE_DAMPING = 0.3, 0.8 -- a fast drop's give
+local SETTLE_SPEED = 500 -- UI units per second at release above which the drop settles
+local SETTLE_SHARE, SETTLE_MOST = 0.25, 600 -- the share of the release speed carried, and its most
+local VELOCITY_WINDOW = 0.1 -- seconds of cursor movement the release speed is measured over
 local SNAP_PULSE_LOW, SNAP_PULSE_HIGH, SNAP_PULSE_HZ = 0.35, 0.85, 1.5
 
 -- Blizzard's Edit Mode selection art, drawn from the client's atlases the way its own systems draw it.
@@ -118,17 +124,20 @@ local function CreateMover(parent)
 	-- art and whatever the frame itself draws.
 	mover.plate = mover.text:CreateTexture(nil, "BACKGROUND")
 	mover.plate:SetColorTexture(0, 0, 0, TEXT_PLATE_ALPHA)
-	mover.name = mover.text:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+	mover.name = mover.text:CreateFontString(nil, "OVERLAY")
+	lib:SetType(mover.name, "secondary")
 	lib:OutlineText(mover.name)
 	mover.name:SetPoint("TOPLEFT", mover, "TOPLEFT", TEXT_INSET_X, -TEXT_INSET_Y)
 	mover.name:SetJustifyH("LEFT")
 	mover.name:SetWordWrap(false)
-	mover.subtitle = mover.text:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+	mover.subtitle = mover.text:CreateFontString(nil, "OVERLAY")
+	lib:SetType(mover.subtitle, "caption", "tertiary")
 	lib:OutlineText(mover.subtitle)
 	mover.subtitle:SetPoint("TOPLEFT", mover.name, "BOTTOMLEFT", 0, -SUBTITLE_GAP)
 	mover.subtitle:SetJustifyH("LEFT")
 	mover.subtitle:SetWordWrap(false)
-	mover.coordinates = mover.text:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	mover.coordinates = mover.text:CreateFontString(nil, "OVERLAY")
+	lib:SetType(mover.coordinates, "caption")
 	lib:OutlineText(mover.coordinates)
 	mover.coordinates:SetPoint("BOTTOMLEFT", mover, "TOPLEFT", 3, 4)
 
@@ -318,7 +327,8 @@ end
 
 function lib:RefreshMovers()
 	local ui = self.ui
-	if not ui then
+	-- While edit mode fades out the movers stay as they were; they go when it has.
+	if not ui or ui.closing then
 		return
 	end
 	local session = self.session
@@ -354,7 +364,7 @@ function lib:RefreshMovers()
 						local state = "idle"
 						if session.drag and session.drag.id == id and session.drag.started then
 							state = "dragging"
-						elseif session.selected == id then
+						elseif session.selected == id or session.pressed == id then
 							state = "selected"
 						end
 						local snapTarget = session.drag and session.drag.started and session.drag.snapFrom == id
@@ -402,7 +412,8 @@ end
 ---Starts a press on a mover. A press on one of its links passes `linkAction`: it runs on release, or the press
 ---becomes a drag after 1 unit of movement.
 function Handlers.MouseDown(mover, button, linkAction)
-	if button ~= "LeftButton" or InCombatLockdown() then
+	local session = lib.session
+	if button ~= "LeftButton" or InCombatLockdown() or not session.open or session.paused then
 		return
 	end
 	if lib.session.pick then
@@ -414,8 +425,9 @@ function Handlers.MouseDown(mover, button, linkAction)
 	if not target then
 		return
 	end
-	-- A pinned target is not dragged; a click still selects it.
-	local pinned = not linkAction and lib:PinnedReason(target) ~= nil
+	-- A pinned target is not dragged: a drag shakes it and says why; a click still selects it.
+	local pinned = not linkAction and lib:PinnedReason(target) or nil
+	Handlers.EndSettle()
 	local left, bottom, width, height = FrameRect(target.frame)
 	if not left then
 		return
@@ -431,13 +443,40 @@ function Handlers.MouseDown(mover, button, linkAction)
 		cursorX = cursorX, cursorY = cursorY, left = left, bottom = bottom, width = width, height = height,
 		insetLeft = left - outerLeft, insetBottom = bottom - outerBottom,
 		extraWidth = outerWidth - width, extraHeight = outerHeight - height,
-		link = linkAction, threshold = linkAction and 1 or pinned and math.huge or DRAG_THRESHOLD,
+		link = linkAction, threshold = linkAction and 1 or DRAG_THRESHOLD, pinned = pinned,
+		history = {}, easeX = { value = 0, velocity = 0 }, easeY = { value = 0, velocity = 0 },
 	}
-	mover:SetScript("OnUpdate", function(self) Handlers.DragUpdate(self) end)
+	mover:SetScript("OnUpdate", function(self, elapsed) Handlers.DragUpdate(self, elapsed) end)
+	-- The press shows the selection at once, before any movement.
+	if not linkAction then
+		session.pressed = mover.id
+		lib:RefreshMovers()
+	end
 end
 
-function Handlers.DragUpdate(mover)
+-- Moves one axis's snap offset toward `target`: exactly while the frame follows the cursor, on a spring while it
+-- catches a line it reached or lets go of one it left. Returns the offset.
+local function EaseAxis(ease, target, snapped, elapsed)
+	if snapped ~= ease.snapped then
+		ease.snapped = snapped
+		ease.catching = not lib:ReduceMotion()
+	end
+	if ease.catching then
+		ease.value, ease.velocity = lib.Motion.Step(ease.value, ease.velocity, target, SNAP_RESPONSE, 1, elapsed)
+		if math.abs(ease.value - target) < CAUGHT and math.abs(ease.velocity) < CAUGHT * 20 then
+			ease.catching = false
+		end
+	end
+	if not ease.catching then
+		ease.value, ease.velocity = target, 0
+	end
+
+	return ease.value
+end
+
+function Handlers.DragUpdate(mover, elapsed)
 	local drag = lib.session.drag
+	elapsed = elapsed or 0
 	if not drag or InCombatLockdown() then
 		Handlers.EndDrag(mover)
 		return
@@ -450,6 +489,12 @@ function Handlers.DragUpdate(mover)
 	local dx, dy = cursorX - drag.cursorX, cursorY - drag.cursorY
 	if not drag.started then
 		if math.abs(dx) < drag.threshold and math.abs(dy) < drag.threshold then
+			return
+		end
+		if drag.pinned then
+			Handlers.EndDrag(mover, true)
+			lib:Refuse(drag.id, drag.pinned)
+			lib:Shake(mover)
 			return
 		end
 		drag.started = true
@@ -481,8 +526,17 @@ function Handlers.DragUpdate(mover)
 		snapMover.hover:SetAlpha(SNAP_PULSE_LOW + (SNAP_PULSE_HIGH - SNAP_PULSE_LOW) * wave)
 	end
 
+	-- The cursor's last tenth of a second, for the release speed.
+	local now = GetTime()
+	local history = drag.history
+	table.insert(history, { now, cursorX, cursorY })
+	while #history > 2 and now - history[1][1] > VELOCITY_WINDOW do
+		table.remove(history, 1)
+	end
+
 	local altDown = IsAltKeyDown()
-	if dx == drag.lastDx and dy == drag.lastDy and altDown == drag.lastAlt then
+	local easing = drag.easeX.catching or drag.easeY.catching
+	if dx == drag.lastDx and dy == drag.lastDy and altDown == drag.lastAlt and not easing then
 		return
 	end
 	drag.lastDx, drag.lastDy, drag.lastAlt = dx, dy, altDown
@@ -506,8 +560,10 @@ function Handlers.DragUpdate(mover)
 				drag.ys, drag.threshold)
 		end
 	end
-	left = left + (snapX and snapX.delta or 0)
-	bottom = bottom + (snapY and snapY.delta or 0)
+	-- Where the frame lands on release is exact; on screen it eases onto a line and off it.
+	drag.finalLeft, drag.finalBottom = left + (snapX and snapX.delta or 0), bottom + (snapY and snapY.delta or 0)
+	left = left + EaseAxis(drag.easeX, snapX and snapX.delta or 0, snapX ~= nil, elapsed)
+	bottom = bottom + EaseAxis(drag.easeY, snapY and snapY.delta or 0, snapY ~= nil, elapsed)
 	local snapFrom = (snapX and snapX.from) or (snapY and snapY.from)
 	if snapFrom ~= drag.snapFrom then
 		drag.snapFrom = snapFrom
@@ -529,11 +585,23 @@ function Handlers.DragUpdate(mover)
 	end
 end
 
-function Handlers.EndDrag(mover)
+---Ends a press or drag. `refused`: a pinned target's drag, which neither moves nor selects it.
+function Handlers.EndDrag(mover, refused)
 	mover:SetScript("OnUpdate", nil)
 	local drag = lib.session.drag
 	lib.session.drag = nil
+	lib.session.pressed = nil
 	lib:ShowGuides(nil, nil)
+	if refused then
+		lib:RefreshMovers()
+		return
+	end
+	if drag and drag.started and drag.finalLeft then
+		-- A frame still easing onto its line lands on it; a fast drop then settles with a little give.
+		lib:MoveTargetTo(drag.registration.addonName, drag.target, drag.finalLeft, drag.finalBottom, drag.width,
+			drag.height, true)
+		Handlers.StartSettle(mover, drag)
+	end
 	if drag and not drag.started and drag.id == mover.id then
 		if drag.link then
 			lib:RefreshMovers()
@@ -541,6 +609,77 @@ function Handlers.EndDrag(mover)
 			return
 		end
 		lib.session.selected = lib.session.selected ~= mover.id and mover.id or nil
+	end
+	lib:RefreshMovers()
+end
+
+-- The release speed across the last tenth of a second, in UI units per second, along the drag's locked axis.
+local function ReleaseVelocity(drag)
+	local history = drag.history
+	local first, last = history[1], history[#history]
+	if not first or first == last or last[1] <= first[1] then
+		return 0, 0
+	end
+	local time = last[1] - first[1]
+	local vx, vy = (last[2] - first[2]) / time, (last[3] - first[3]) / time
+
+	return drag.axis == "y" and 0 or vx, drag.axis == "x" and 0 or vy
+end
+
+-- A fast drop carries a share of its speed past where it landed and springs back, under-damped; the pending
+-- position stays where it landed.
+function Handlers.StartSettle(mover, drag)
+	local vx, vy = ReleaseVelocity(drag)
+	if math.sqrt(vx * vx + vy * vy) < SETTLE_SPEED or lib:ReduceMotion() then
+		return
+	end
+	local function Carry(v)
+		return math.max(-SETTLE_MOST, math.min(SETTLE_MOST, v * SETTLE_SHARE))
+	end
+	lib.session.settle = {
+		mover = mover, drag = drag, x = 0, y = 0, vx = Carry(vx), vy = Carry(vy),
+	}
+	mover:SetScript("OnUpdate", function(_, elapsed) Handlers.SettleStep(elapsed) end)
+end
+
+function Handlers.SettleStep(elapsed)
+	local settle = lib.session.settle
+	if not settle or InCombatLockdown() then
+		Handlers.EndSettle()
+		return
+	end
+	local Step = lib.Motion.Step
+	settle.x, settle.vx = Step(settle.x, settle.vx, 0, SETTLE_RESPONSE, SETTLE_DAMPING, elapsed)
+	settle.y, settle.vy = Step(settle.y, settle.vy, 0, SETTLE_RESPONSE, SETTLE_DAMPING, elapsed)
+	local Settled = lib.Motion.Settled
+	local settled = Settled(settle.x, settle.vx, 0, 0.05) and Settled(settle.y, settle.vy, 0, 0.05)
+	if settled then
+		settle.x, settle.y = 0, 0
+	end
+	local drag = settle.drag
+	lib:MoveTargetTo(drag.registration.addonName, drag.target, drag.finalLeft + settle.x,
+		drag.finalBottom + settle.y, drag.width, drag.height, true)
+	for _, moved in ipairs(drag.moving or {}) do
+		LayoutMover(moved, moved.target, false, 0)
+	end
+	lib:MoveLines()
+	if settled then
+		Handlers.EndSettle()
+	end
+end
+
+---Ends a settling drop where it landed.
+function Handlers.EndSettle()
+	local settle = lib.session.settle
+	if not settle then
+		return
+	end
+	lib.session.settle = nil
+	settle.mover:SetScript("OnUpdate", nil)
+	local drag = settle.drag
+	if settle.x ~= 0 or settle.y ~= 0 then
+		lib:MoveTargetTo(drag.registration.addonName, drag.target, drag.finalLeft, drag.finalBottom, drag.width,
+			drag.height, true)
 	end
 	lib:RefreshMovers()
 end
@@ -600,6 +739,7 @@ local ARROWS = { LEFT = { -1, 0 }, RIGHT = { 1, 0 }, UP = { 0, 1 }, DOWN = { 0, 
 
 ---Moves the selected mover by whole physical pixels. Returns true when the key was used.
 function lib:NudgeSelected(key)
+	Handlers.EndSettle()
 	local direction = ARROWS[key]
 	local selected = self.session.selected
 	local mover = selected and self.ui and self.ui.movers and self.ui.movers[selected]

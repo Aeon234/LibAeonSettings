@@ -7,7 +7,8 @@ end
 
 local SNAP_DISTANCE = 6     -- virtual pixels (UI units times UIParent's effective scale)
 local GRID_SPACING = 32
-local GUIDE_COLOR = { 1, 0.82, 0, 0.55 }
+local GUIDE_ALPHA = 0.55
+local GUIDE_FADE = 0.1 -- the guides' spring response: they fade in and out instead of popping
 
 ---@return number threshold in UI units
 function lib:SnapThreshold()
@@ -67,11 +68,26 @@ local function Guide(ui, index)
 	local guide = ui.guides[index]
 	if not guide then
 		guide = ui.guideLayer:CreateTexture(nil, "OVERLAY")
-		guide:SetColorTexture(unpack(GUIDE_COLOR))
+		guide:SetColorTexture(lib:Color("accent", GUIDE_ALPHA))
+		guide:SetAlpha(0)
+		guide:Hide()
 		ui.guides[index] = guide
 	end
 
 	return guide
+end
+
+-- Fades a guide in or out on its own spring, made on first use; it hides once gone.
+function lib.SnapFade(guide, shown)
+	if not guide.fade then
+		guide.fade = lib:CreateSpring(0, function(value)
+			guide:SetAlpha(value)
+			guide:SetShown(value > 0)
+		end, { response = GUIDE_FADE, epsilon = 0.01 })
+	end
+	if guide.fade.target ~= (shown and 1 or 0) then
+		guide.fade:To(shown and 1 or 0)
+	end
 end
 
 ---Shows a vertical guide at `x` and a horizontal one at `y` (UI units); nil hides that guide.
@@ -82,8 +98,8 @@ function lib:ShowGuides(x, y)
 	end
 	local thickness = PixelUtil.GetNearestPixelSize(1, UIParent:GetEffectiveScale(), 1)
 	local vertical, horizontal = Guide(ui, 1), Guide(ui, 2)
-	vertical:SetShown(x ~= nil)
-	horizontal:SetShown(y ~= nil)
+	lib.SnapFade(vertical, x ~= nil)
+	lib.SnapFade(horizontal, y ~= nil)
 	-- Started on a screen pixel, as the grid's lines are, so a guide covers the grid line it matches.
 	local pixel = self:PixelSize()
 	if x then

@@ -19,9 +19,9 @@ lib.ControlHandlers = lib.ControlHandlers or {}
 local Handlers = lib.ControlHandlers
 
 ---Shakes a control sideways around its first anchor (`motion.reject`), the label staying still. Skipped while
----hidden.
+---hidden, and with Reduce Motion.
 function lib:Shake(frame)
-	if not frame:IsVisible() or frame:GetNumPoints() ~= 1 then
+	if not frame:IsVisible() or frame:GetNumPoints() ~= 1 or self:ReduceMotion() then
 		return
 	end
 	local shaker = frame.libShaker

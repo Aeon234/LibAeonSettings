@@ -10,7 +10,7 @@ local L = lib.L
 
 local LINK_COLOR = { 1, 1, 1 }
 local LINK_ACTIVE = { 1, 0.7, 0.3 }
-local LINK_HOVER = { 1, 0.82, 0 }
+local LINK_HOVER = lib.COLOR.accent
 local LINE_COLOR = { 1, 0.7, 0.3, 0.9 }
 local LINE_THICKNESS = 3
 local PULSE_SIZE = 14
@@ -230,7 +230,8 @@ function lib:Refuse(id, reason)
 		end
 	end)
 	GameTooltip:SetOwner(UIParent, "ANCHOR_CURSOR")
-	GameTooltip:SetText(reason, 1, 0.35, 0.3, 1, true)
+	local r, g, b = lib:Color("destructive")
+	GameTooltip:SetText(reason, r, g, b, 1, true)
 	GameTooltip:Show()
 	C_Timer.After(REFUSE_TOOLTIP, function()
 		if GameTooltip:GetOwner() == UIParent then
@@ -278,7 +279,7 @@ local function OpenAnchorMenu(sourceId, targetId)
 				lib:Detach(sourceId)
 				lib:CloseMenus()
 				lib:EndPick()
-			end, { color = { 1, 0.35, 0.3 } })
+			end, { color = lib.COLOR.destructive })
 		end
 	end)
 end
@@ -421,7 +422,8 @@ function lib:CreateLinks(mover)
 	for _, kind in ipairs(LINK_KINDS) do
 		local button = CreateFrame("Button", nil, row)
 		button:SetHeight(14)
-		button.label = button:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+		button.label = button:CreateFontString(nil, "OVERLAY")
+		lib:SetType(button.label, "caption", "accent")
 		lib:OutlineText(button.label)
 		button.label:SetPoint("CENTER")
 		button.kind = kind

@@ -1,4 +1,5 @@
--- Edit mode's presentation: the opening sequence, Hover Top Bar, the Shift fade and the first-time tip.
+-- Edit mode's presentation: the opening sequence and the closing that runs it backward, Hover Top Bar, the Shift
+-- fade and the first-time tip.
 -- Animations use animation groups; OnUpdate runs only for the toolbar's slide and while Hover Top Bar is on.
 
 local lib = LibStub("LibAeonSettings-1.0")
@@ -79,21 +80,88 @@ function lib:PrepareOpening()
 end
 
 ---Plays the opening sequence: the tint and grid fade in, the toolbar slides down as it fades in and the movers
----fade in.
-function lib:PlayOpening()
+---fade in. `from` (seconds) picks it up where a closing left off; `quiet` skips the first-time tip. With Reduce
+---Motion everything shows at once.
+function lib:PlayOpening(from, quiet)
 	local ui = self.ui
-	C_Timer.After(TIP_DELAY, function()
-		if lib.session.open and not lib.session.paused then
-			lib:ShowFirstTip()
-		end
-	end)
+	if not quiet then
+		C_Timer.After(TIP_DELAY, function()
+			if lib.session.open and not lib.session.paused then
+				lib:ShowFirstTip()
+			end
+		end)
+	end
 	self:PrepareOpening()
+	if self:ReduceMotion() then
+		self:StopOpening()
+		return
+	end
 	if not ui.openingDriver then
 		ui.openingDriver = CreateFrame("Frame", nil, ui.screen)
 		ui.openingDriver:SetScript("OnUpdate", function(self, elapsed) Handlers.Opening(self, elapsed) end)
 	end
-	ui.openingDriver.elapsed = 0
+	ui.openingDriver.elapsed = from or 0
+	ApplyOpening(ui, ui.openingDriver.elapsed)
 	ui.openingDriver:Show()
+end
+
+---Plays the opening sequence backward from where it is (from its end once it has finished), then runs `done`.
+---Reduce Motion runs `done` at once.
+function lib:PlayClosing(done)
+	local ui = self.ui
+	local from = ui.openingActive and ui.openingDriver and ui.openingDriver.elapsed or OPENING_LENGTH
+	if ui.openingDriver then
+		ui.openingDriver:Hide()
+	end
+	ui.openingActive = nil
+	ui.closingDone = done
+	if self:ReduceMotion() then
+		Handlers.FinishClosing(ui)
+		return
+	end
+	ui.toolbar:SetClampedToScreen(false)
+	ui.openingDistance = ui.toolbarSpot and 0 or self:ToolbarHiddenOffset()
+	if not ui.closingDriver then
+		ui.closingDriver = CreateFrame("Frame", nil, ui.screen)
+		ui.closingDriver:SetScript("OnUpdate", function(self, elapsed) Handlers.Closing(self, elapsed) end)
+	end
+	ui.closingDriver.elapsed = from
+	ui.closing = true
+	ui.closingDriver:Show()
+end
+
+function Handlers.Closing(driver, elapsed)
+	driver.elapsed = driver.elapsed - elapsed
+	if driver.elapsed <= 0 then
+		Handlers.FinishClosing(lib.ui)
+		return
+	end
+	ApplyOpening(lib.ui, driver.elapsed)
+end
+
+function Handlers.FinishClosing(ui)
+	if ui.closingDriver then
+		ui.closingDriver:Hide()
+	end
+	ui.closing = nil
+	local done = ui.closingDone
+	ui.closingDone = nil
+	if done then
+		done()
+	end
+end
+
+---Stops a closing where it is, without running its `done`.
+---@return number? from the point in the opening sequence it had reached, or nil when none was running
+function lib:StopClosing()
+	local ui = self.ui
+	if not ui or not ui.closing then
+		return nil
+	end
+	ui.closingDriver:Hide()
+	ui.closing, ui.closingDone = nil, nil
+
+	return math.max(0, ui.closingDriver.elapsed)
 end
 
 ---Ends the opening sequence at once, everything in its final state.
@@ -235,10 +303,12 @@ local function BuildTip(ui)
 	tip:SetWidth(380)
 	tip:EnableMouse(true)
 	lib:ApplyPanelArt(tip)
-	tip.title = tip:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+	tip.title = tip:CreateFontString(nil, "OVERLAY")
+	lib:SetType(tip.title, "body", "cream")
 	tip.title:SetPoint("TOPLEFT", 14, -12)
 	tip.title:SetText(L.EDIT_MODE)
-	tip.text = tip:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+	tip.text = tip:CreateFontString(nil, "OVERLAY")
+	lib:SetType(tip.text, "secondary")
 	tip.text:SetPoint("TOPLEFT", tip.title, "BOTTOMLEFT", 0, -8)
 	tip.text:SetWidth(352)
 	tip.text:SetJustifyH("LEFT")
