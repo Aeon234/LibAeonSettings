@@ -15,31 +15,25 @@ local L = lib.L
 -- Kit values (Bronze Hearth).
 local PAGE_LEFT, PAGE_TOP, PAGE_RIGHT, PAGE_BOTTOM = 284, 42, 42, 58
 local DEFAULT_WIDTH = 1005
-local TITLE_SIZE, TITLE_HEIGHT = 32, 34
-local DESCRIPTION_SIZE, DESCRIPTION_GAP = 14, 6
-local SWITCH_SIZE, SWITCH_GAP, SWITCH_TOP = 16, 12, 4
-local SECTION_GAP, SECTION_TITLE_SIZE, SECTION_TITLE_HEIGHT = 14, 18, 30
+local TITLE_HEIGHT = 30
+local DESCRIPTION_GAP = 6
+local SWITCH_GAP, SWITCH_TOP = 12, 4
+local SECTION_GAP, SECTION_TITLE_HEIGHT = 14, 30
 local SECTION_RULE_ALPHA = 0.9
 local MENU_CENTER = 15 -- the section title's center line, from the header's top
 local ROW_HEIGHT, TALL_HEIGHT = 44, 52
 local INSET, CONTROL_RIGHT, LABEL_GAP, MIN_LABEL = 20, 64, 12, 80
-local LABEL_SIZE, LABEL_HEIGHT, SMALL_SIZE, SMALL_HEIGHT = 14, 17, 12, 15
-local NOTE_TOP, NOTE_SIZE, NOTE_LINE = 10, 14, 20
+local LABEL_HEIGHT, SMALL_HEIGHT = 17, 15
+local NOTE_TOP, NOTE_LINE = 10, 20
 local BOTTOM_PADDING = 14
-local ROW_LINE = { 1, 1, 1, 0.06 }
 local HALF_LINE = { 1, 1, 1, 0.12 }
-local GOLD = { 1, 0.82, 0 }
-local DESCRIPTION_COLOR = { 1, 1, 1, 0.72 }
-local REASON_COLOR = { 1, 0.549, 0.471, 0.85 }
 local INACTIVE_ALPHA, INACTIVE_DESATURATION = 0.5, 0.7
 local PAGE_OFF_ALPHA, PAGE_OFF_DESATURATION = 0.5, 0.6
 -- Overrides (Q30, Q70): the ◆/↺ gutter, reserved on every half between the control and the inset.
 local GUTTER_RIGHT, GUTTER_WIDTH, GUTTER_HEIGHT = 20, 44, 16
 local DIAMOND_SIZE, UNDO_SIZE, UNDO_ALPHA = 14, 16, 0.85
-local INHERITED_COLOR = { 0.961, 0.824, 0.478, 0.85 }
 local RESET_SOUND = SOUNDKIT and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON
 local HOVER_MARGIN = 4 -- the label's hover region reaches this far past its text lines
-local TOOLTIP_REASON = { 1, 0.25, 0.25 }
 
 lib.PageHandlers = lib.PageHandlers or {}
 local Handlers = lib.PageHandlers
@@ -93,20 +87,19 @@ end
 local function CreateHalf(view)
 	local half = CreateFrame("Frame", nil, view.scroll.child)
 	half.label = half:CreateFontString(nil, "OVERLAY")
-	lib:SetFont(half.label, "body", LABEL_SIZE)
+	lib:SetType(half.label, "body")
 	half.label:SetJustifyH("LEFT")
 	half.label:SetWordWrap(false)
 	half.label:SetHeight(LABEL_HEIGHT)
 	half.small = half:CreateFontString(nil, "OVERLAY")
-	lib:SetFont(half.small, "body", SMALL_SIZE)
+	lib:SetType(half.small, "secondary", "secondary")
 	half.small:SetJustifyH("LEFT")
 	half.small:SetWordWrap(false)
 	half.small:SetHeight(SMALL_HEIGHT)
 	half.small:SetPoint("TOPLEFT", half.label, "BOTTOMLEFT")
 	-- An overridden row's inherited value ("Whole Bar: 12"), under the label and any description.
 	half.inherited = half:CreateFontString(nil, "OVERLAY")
-	lib:SetFont(half.inherited, "body", SMALL_SIZE)
-	half.inherited:SetTextColor(unpack(INHERITED_COLOR))
+	lib:SetType(half.inherited, "secondary", "secondary")
 	half.inherited:SetJustifyH("LEFT")
 	half.inherited:SetWordWrap(false)
 	half.inherited:SetHeight(SMALL_HEIGHT)
@@ -161,8 +154,7 @@ end
 local function CreateSectionHeader(view)
 	local header = CreateFrame("Frame", nil, view.scroll.child)
 	header.title = header:CreateFontString(nil, "OVERLAY")
-	lib:SetFont(header.title, "header", SECTION_TITLE_SIZE)
-	header.title:SetTextColor(unpack(GOLD))
+	lib:SetType(header.title, "heading", "heading")
 	header.title:SetJustifyH("LEFT")
 	header.title:SetPoint("TOPLEFT")
 	header.title:SetPoint("TOPRIGHT")
@@ -217,13 +209,12 @@ end
 local function CreateNote(view)
 	local note = CreateFrame("Frame", nil, view.scroll.child)
 	note.text = note:CreateFontString(nil, "OVERLAY")
-	lib:SetFont(note.text, "body", NOTE_SIZE)
+	lib:SetType(note.text, "body")
 	note.text:SetJustifyH("LEFT")
-	note.text:SetSpacing(NOTE_LINE - NOTE_SIZE)
+	note.text:SetSpacing(NOTE_LINE - lib.TYPE.body[2])
 	note.text:SetPoint("TOPLEFT", INSET, -NOTE_TOP)
 	note.small = note:CreateFontString(nil, "OVERLAY")
-	lib:SetFont(note.small, "body", SMALL_SIZE)
-	note.small:SetTextColor(unpack(DESCRIPTION_COLOR))
+	lib:SetType(note.small, "secondary", "secondary")
 	note.small:SetJustifyH("LEFT")
 	note.small:SetPoint("TOPLEFT", note.text, "BOTTOMLEFT")
 
@@ -243,14 +234,12 @@ local function BuildPageView(window)
 	header:SetPoint("TOPRIGHT")
 	view.header = header
 	view.title = header:CreateFontString(nil, "OVERLAY")
-	lib:SetFont(view.title, "header", TITLE_SIZE)
-	view.title:SetTextColor(unpack(GOLD))
+	lib:SetType(view.title, "title", "cream")
 	view.title:SetJustifyH("LEFT")
 	view.title:SetHeight(TITLE_HEIGHT)
 	view.title:SetPoint("TOPLEFT")
 	view.description = header:CreateFontString(nil, "OVERLAY")
-	lib:SetFont(view.description, "body", DESCRIPTION_SIZE)
-	view.description:SetTextColor(unpack(DESCRIPTION_COLOR))
+	lib:SetType(view.description, "body", "secondary")
 	view.description:SetJustifyH("LEFT")
 	view.description:SetPoint("TOPLEFT", view.title, "BOTTOMLEFT", 0, -DESCRIPTION_GAP)
 
@@ -258,8 +247,7 @@ local function BuildPageView(window)
 	view.switch = lib:CreateToggle(header, true)
 	view.switch.frame:SetPoint("TOPRIGHT", header, "TOPRIGHT", 0, -SWITCH_TOP)
 	view.switchLabel = header:CreateFontString(nil, "OVERLAY")
-	lib:SetFont(view.switchLabel, "header", SWITCH_SIZE)
-	view.switchLabel:SetTextColor(unpack(GOLD))
+	lib:SetType(view.switchLabel, "body")
 	view.switchLabel:SetPoint("RIGHT", view.switch.frame, "LEFT", -SWITCH_GAP, 0)
 	view.switchLabel:SetText(L.ENABLED)
 
@@ -434,11 +422,11 @@ local function RefreshHalf(half)
 	end
 	if rowInactive and reason then
 		half.small:SetText(reason)
-		half.small:SetTextColor(unpack(REASON_COLOR))
+		half.small:SetTextColor(lib:Color("destructive"))
 		half.small:Show()
 	elseif setting.description then
 		half.small:SetText(setting.description)
-		half.small:SetTextColor(unpack(DESCRIPTION_COLOR))
+		half.small:SetTextColor(lib:Color("secondary"))
 		half.small:Show()
 	else
 		half.small:Hide()
@@ -591,7 +579,7 @@ function lib.Window:LayoutPage()
 				end
 			else
 				if previousLine then
-					Rule(view, ROW_LINE, 0, y, width, 1)
+					Rule(view, lib.COLOR.separator, 0, y, width, 1)
 					y = y + 1
 				end
 				local height = ROW_HEIGHT
@@ -733,10 +721,10 @@ function Handlers.LabelEnter(half)
 	if half.small:IsShown() and half.small:IsTruncated() then
 		local reason = select(2, setting:Activity())
 		local red = reason and half.small:GetText() == reason
-		lines[#lines + 1] = { half.small:GetText(), unpack(red and TOOLTIP_REASON or { 1, 1, 1 }) }
+		lines[#lines + 1] = { half.small:GetText(), lib:Color(red and "destructive" or "text") }
 	end
 	if half.inherited:IsShown() and half.inherited:IsTruncated() then
-		lines[#lines + 1] = { half.inherited:GetText(), unpack(INHERITED_COLOR, 1, 3) }
+		lines[#lines + 1] = { half.inherited:GetText(), 1, 1, 1 }
 	end
 	if #lines == 0 then
 		Handlers.LabelLeave(half)
@@ -772,7 +760,8 @@ function Handlers.MenuBlockerEnter(header)
 		return
 	end
 	GameTooltip:SetOwner(menu.blocker, "ANCHOR_TOP")
-	GameTooltip:SetText(menu.reason, REASON_COLOR[1], REASON_COLOR[2], REASON_COLOR[3], 1, true)
+	local r, g, b = lib:Color("destructive")
+	GameTooltip:SetText(menu.reason, r, g, b, 1, true)
 	GameTooltip:Show()
 end
 

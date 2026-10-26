@@ -13,12 +13,9 @@ local L = lib.L
 -- Kit values (Bronze Hearth, the Micro-Menu prototype).
 local ROW_HEIGHT = 40
 local NUMBER_WIDTH, NUMBER_GAP = 56, 14
-local NAME_SIZE, NUMBER_SIZE = 14, 13
 local ARROWS_WIDTH, ARROW_WIDTH, ARROW_HEIGHT, ARROW_GAP = 120, 17, 11, 14
 local CHECKBOX_RIGHT = 20
 local OFF_ALPHA, END_ALPHA = 0.5, 0.25
-local DESCRIPTION_COLOR = { 1, 1, 1, 0.72 }
-local ROW_LINE = { 1, 1, 1, 0.06 }
 local SOUND_MOVE = SOUNDKIT and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON
 local SOUND_ON = SOUNDKIT and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON
 local SOUND_OFF = SOUNDKIT and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_OFF
@@ -154,18 +151,17 @@ local function CreateRow(view)
 	local row = CreateFrame("Frame", nil, view.frame)
 	row:SetHeight(ROW_HEIGHT)
 	row.line = row:CreateTexture(nil, "BACKGROUND")
-	row.line:SetColorTexture(unpack(ROW_LINE))
+	row.line:SetColorTexture(lib:Color("separator"))
 	row.line:SetHeight(1)
 	row.line:SetPoint("TOPLEFT")
 	row.line:SetPoint("TOPRIGHT")
 	row.number = row:CreateFontString(nil, "OVERLAY")
-	lib:SetFont(row.number, "body", NUMBER_SIZE)
-	row.number:SetTextColor(unpack(DESCRIPTION_COLOR))
+	lib:SetType(row.number, "secondary", "secondary")
 	row.number:SetJustifyH("RIGHT")
 	row.number:SetPoint("LEFT", 0, 0)
 	row.number:SetWidth(NUMBER_WIDTH - NUMBER_GAP)
 	row.name = row:CreateFontString(nil, "OVERLAY")
-	lib:SetFont(row.name, "body", NAME_SIZE)
+	lib:SetType(row.name, "body")
 	row.name:SetJustifyH("LEFT")
 	row.name:SetWordWrap(false)
 	row.name:SetPoint("LEFT", NUMBER_WIDTH, 0)

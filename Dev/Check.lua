@@ -1,6 +1,7 @@
 -- Offline checks of the library's rules that need no client: positions, target lists and size matching, the
--- media pickers' choices, targets that place themselves, the settings model, hidden sections, Undo, search, text
--- insertion and section menus. Loads the real source files under small stand-ins for the WoW API.
+-- media pickers' choices, the type and color tokens, targets that place themselves, the settings model, hidden
+-- sections, Undo, search, text insertion and section menus. Loads the real source files under small stand-ins
+-- for the WoW API.
 -- Run from anywhere with Lua 5.1: ~/.local/lua51/bin/lua Dev/Check.lua
 
 local root = (arg and arg[0] or ""):match("^(.*)[/\\]Dev[/\\]Check%.lua$") or "."
@@ -82,7 +83,7 @@ function strsplit(separator, text)
 	return unpack(parts)
 end
 
-for _, file in ipairs({ "Core", "Locale", "Media", "Geometry", "Placement", "Anchor" }) do
+for _, file in ipairs({ "Core", "Locale", "Fonts", "Media", "Geometry", "Placement", "Anchor" }) do
 	dofile(root .. "/Source/" .. file .. ".lua")
 end
 local lib = LibStub("LibAeonSettings-1.0")
@@ -325,6 +326,29 @@ do
 		section:Toggle({ id = "odd", label = "Odd", path = "odd", colour = true })
 		return #errors == before + 1
 	end)())
+end
+
+-- Type and color tokens
+
+do
+	local roles = 0
+	for _, entry in pairs(lib.TYPE) do
+		roles = roles + 1
+		Check("type: each role names a library font and a size", (entry[1] == "body" or entry[1] == "header")
+			and type(entry[2]) == "number" and entry[2] > 0)
+	end
+	Check("type: the scale has its six roles", roles == 6)
+	local r, g, b, a = lib:Color("accent")
+	Check("color: accent is Blizzard's gold", r == 1 and Near(g, 0.82) and b == 0 and a == 1)
+	Check("color: an alpha given replaces the color's own", select(4, lib:Color("bronze", 0.2)) == 0.2)
+	Check("color: an unknown name falls back to white",
+		lib:Color("missing") == 1 and select(4, lib:Color("missing")) == 1)
+	Check("color: destructive without the client's red keeps its own value",
+		Near(select(2, lib:Color("destructive")), 0.125))
+	RED_FONT_COLOR = { GetRGB = function() return 0.9, 0.1, 0.2 end }
+	r, g, b, a = lib:Color("destructive")
+	Check("color: destructive reads the client's red at each call", r == 0.9 and g == 0.1 and b == 0.2 and a == 1)
+	RED_FONT_COLOR = nil
 end
 
 -- Media pickers

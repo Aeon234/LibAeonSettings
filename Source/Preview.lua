@@ -12,17 +12,13 @@ local L = lib.L
 
 -- Kit values (Bronze Hearth).
 local PREVIEW_GAP, PREVIEW_HEIGHT, CAPTION_HEIGHT = 18, 84, 16
-local SECTION_TITLE_SIZE, SECTION_TITLE_HEIGHT = 18, 30
+local SECTION_TITLE_HEIGHT = 30
 local ROOM_X, ROOM_Y = 24, 8 -- the canvas keeps this much of the stage free when it shrinks
-local PILL_SIZE, PILL_PAD, PILL_HEIGHT, PILL_GAP, PILL_TOP = 12, 10, 18, 2, 4
+local PILL_PAD, PILL_HEIGHT, PILL_GAP, PILL_TOP = 10, 18, 2, 4
 local PILL_LINE = { 1, 1, 1, 0.12 }
-local PILL_ON_LINE = { 0.620, 0.459, 0.290, 1 }
-local PILL_ON_FILL = { 0.620, 0.459, 0.290, 0.2 }
+local PILL_ON_FILL_ALPHA = 0.2 -- over the bronze edge's color
 local TAB_GAP, TAB_TOP, TAB_HEIGHT, TAB_ACTIVE_HEIGHT = 4, 18, 23, 26
-local TAB_PAD, TAB_CAP, TAB_SIZE, TAB_FIRST = 18, 7, 15, 4
-local GOLD = { 1, 0.82, 0 }
-local DESCRIPTION_COLOR = { 1, 1, 1, 0.72 }
-local TAB_TEXT = { 1, 1, 1, 0.75 }
+local TAB_PAD, TAB_CAP, TAB_FIRST = 18, 7, 4
 local TAB_SOUND = SOUNDKIT and SOUNDKIT.IG_CHARACTER_INFO_TAB
 local PREVIEW_FIELDS = { height = true, states = true, create = true, refresh = true, caption = true, pick = true,
 	stop = true }
@@ -30,7 +26,7 @@ local PART_FIELDS = { text = true, key = true }
 local PART_TEXT_PAD, PART_OUTLINE = 2, 2 -- the pad in the sample's own units; the outline in the window's
 local PART_LEVEL, TEXT_PART_LEVEL = 50, 300 -- above the sample's own frames; text parts above every other part
 local INACTIVE_ALPHA = 0.5
-local HINT_SIZE, HINT_ALPHA, HINT_GAP = 11, 0.65, 12
+local HINT_GAP = 12
 
 lib.PreviewHandlers = lib.PreviewHandlers or {}
 local Handlers = lib.PreviewHandlers
@@ -172,7 +168,7 @@ local function CreatePill(fixed)
 		table.insert(pill.edges, edge)
 	end
 	pill.text = pill:CreateFontString(nil, "OVERLAY")
-	lib:SetFont(pill.text, "body", PILL_SIZE)
+	lib:SetType(pill.text, "secondary")
 	pill.text:SetPoint("CENTER")
 	pill:SetScript("OnClick", function(self) Handlers.PillClick(fixed.window, self.state) end)
 	pill:SetScript("OnEnter", function(self) if not self.on then self.text:SetTextColor(1, 1, 1) end end)
@@ -182,12 +178,15 @@ local function CreatePill(fixed)
 end
 
 function Handlers.PaintPill(pill)
-	local line = pill.on and PILL_ON_LINE or PILL_LINE
 	for _, edge in ipairs(pill.edges) do
-		edge:SetColorTexture(unpack(line))
+		if pill.on then
+			edge:SetColorTexture(lib:Color("bronze"))
+		else
+			edge:SetColorTexture(unpack(PILL_LINE))
+		end
 	end
-	pill.fill:SetColorTexture(unpack(pill.on and PILL_ON_FILL or { 0, 0, 0, 0 }))
-	pill.text:SetTextColor(unpack(pill.on and GOLD or DESCRIPTION_COLOR))
+	pill.fill:SetColorTexture(lib:Color("bronze", pill.on and PILL_ON_FILL_ALPHA or 0))
+	pill.text:SetTextColor(lib:Color(pill.on and "accent" or "secondary"))
 end
 
 local function TabPiece(tab, layer)
@@ -212,7 +211,7 @@ local function CreateTab(fixed)
 	tab.middle:SetPoint("TOPLEFT", tab.left, "TOPRIGHT")
 	tab.middle:SetPoint("BOTTOMRIGHT", tab.right, "BOTTOMLEFT")
 	tab.text = tab:CreateFontString(nil, "OVERLAY")
-	lib:SetFont(tab.text, "body", TAB_SIZE)
+	lib:SetType(tab.text, "body")
 	tab.text:SetPoint("CENTER", 0, -1)
 	tab:SetScript("OnClick", function(self) Handlers.TabClick(fixed.window, self.tabId) end)
 	tab:SetScript("OnEnter", function(self) if not self.on then self.text:SetTextColor(1, 1, 1) end end)
@@ -228,7 +227,7 @@ function Handlers.PaintTab(tab)
 	tab.right:SetAtlas(prefix .. "Right")
 	tab:SetHeight(tab.on and TAB_ACTIVE_HEIGHT or TAB_HEIGHT)
 	tab:SetFrameLevel(tab:GetParent():GetFrameLevel() + (tab.on and 2 or 1))
-	tab.text:SetTextColor(unpack(tab.on and GOLD or TAB_TEXT))
+	tab.text:SetTextColor(lib:Color(tab.on and "accent" or "secondary"))
 end
 
 ---Builds the fixed part of the page view: called by the page view when it is built.
@@ -243,14 +242,12 @@ function lib:BuildFixedArea(window, view)
 	preview:SetPoint("TOPLEFT")
 	preview:SetPoint("TOPRIGHT")
 	preview.title = preview:CreateFontString(nil, "OVERLAY")
-	lib:SetFont(preview.title, "header", SECTION_TITLE_SIZE)
-	preview.title:SetTextColor(unpack(GOLD))
+	lib:SetType(preview.title, "heading", "heading")
 	preview.title:SetPoint("TOPLEFT", 0, -PREVIEW_GAP)
 	preview.title:SetHeight(SECTION_TITLE_HEIGHT)
 	preview.title:SetText(L.PREVIEW)
 	preview.hint = preview:CreateFontString(nil, "OVERLAY")
-	lib:SetFont(preview.hint, "body", HINT_SIZE)
-	preview.hint:SetTextColor(1, 1, 1, HINT_ALPHA)
+	lib:SetType(preview.hint, "caption", "secondary")
 	preview.hint:SetPoint("LEFT", preview.title, "RIGHT", HINT_GAP, 0)
 	preview.hint:SetText(L.PREVIEW_HINT)
 	preview.hint:Hide()
@@ -265,8 +262,7 @@ function lib:BuildFixedArea(window, view)
 	preview.stage:SetPoint("TOPRIGHT", 0, -(PREVIEW_GAP + SECTION_TITLE_HEIGHT + 1))
 	preview.stage:SetClipsChildren(true)
 	preview.caption = preview:CreateFontString(nil, "OVERLAY")
-	lib:SetFont(preview.caption, "body", 12)
-	preview.caption:SetTextColor(unpack(DESCRIPTION_COLOR))
+	lib:SetType(preview.caption, "secondary", "secondary")
 	preview.caption:SetPoint("TOPLEFT", preview.stage, "BOTTOMLEFT")
 	preview.caption:SetPoint("TOPRIGHT", preview.stage, "BOTTOMRIGHT")
 	preview.caption:SetHeight(CAPTION_HEIGHT)
@@ -474,7 +470,7 @@ local function CreateOutline(parent)
 	for _, side in ipairs({ { "TOPLEFT", "TOPRIGHT", true }, { "BOTTOMLEFT", "BOTTOMRIGHT", true },
 		{ "TOPLEFT", "BOTTOMLEFT", false }, { "TOPRIGHT", "BOTTOMRIGHT", false } }) do
 		local edge = outline:CreateTexture(nil, "OVERLAY")
-		edge:SetColorTexture(GOLD[1], GOLD[2], GOLD[3], 1)
+		edge:SetColorTexture(lib:Color("accent"))
 		edge:SetPoint(side[1])
 		edge:SetPoint(side[2])
 		edge.horizontal = side[3]

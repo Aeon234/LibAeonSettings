@@ -17,18 +17,15 @@ local BOX_ART_FOCUS = lib.mediaPath .. "Textures\\search-box-focus"
 local ICON_LEFT, ICON_TOP, ICON_SIZE, ICON_ALPHA = 1, 6, 18, 0.85
 local INPUT_LEFT, INPUT_TOP, INPUT_HEIGHT = 22, -4, 36
 local TEXT_SIZE = 18 -- the magnifier's height
-local PLACEHOLDER_ALPHA = 0.45
 local LIST_LEFT, LIST_TOP, LIST_WIDTH, LIST_PAD, LIST_MAX = 18, 84, 238, 7, 420
 local RESULT_PAD_X, RESULT_PAD_Y, RESULT_SIZE, RESULT_SMALL = 10, 5, 14, 12
 local RESULT_HEIGHT = RESULT_PAD_Y * 2 + 17 + 15
-local RESULT_ON = { 0.788, 0.647, 0.306, 0.18 }
-local WHERE_COLOR = { 1, 1, 1, 0.6 }
+local RESULT_ON_ALPHA = 0.28 -- the highlighted result's bronze fill
 local BACKING = { 0.043, 0.043, 0.063, 1 }
 local TOOLTIP_CENTER = { 0.090, 0.090, 0.188 }
 local LANDING_MARGIN = 80 -- the found row lands this far below the list's top
 local FLASH_SECONDS, FLASH_HOLD, FLASH_EDGE = 2.4, 0.6, 2
 local FLASH_FILL = 0.12
-local GOLD = { 1, 0.82, 0 }
 local CLOSE_DELAY = 0.1
 local MAX_RESULTS = 50 -- the list draws at most this many matches, best first
 
@@ -466,7 +463,7 @@ local function CreateResult(window, list)
 	result:SetHeight(RESULT_HEIGHT)
 	result.fill = result:CreateTexture(nil, "BACKGROUND")
 	result.fill:SetAllPoints()
-	result.fill:SetColorTexture(unpack(RESULT_ON))
+	result.fill:SetColorTexture(lib:Color("bronze", RESULT_ON_ALPHA))
 	result.fill:Hide()
 	result.label = result:CreateFontString(nil, "OVERLAY")
 	lib:SetFont(result.label, "body", RESULT_SIZE)
@@ -477,7 +474,7 @@ local function CreateResult(window, list)
 	result.label:SetHeight(17)
 	result.where = result:CreateFontString(nil, "OVERLAY")
 	lib:SetFont(result.where, "body", RESULT_SMALL)
-	result.where:SetTextColor(unpack(WHERE_COLOR))
+	result.where:SetTextColor(lib:Color("secondary"))
 	result.where:SetPoint("TOPLEFT", result.label, "BOTTOMLEFT")
 	result.where:SetPoint("TOPRIGHT", result.label, "BOTTOMRIGHT")
 	result.where:SetJustifyH("LEFT")
@@ -528,7 +525,7 @@ function lib.Window:BuildSearch()
 	input:SetTextColor(1, 1, 1)
 	input.placeholder = input:CreateFontString(nil, "OVERLAY")
 	lib:SetFont(input.placeholder, "body", TEXT_SIZE)
-	input.placeholder:SetTextColor(1, 1, 1, PLACEHOLDER_ALPHA)
+	input.placeholder:SetTextColor(lib:Color("tertiary"))
 	input.placeholder:SetPoint("LEFT")
 	input.placeholder:SetText(L.SEARCH_SETTINGS)
 	input:SetScript("OnTextChanged", function(_, userInput) Handlers.Changed(self, userInput) end)
@@ -563,7 +560,7 @@ function lib.Window:BuildSearch()
 	list.scroll = lib:CreateScroll(scrollRegion, { step = RESULT_HEIGHT, row = RESULT_HEIGHT, slim = true, inside = true })
 	list.empty = list:CreateFontString(nil, "OVERLAY")
 	lib:SetFont(list.empty, "body", RESULT_SIZE)
-	list.empty:SetTextColor(unpack(WHERE_COLOR))
+	list.empty:SetTextColor(lib:Color("secondary"))
 	list.empty:SetPoint("TOPLEFT", RESULT_PAD_X, -(LIST_PAD + RESULT_PAD_Y))
 	list.empty:SetText(L.NO_MATCHES)
 	list.results = {}
@@ -703,7 +700,7 @@ end
 
 local function FlashEdge(flash, first, second, horizontal)
 	local edge = flash:CreateTexture(nil, "OVERLAY")
-	edge:SetColorTexture(GOLD[1], GOLD[2], GOLD[3], 1)
+	edge:SetColorTexture(lib:Color("accent"))
 	edge:SetPoint(first)
 	edge:SetPoint(second)
 	if horizontal then
@@ -722,7 +719,7 @@ function lib.Window:Flash(half, top, height)
 		flash = CreateFrame("Frame", nil, view.scroll.child)
 		local fill = flash:CreateTexture(nil, "ARTWORK")
 		fill:SetAllPoints()
-		fill:SetColorTexture(GOLD[1], GOLD[2], GOLD[3], FLASH_FILL)
+		fill:SetColorTexture(lib:Color("accent", FLASH_FILL))
 		FlashEdge(flash, "TOPLEFT", "TOPRIGHT", true)
 		FlashEdge(flash, "BOTTOMLEFT", "BOTTOMRIGHT", true)
 		FlashEdge(flash, "TOPLEFT", "BOTTOMLEFT", false)

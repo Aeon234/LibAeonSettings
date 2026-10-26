@@ -9,14 +9,13 @@ end
 local L = lib.L
 
 local WINDOW_WIDTH, WINDOW_HEIGHT = 1331, 900
-local TITLE_SIZE, VERSION_SIZE = 14, 12
+local TITLE_SIZE = 14
 local FOOTER_HEIGHT = 35
 local FOOTER_BOTTOM = 11 -- centers the band between the inner frame's bottom (46) and the frame's inner edge (11)
 local FOOTER_TEXT_SIZE = 14
 local STATUS_SECONDS = 6
 local TEXT_FADE_OUT, TEXT_FADE_IN = 0.15, 0.25 -- the footer text's crossfade when it changes
-local GOLD = { 1, 0.82, 0 }
-local VERSION_GRAY = { 0.62, 0.62, 0.62 }
+local TITLE_GOLD = { 1, 0.82, 0 } -- the title's color in Blizzard's own panels
 
 -- Layout inside the window (from its top left): the inner frame, the sidebar column and the content fill.
 local INNER_LEFT, INNER_TOP, INNER_RIGHT, INNER_BOTTOM = 10, 30, 10, 46
@@ -175,7 +174,7 @@ function lib:CreateSettingsShell(name, parent, strata, onDragStop)
 	titleBar:SetScript("OnDragStop", onDragStop or function() frame:StopMovingOrSizing() end)
 	local title = titleBar:CreateFontString(nil, "OVERLAY")
 	lib:SetFont(title, "header", TITLE_SIZE)
-	title:SetTextColor(unpack(GOLD))
+	title:SetTextColor(unpack(TITLE_GOLD))
 	title:SetPoint("TOP", frame, "TOP", 0, -4)
 	frame.titleBar, frame.title = titleBar, title
 
@@ -191,8 +190,7 @@ local function Build(window)
 	frame.ClosePanelButton:SetScript("OnClick", function() window:Close() end)
 
 	local version = frame.titleBar:CreateFontString(nil, "OVERLAY")
-	lib:SetFont(version, "body", VERSION_SIZE)
-	version:SetTextColor(unpack(VERSION_GRAY))
+	lib:SetType(version, "secondary", "secondary")
 	version:SetPoint("LEFT", frame.title, "RIGHT", 6, 0)
 	frame.version = version
 
@@ -245,7 +243,7 @@ end
 ---mode is open (which is asked to close first).
 function lib.Window:Open()
 	if InCombatLockdown() then
-		UIErrorsFrame:AddMessage(L.UNAVAILABLE_IN_COMBAT, 1, 0.1, 0.1)
+		UIErrorsFrame:AddMessage(L.UNAVAILABLE_IN_COMBAT, lib:Color("destructive"))
 		return
 	end
 	if lib:IsEditing() then

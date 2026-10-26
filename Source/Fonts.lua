@@ -48,6 +48,55 @@ function lib:SetFont(fontString, kind, size, flags)
 	fontString:SetShadowOffset(1, -1)
 end
 
+-- The type scale: every text in the settings window takes one of these roles, as { font kind, size }.
+lib.TYPE = {
+	title = { "header", 26 },
+	heading = { "header", 12 },
+	navHeading = { "header", 11 },
+	body = { "body", 14 },
+	secondary = { "body", 12 },
+	caption = { "body", 11 },
+}
+
+-- Named colors. Gold (`accent`) marks only what is selected or can be acted on; titles and headings are cream.
+lib.COLOR = {
+	text = { 1, 1, 1, 1 },
+	cream = { 1, 0.918, 0.761, 1 },
+	heading = { 1, 0.918, 0.761, 0.6 },
+	navHeading = { 1, 0.918, 0.761, 0.5 },
+	secondary = { 1, 1, 1, 0.62 },
+	tertiary = { 1, 1, 1, 0.4 },
+	accent = { 1, 0.82, 0, 1 },
+	bronze = { 0.620, 0.459, 0.290, 1 },
+	separator = { 1, 1, 1, 0.08 },
+	destructive = { 1, 0.125, 0.125, 1 }, -- RED_FONT_COLOR's value, used where the client has none
+}
+
+---A named color's components.
+---@param name string a key of `lib.COLOR`
+---@param alpha number? replaces the color's own alpha
+---@return number r, number g, number b, number a
+function lib:Color(name, alpha)
+	if name == "destructive" and RED_FONT_COLOR and RED_FONT_COLOR.GetRGB then
+		local r, g, b = RED_FONT_COLOR:GetRGB()
+
+		return r, g, b, alpha or 1
+	end
+	local color = self.COLOR[name] or self.COLOR.text
+
+	return color[1], color[2], color[3], alpha or color[4]
+end
+
+---Sets a font string to one of the type scale's roles, in a named color.
+---@param fontString FontString
+---@param role string a key of `lib.TYPE`
+---@param color string? a key of `lib.COLOR`; `text` when omitted
+function lib:SetType(fontString, role, color)
+	local entry = self.TYPE[role] or self.TYPE.body
+	self:SetFont(fontString, entry[1], entry[2])
+	fontString:SetTextColor(self:Color(color or "text"))
+end
+
 ---Gives a font string its font object's face and size with a thin outline, for text drawn over any background.
 function lib:OutlineText(fontString)
 	local face, size = fontString:GetFont()

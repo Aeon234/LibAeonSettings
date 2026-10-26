@@ -10,18 +10,16 @@ local ROW_HEIGHT = 32
 local DIVIDER_HEIGHT = 19       -- a 1-unit rule with 9 above and below
 local ICON_SIZE = 16
 local CHEVRON_SIZE, GROUP_CHEVRON_SIZE = 14, 12
-local GOLD = { 1, 0.82, 0 }
-local WHITE = { 1, 1, 1 }
-local GROUP_WHITE = { 1, 1, 1, 0.9 }
+local GROUP_ALPHA = 0.9
 local SELECT_SOUND = SOUNDKIT and SOUNDKIT.IG_CHARACTER_INFO_TAB
 
--- Text inset, font and size by kind; `icon` is the icon's inset and `slotted` the text inset with an icon slot.
+-- Text inset and type role by kind; `icon` is the icon's inset and `slotted` the text inset with an icon slot.
 local KINDS = {
-	top = { inset = 16, font = "body", size = 16 },
-	header = { inset = 34, font = "header", size = 16, chevron = 14 },
-	group = { inset = 34, font = "body", size = 14, chevron = 18 },
-	sub = { inset = 34, font = "body", size = 14, icon = 32, slotted = 54 },
-	item = { inset = 52, font = "body", size = 14, icon = 50, slotted = 72 },
+	top = { inset = 16, role = "body" },
+	header = { inset = 34, role = "navHeading", chevron = 14 },
+	group = { inset = 34, role = "body", chevron = 18 },
+	sub = { inset = 34, role = "body", icon = 32, slotted = 54 },
+	item = { inset = 52, role = "body", icon = 50, slotted = 72 },
 }
 
 lib.SidebarHandlers = lib.SidebarHandlers or {}
@@ -177,11 +175,11 @@ local function PaintRow(window, row)
 	row.selected:SetShown(selected)
 	row.hover:SetShown(row.hovered and not selected and node.kind ~= "divider")
 	if node.isPage then
-		row.label:SetTextColor(unpack(selected and GOLD or WHITE))
+		row.label:SetTextColor(lib:Color(selected and "accent" or "text"))
 	elseif node.kind == "header" then
-		row.label:SetTextColor(unpack(GOLD))
+		row.label:SetTextColor(lib:Color("navHeading"))
 	elseif node.kind == "group" then
-		row.label:SetTextColor(unpack(GROUP_WHITE))
+		row.label:SetTextColor(lib:Color("text", GROUP_ALPHA))
 	end
 end
 
@@ -201,7 +199,8 @@ local function SetUpRow(window, row, node)
 	end
 
 	local kind = KINDS[node.kind]
-	lib:SetFont(row.label, kind.font, kind.size)
+	local role = lib.TYPE[kind.role]
+	lib:SetFont(row.label, role[1], role[2])
 	row.label:SetText(node.title)
 	row.label:ClearAllPoints()
 	local inset = kind.inset
@@ -229,7 +228,7 @@ local function SetUpRow(window, row, node)
 		row.chevron:SetPoint("CENTER", row, "LEFT", kind.chevron, 0)
 		row.chevron:SetRotation(window.collapsed[node.id] and math.pi / 2 or 0)
 		row.chevron:SetAlpha(node.kind == "group" and 0.7 or 1)
-		row.chevron:SetVertexColor(unpack(node.kind == "header" and GOLD or WHITE))
+		row.chevron:SetVertexColor(lib:Color(node.kind == "header" and "navHeading" or "text"))
 		row.chevron:Show()
 	end
 	PaintRow(window, row)

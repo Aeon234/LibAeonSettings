@@ -24,7 +24,6 @@ local ERROR_STEP = 18
 local CHOICE_WIDTH, CHOICE_HEIGHT, CHOICE_STEP = 256, 25, 34
 local BUTTON_WIDTH, BUTTON_HEIGHT, BUTTON_GAP, BUTTONS_GAP = 120, 26, 8, 8
 local RAISE = 80 -- first shown this far above the window's center
-local ERROR_COLOR = { 1, 0.251, 0.251 }
 local REPORT_ALPHA = 0.72
 local BULLET = "|cffc9a54e•|r  "
 local WELL_BACKING = { 0, 0, 0, 0.9 }
@@ -136,7 +135,7 @@ local function Build(window)
 	nameBox:SetScript("OnEscapePressed", function() nameBox:ClearFocus() end)
 	dialog.nameBox = nameBox
 
-	dialog.errorLine = Text(dialog, SMALL_SIZE, ERROR_COLOR)
+	dialog.errorLine = Text(dialog, SMALL_SIZE, { lib:Color("destructive") })
 	dialog.errorLine:SetWordWrap(false)
 
 	local choice = CreateFrame("DropdownButton", nil, dialog, "WowStyle1DropdownTemplate")
@@ -377,7 +376,7 @@ function Handlers.WellChanged(window, userChanged)
 		dialog.summary:SetTextColor(1, 1, 1)
 	else
 		dialog.summary:SetText(reason or "")
-		dialog.summary:SetTextColor(unpack(ERROR_COLOR))
+		dialog.summary:SetTextColor(lib:Color("destructive"))
 	end
 	local report = info and type(info.report) == "table" and info.report or nil
 	if report and #report > 0 then

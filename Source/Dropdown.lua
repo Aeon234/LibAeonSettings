@@ -14,7 +14,6 @@ local L = lib.L
 local HEIGHT, TEXT_SIZE = 25, 14
 local SCROLL_AFTER, ENTRY_HEIGHT = 20, 20
 local MENU_INSETS, ENTRY_PADDING, RADIO_MARK, SCROLL_BAR = 16, 20, 20, 18
-local REASON_COLOR = { 1, 0.549, 0.471 }
 local SAMPLE_ALPHA = 0.6
 local SPEAKER_SIZE, SPEAKER_ICON, SPEAKER_GAP, SPEAKER_GRAY = 24, 20, 4, 0.85
 local FIT_MIN = 90
@@ -191,7 +190,8 @@ function Handlers.Generate(view, root)
 			if choice.blocked then
 				radio:SetEnabled(false)
 				radio:SetTooltip(function(tooltip)
-					tooltip:AddLine(choice.blocked, REASON_COLOR[1], REASON_COLOR[2], REASON_COLOR[3], true)
+					local r, g, b = lib:Color("destructive")
+					tooltip:AddLine(choice.blocked, r, g, b, true)
 				end)
 			elseif choice.tooltip then
 				radio:SetTooltip(function(tooltip)
