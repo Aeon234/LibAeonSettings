@@ -14,6 +14,7 @@
 	<Script file="Source\Fonts.lua" />
 	<Script file="Source\Media.lua" />
 	<Script file="Source\Geometry.lua" />
+	<Script file="Source\Motion.lua" />
 	<Script file="Source\Placement.lua" />
 	<Script file="Source\EditMode.lua" />
 	<Script file="Source\EditUI.lua" />

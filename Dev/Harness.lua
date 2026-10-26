@@ -1268,8 +1268,14 @@ function COMMANDS.writes()
 	Print("Echoing writes %s (%d so far).", Harness.echoWrites and "on" or "off", Harness.writeCount or 0)
 end
 
+-- Reduce Motion until the settings window has its checkbox: springs jump to their targets while it is on.
+function COMMANDS.motion()
+	lib:SetReduceMotion(not lib:ReduceMotion())
+	Print("Reduce Motion %s.", lib:ReduceMotion() and "on" or "off")
+end
+
 function COMMANDS.help()
-	Print("/lasdev edit [second] | hide <key> | pend <key> <dx> <dy> | move | show | set <key> <POINT> <x> <y> | reset [key] | profile <name> | off <key> | scale <key> <n> | bad | media | tip | combat [key] [dx] [dy] | settings | status [text] | block | lock | shadow [on|off|size n|red|below|probe] | sound <kit> | icons | tint <percent> | writes | pin | strip | places")
+	Print("/lasdev edit [second] | hide <key> | pend <key> <dx> <dy> | move | show | set <key> <POINT> <x> <y> | reset [key] | profile <name> | off <key> | scale <key> <n> | bad | media | tip | combat [key] [dx] [dy] | settings | status [text] | block | lock | shadow [on|off|size n|red|below|probe] | sound <kit> | icons | tint <percent> | writes | motion | pin | strip | places")
 end
 
 SLASH_LIBAEONSETTINGSDEV1 = "/lasdev"

@@ -29,28 +29,13 @@ local PREFERENCE_DEFAULTS = {
 	toolbarScale = 1, tipSeen = false,
 }
 
--- Edit mode preferences are account-wide and live in each adopting addon's `account` table, kept identical in all
--- of them; the library itself has no saved variables.
-local function AccountTables()
-	local tables = {}
-	for _, addonName in ipairs(lib.order) do
-		local account = lib.registrations[addonName].declaration.account
-		if type(account) == "function" then
-			account = account()
-		end
-		if type(account) == "table" then
-			table.insert(tables, account)
-		end
-	end
-
-	return tables
-end
+-- Edit mode preferences are account-wide, kept under `editMode` in every adopting addon's `account` table.
 
 ---@return any
 function lib:GetPreference(name)
 	local opener = self.session.opener and self.registrations[self.session.opener]
 	local first = { opener and opener.declaration.account }
-	for _, account in ipairs(AccountTables()) do
+	for _, account in ipairs(lib:AccountTables()) do
 		table.insert(first, account)
 	end
 	for _, account in ipairs(first) do
@@ -67,7 +52,7 @@ function lib:GetPreference(name)
 end
 
 function lib:SetPreference(name, value)
-	for _, account in ipairs(AccountTables()) do
+	for _, account in ipairs(lib:AccountTables()) do
 		account.editMode = account.editMode or {}
 		account.editMode[name] = value
 	end

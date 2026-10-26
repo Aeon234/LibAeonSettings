@@ -1,7 +1,7 @@
 -- Offline checks of the library's rules that need no client: positions, target lists and size matching, the
--- media pickers' choices, the type and color tokens, targets that place themselves, the settings model, hidden
--- sections, Undo, search, text insertion and section menus. Loads the real source files under small stand-ins
--- for the WoW API.
+-- media pickers' choices, the type and color tokens, springs and Reduce Motion, targets that place themselves, the
+-- settings model, hidden sections, Undo, search, text insertion and section menus. Loads the real source files under
+-- small stand-ins for the WoW API.
 -- Run from anywhere with Lua 5.1: ~/.local/lua51/bin/lua Dev/Check.lua
 
 local root = (arg and arg[0] or ""):match("^(.*)[/\\]Dev[/\\]Check%.lua$") or "."
@@ -83,7 +83,7 @@ function strsplit(separator, text)
 	return unpack(parts)
 end
 
-for _, file in ipairs({ "Core", "Locale", "Fonts", "Media", "Geometry", "Placement", "Anchor" }) do
+for _, file in ipairs({ "Core", "Locale", "Fonts", "Media", "Geometry", "Motion", "Placement", "Anchor" }) do
 	dofile(root .. "/Source/" .. file .. ".lua")
 end
 local lib = LibStub("LibAeonSettings-1.0")
@@ -349,6 +349,73 @@ do
 	r, g, b, a = lib:Color("destructive")
 	Check("color: destructive reads the client's red at each call", r == 0.9 and g == 0.1 and b == 0.2 and a == 1)
 	RED_FONT_COLOR = nil
+end
+
+-- Springs and Reduce Motion
+
+do
+	local Motion = lib.Motion
+	local function Run(response, damping, seconds)
+		local value, velocity, peak = 0, 0, 0
+		for _ = 1, math.floor(seconds * 60) do
+			value, velocity = Motion.Step(value, velocity, 1, response, damping, 1 / 60)
+			peak = math.max(peak, value)
+		end
+		return value, peak
+	end
+	local value, peak = Run(0.3, 1, 2)
+	Check("spring: critically damped, it settles on the target", math.abs(value - 1) < 0.001)
+	Check("spring: critically damped, it never passes the target", peak <= 1 + 1e-6)
+	Check("spring: by its response time it is most of the way there", (Run(0.3, 1, 0.3)) > 0.95)
+	Check("spring: under-damped, it overshoots", select(2, Run(0.3, 0.8, 2)) > 1.01)
+	Check("spring: under-damped, it overshoots as its damping says", math.abs(select(2, Run(0.3, 0.8, 2)) - 1
+		- math.exp(-math.pi * 0.8 / math.sqrt(1 - 0.64))) < 0.002)
+	for _, damping in ipairs({ 0.8, 1, 1.4 }) do
+		local big = { Motion.Step(0, 2, 1, 0.3, damping, 0.25) }
+		local small = { 0, 2 }
+		for _ = 1, 25 do
+			small = { Motion.Step(small[1], small[2], 1, 0.3, damping, 0.01) }
+		end
+		Check(("spring: one long frame lands where many short ones do (damping %.1f)"):format(damping),
+			math.abs(big[1] - small[1]) < 1e-9 and math.abs(big[2] - small[2]) < 1e-7)
+	end
+
+	local savedWindows = lib.windows
+	local first, second = {}, {}
+	lib.windows = {
+		A = { declaration = { account = first } },
+		B = { declaration = { account = function() return second end } },
+		C = { declaration = { account = first } },
+	}
+	local reports, rests = {}, 0
+	local spring = lib:CreateSpring(0, function(v) reports[#reports + 1] = v end,
+		{ onRest = function() rests = rests + 1 end })
+	spring:To(1)
+	Check("spring: a new target starts it moving", spring:IsMoving())
+	for _ = 1, 10 do
+		lib.MotionHandlers.Update(1 / 60)
+	end
+	local speed = spring.velocity
+	spring:To(0)
+	Check("spring: turning back keeps its speed", speed > 0 and spring.velocity == speed and spring:IsMoving())
+	for _ = 1, 120 do
+		lib.MotionHandlers.Update(1 / 60)
+	end
+	Check("spring: it comes to rest on the new target and reports it once", spring.value == 0 and not spring:IsMoving()
+		and rests == 1 and reports[#reports] == 0)
+
+	Check("reduce motion: off by default", lib:ReduceMotion() == false)
+	spring:To(1)
+	lib:SetReduceMotion(true)
+	Check("reduce motion: turning it on ends a moving spring at its target",
+		spring.value == 1 and not spring:IsMoving())
+	Check("reduce motion: stored in every account table, each once", #lib:AccountTables() >= 2
+		and first.settingsWindow.reduceMotion == true and second.settingsWindow.reduceMotion == true)
+	spring:To(0)
+	Check("reduce motion: a spring jumps to its target", spring.value == 0 and not spring:IsMoving())
+	lib:SetReduceMotion(false)
+	Check("reduce motion: off again", lib:ReduceMotion() == false)
+	lib.windows = savedWindows
 end
 
 -- Media pickers

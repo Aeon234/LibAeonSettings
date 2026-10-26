@@ -35,6 +35,37 @@ local function FindMediaPath()
 end
 lib.mediaPath = FindMediaPath() or "Interface\\AddOns\\LibAeonSettings\\Media\\"
 
+---Each adopting addon's account-wide table, from its edit mode registration (in registration order), then from its
+---settings window (by addon name), each table once. Account-wide preferences live in all of them, kept identical; the
+---library itself has no saved variables.
+---@return table[]
+function lib:AccountTables()
+	local tables, seen = {}, {}
+	local function Add(declaration)
+		local account = declaration and declaration.account
+		if type(account) == "function" then
+			account = account()
+		end
+		if type(account) == "table" and not seen[account] then
+			seen[account] = true
+			table.insert(tables, account)
+		end
+	end
+	for _, addonName in ipairs(self.order) do
+		Add(self.registrations[addonName].declaration)
+	end
+	local names = {}
+	for addonName in pairs(self.windows or {}) do
+		table.insert(names, addonName)
+	end
+	table.sort(names)
+	for _, addonName in ipairs(names) do
+		Add(self.windows[addonName].declaration)
+	end
+
+	return tables
+end
+
 ---Reports a problem in an adopting addon's call once, without stopping the caller.
 ---@param addonName string
 ---@param message string
