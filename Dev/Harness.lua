@@ -306,6 +306,25 @@ function Harness:DeclareGeneral(page)
 	intro:Checkbox({ id = "extraB", label = "Extra B (whole line hidden)", path = "general.extraB", show = extras })
 	intro:Checkbox({ id = "after", label = "After the Hidden Line", path = "general.after" })
 
+	-- A choice card: short checkboxes two to a line, the last pair a switch and the choice that needs it.
+	local choices = page:Section("choices", "Choice Card", { columns = 2 })
+	for _, name in ipairs({ "Experience", "Reputation", "Honor", "Pet Experience", "Azerite" }) do
+		choices:Checkbox({ id = "type" .. name:gsub(" ", ""), label = name, path = "choices." .. name:gsub(" ", ""),
+			default = true })
+	end
+	choices:Checkbox({ id = "arrows", label = "Show Arrows", path = "choices.arrows", default = true })
+	choices:Checkbox({ id = "arrowsAnimate", label = "Animate Arrows", path = "choices.arrowsAnimate", default = true,
+		depends = "arrows" })
+	choices:Note("Animate Arrows dims while Show Arrows is off; its tooltip says why.")
+
+	-- A row that depends on another row of its card leaves while it is off, growing back in under it.
+	local reveal = page:Section("reveal", "Rows Under Their Switch")
+	reveal:Checkbox({ id = "fadeIdle", label = "Fade While Idle", path = "reveal.fade", default = false })
+	reveal:Checkbox({ id = "idleOther", label = "Declared Before Its Dependent", path = "reveal.other",
+		default = true })
+	reveal:Slider({ id = "idleAlpha", label = "Idle Opacity", path = "reveal.alpha", default = 0.3, min = 0, max = 1,
+		step = 0.05, depends = "fadeIdle" })
+
 	local custom = page:Section("custom", "Custom Rows")
 	custom:Custom({ id = "swatch", label = "Custom in a Half", width = 120, height = 24,
 		create = function(area)

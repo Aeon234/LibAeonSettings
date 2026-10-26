@@ -1,5 +1,6 @@
--- The page body: the page header (title, description, the page's switch), then its sections, lines and notes in
--- a smooth scrolling list. Rows are pooled halves; each half keeps one view per control kind and binds it to the
+-- The page body: the page header (title, description, the page's switch), then its sections in a smooth scrolling
+-- list. A section is a heading over a card of rows, one setting to a line (or two to a line in a choice card), with
+-- its notes under the card. Rows are pooled halves; each half keeps one view per control kind and binds it to the
 -- setting it shows.
 --
 -- Control views (see Toggle.lua) provide: `.frame`, `Bind(setting)` (draw at once), `Update(instant, refused)`,
@@ -18,14 +19,15 @@ local DEFAULT_WIDTH = 674 -- the 1000-wide window less the page's insets
 local TITLE_HEIGHT = 30
 local DESCRIPTION_GAP = 6
 local SWITCH_GAP, SWITCH_TOP = 12, 4
-local SECTION_GAP, SECTION_TITLE_HEIGHT = 14, 30
-local SECTION_RULE_ALPHA = 0.9
+local SECTION_GAP, SECTION_TITLE_HEIGHT = 18, 30 -- the heading's line also holds a section's menu and link
+local HEADING_INSET, HEADING_BOTTOM = 14, 6 -- the heading's text: in from the card's edge, above the card
 local MENU_CENTER = 15 -- the section title's center line, from the header's top
 local ROW_HEIGHT, TALL_HEIGHT = 44, 52
-local INSET, CONTROL_RIGHT, LABEL_GAP, MIN_LABEL = 20, 64, 12, 80
+local INSET, CONTROL_RIGHT, LABEL_GAP, MIN_LABEL = 16, 64, 12, 80
 local LABEL_HEIGHT, SMALL_HEIGHT = 17, 15
-local NOTE_TOP, NOTE_LINE = 10, 20
+local NOTE_TOP, NOTE_LINE = 7, 16 -- a note under its card: the gap above it and its line height
 local BOTTOM_PADDING = 14
+local REVEAL_RESPONSE = 0.32 -- a row growing in under the row it depends on, or shrinking away
 local INACTIVE_ALPHA, INACTIVE_DESATURATION = 0.5, 0.7
 local PAGE_OFF_ALPHA, PAGE_OFF_DESATURATION = 0.5, 0.6
 -- Overrides (Q30, Q70): the ◆/↺ gutter, reserved on every half between the control and the inset.
@@ -85,6 +87,7 @@ end
 
 local function CreateHalf(view)
 	local half = CreateFrame("Frame", nil, view.scroll.child)
+	half.pageView = view
 	half.label = half:CreateFontString(nil, "OVERLAY")
 	lib:SetType(half.label, "body")
 	half.label:SetJustifyH("LEFT")
@@ -147,7 +150,12 @@ local function ResetHalf(half)
 		half.view:Release()
 		half.view.frame:Hide()
 	end
-	half.setting, half.view = nil, nil
+	if half.reveal then
+		half.reveal:Stop()
+	end
+	half.setting, half.view, half.want, half.revealed, half.grid, half.reason = nil, nil, nil, nil, nil, nil
+	half:SetAlpha(1)
+	half:SetClipsChildren(false)
 end
 
 local function CreateSectionHeader(view)
@@ -155,15 +163,10 @@ local function CreateSectionHeader(view)
 	header.title = header:CreateFontString(nil, "OVERLAY")
 	lib:SetType(header.title, "heading", "heading")
 	header.title:SetJustifyH("LEFT")
-	header.title:SetPoint("TOPLEFT")
+	header.title:SetJustifyV("BOTTOM")
+	header.title:SetPoint("TOPLEFT", HEADING_INSET, 0)
 	header.title:SetPoint("TOPRIGHT")
-	header.title:SetHeight(SECTION_TITLE_HEIGHT)
-	header.rule = header:CreateTexture(nil, "ARTWORK")
-	header.rule:SetAtlas("Options_HorizontalDivider")
-	header.rule:SetAlpha(SECTION_RULE_ALPHA)
-	header.rule:SetHeight(1)
-	header.rule:SetPoint("BOTTOMLEFT")
-	header.rule:SetPoint("BOTTOMRIGHT")
+	header.title:SetHeight(SECTION_TITLE_HEIGHT - HEADING_BOTTOM)
 
 	return header
 end
@@ -208,13 +211,14 @@ end
 local function CreateNote(view)
 	local note = CreateFrame("Frame", nil, view.scroll.child)
 	note.text = note:CreateFontString(nil, "OVERLAY")
-	lib:SetType(note.text, "body")
+	lib:SetType(note.text, "secondary", "secondary")
 	note.text:SetJustifyH("LEFT")
-	note.text:SetSpacing(NOTE_LINE - lib.TYPE.body[2])
-	note.text:SetPoint("TOPLEFT", INSET, -NOTE_TOP)
+	note.text:SetSpacing(NOTE_LINE - lib.TYPE.secondary[2])
+	note.text:SetPoint("TOPLEFT", HEADING_INSET, -NOTE_TOP)
 	note.small = note:CreateFontString(nil, "OVERLAY")
 	lib:SetType(note.small, "secondary", "secondary")
 	note.small:SetJustifyH("LEFT")
+	note.small:SetSpacing(NOTE_LINE - lib.TYPE.secondary[2])
 	note.small:SetPoint("TOPLEFT", note.text, "BOTTOMLEFT")
 
 	return note
@@ -262,7 +266,9 @@ local function BuildPageView(window)
 	view.sectionHeaders = NewPool(function() return CreateSectionHeader(view) end, ResetSectionHeader)
 	view.notes = NewPool(function() return CreateNote(view) end)
 	view.lines = NewPool(function() return view.scroll.child:CreateTexture(nil, "BORDER") end)
+	view.fills = NewPool(function() return view.scroll.child:CreateTexture(nil, "BACKGROUND") end)
 	view.items = {}
+	view.window = window
 	window.pageView = view
 	window.offsets = window.offsets or {}
 
@@ -354,28 +360,35 @@ function lib.Window:ShowPage()
 		view.headerOf[section] = header
 		BindSectionMenu(view, header, section)
 		self:RefreshSectionLink(header, section)
-		view.items[#view.items + 1] = { header = header }
+		local block = { header = header, rows = {}, notes = {}, grid = lib.ChoiceGrid(self, section) }
 		for _, line in ipairs(section.lines) do
 			if line.note then
 				local note = Acquire(view.notes)
 				note.text:SetText(line.note.text or "")
 				note.small:SetText(line.note.small or "")
 				note.small:SetShown(line.note.small ~= nil)
-				view.items[#view.items + 1] = { note = note }
+				table.insert(block.notes, note)
 			else
-				local item = { wide = line.wide }
 				for index = 1, 2 do
 					local entry = line[index]
 					if entry and entry ~= lib.EMPTY then
-						item[index] = BindHalf(view, entry)
+						local half = BindHalf(view, entry)
+						half.grid = block.grid
+						table.insert(block.rows, half)
 					end
 				end
-				view.items[#view.items + 1] = item
 			end
 		end
+		if not block.grid then
+			lib.OrderUnderParents(block.rows)
+		end
+		view.items[#view.items + 1] = block
 	end
 
+	-- Rows take their first state without moving.
+	view.settling = true
 	self:RefreshStates()
+	view.settling = nil
 	self:LayoutPage()
 	view.scroll:JumpTo(self.offsets[view.shownKey] or 0)
 end
@@ -385,9 +398,10 @@ end
 ---Redraws one row's state. Returns true when its visibility or height changed, so the page needs laying out again.
 local function RefreshHalf(half)
 	local setting, control = half.setting, half.view
-	local wasShown, wasLines = half.shown, half.lines
-	half.shown = setting:IsShown()
+	local wasWant, wasLines = half.want, half.lines
 	local active, reason, cause = setting:Activity()
+	-- A row whose parent in its own card is off leaves, under that parent; a choice-card row stays, dimmed.
+	half.want = setting:IsShown() and not (cause == "depends" and not half.grid and lib.ParentOffInSection(setting))
 	local rowInactive = not active and cause ~= "page" and cause ~= "class"
 	-- A swatch following the class color dims only its control: the label stays and needs no reason.
 	local controlDimmed = rowInactive or cause == "class"
@@ -419,7 +433,12 @@ local function RefreshHalf(half)
 	else
 		half.inherited:Hide()
 	end
-	if rowInactive and reason then
+	-- A choice-card row has no second line: its reason shows in its tooltip.
+	half.reason = rowInactive and reason or nil
+	if half.grid then
+		half.small:Hide()
+		half.inherited:Hide()
+	elseif rowInactive and reason then
 		half.small:SetText(reason)
 		half.small:SetTextColor(lib:Color("destructive"))
 		half.small:Show()
@@ -432,7 +451,7 @@ local function RefreshHalf(half)
 	end
 	-- A row that can be overridden always keeps room for the inherited line, so overriding never resizes it or
 	-- moves its label.
-	half.lines = (half.small:IsShown() and 1 or 0) + (setting.inherits and 1 or 0)
+	half.lines = half.grid and 0 or (half.small:IsShown() and 1 or 0) + (setting.inherits and 1 or 0)
 	half.tall = half.lines > 0
 	half.inherited:ClearAllPoints()
 	half.inherited:SetPoint("TOPLEFT", half.small:IsShown() and half.small or half.label, "BOTTOMLEFT")
@@ -442,7 +461,31 @@ local function RefreshHalf(half)
 		Handlers.LabelEnter(half)
 	end
 
-	return half.shown ~= wasShown or half.lines ~= wasLines
+	Handlers.Reveal(half)
+
+	return half.want ~= wasWant or half.lines ~= wasLines
+end
+
+-- Moves a row toward its wanted visibility: at once while the page settles or the window is hidden, else on a
+-- spring that lays the page out again on every step. `revealed` runs 0 (gone) to 1 (full height).
+function Handlers.Reveal(half)
+	local target = half.want and 1 or 0
+	local view = half.pageView
+	if not half.reveal then
+		half.reveal = lib:CreateSpring(target, function(value)
+			half.revealed = value
+			if not half.settling then
+				half.pageView.window:LayoutPage()
+			end
+		end, { response = REVEAL_RESPONSE, epsilon = 0.002 })
+	end
+	if half.revealed == nil or view.settling or half.grid or not view.window:IsShown() then
+		half.settling = true
+		half.reveal:Jump(target)
+		half.settling = nil
+	elseif half.reveal.target ~= target then
+		half.reveal:To(target)
+	end
 end
 
 ---Redraws which settings on the shown page are active, hidden or explained, and dims the body while the page's
@@ -466,17 +509,15 @@ function lib.Window:RefreshStates()
 		menu.reason = reason
 	end
 	local layoutChanged = false
-	for _, item in ipairs(view.items) do
-		local header = item.header
-		if header then
-			local shown = header.section:IsShown()
-			if shown ~= header.shown then
-				header.shown = shown
-				layoutChanged = true
-			end
+	for _, block in ipairs(view.items) do
+		local header = block.header
+		local shown = header.section:IsShown()
+		if shown ~= header.shown then
+			header.shown = shown
+			layoutChanged = true
 		end
-		for index = 1, 2 do
-			if item[index] and RefreshHalf(item[index]) then
+		for _, half in ipairs(block.rows) do
+			if RefreshHalf(half) then
 				layoutChanged = true
 			end
 		end
@@ -490,7 +531,7 @@ local function PlaceHalf(half, child, left, y, width, height)
 	half:SetPoint("TOPLEFT", child, "TOPLEFT", left, -y)
 	half.top = y
 	half:SetSize(width, height)
-	half:SetShown(half.shown)
+	half:Show()
 	local labelWidth = math.max(MIN_LABEL, width - INSET - CONTROL_RIGHT - half.view:GetWidth() - LABEL_GAP)
 	half.label:SetWidth(labelWidth)
 	half.small:SetWidth(labelWidth)
@@ -507,16 +548,16 @@ local function PlaceHalf(half, child, left, y, width, height)
 	half.hover:SetPoint("BOTTOMRIGHT", last, "BOTTOMRIGHT", HOVER_MARGIN, -HOVER_MARGIN)
 end
 
-local function Rule(view, color, left, top, width, height)
+local function Rule(view, color, left, top, width, height, alpha)
 	local texture = Acquire(view.lines)
-	texture:SetColorTexture(unpack(color))
+	texture:SetColorTexture(color[1], color[2], color[3], (color[4] or 1) * (alpha or 1))
 	texture:SetPoint("TOPLEFT", view.scroll.child, "TOPLEFT", left, -top)
 	texture:SetSize(width, height)
 end
 
----Places the shown page's sections, lines and notes: a hidden section is left out with its notes (its rows are
----hidden through their settings); a line both of whose halves are hidden is left out; a hidden half alone keeps its
----place; a line is taller while either half has a second line.
+---Places the shown page's sections: each a heading, a card holding its rows one to a line (two in a choice card),
+---then its notes under the card. A hidden section is left out with its rows and notes; a row growing in or leaving
+---takes its share of its height, faded by as much.
 function lib.Window:LayoutPage()
 	local view = self.pageView
 	if not view or not view.shownPage then
@@ -528,70 +569,114 @@ function lib.Window:LayoutPage()
 		width = DEFAULT_WIDTH
 	end
 	ReleaseAll(view.lines)
-	local y, previousLine = 0, false
-	local open -- the section header whose rows are being laid out, so each section knows where it ends
-	local hidden = false -- the section being laid out is hidden
-	for _, item in ipairs(view.items) do
-		if item.header then
-			if open then
-				open.bottom = y
+	ReleaseAll(view.fills)
+	local y = 0
+	for _, block in ipairs(view.items) do
+		local header = block.header
+		if header.shown == false then
+			header:Hide()
+			header.top, header.bottom = nil, nil
+			for _, half in ipairs(block.rows) do
+				half:Hide()
 			end
-			hidden = item.header.shown == false
-			item.header:SetShown(not hidden)
-			open = not hidden and item.header or nil
-		end
-		if hidden then
-			if item.note then
-				item.note:Hide()
+			for _, note in ipairs(block.notes) do
+				note:Hide()
 			end
-			for index = 1, 2 do
-				if item[index] then
-					item[index]:Hide()
-				end
-			end
-		elseif item.header then
-			y = y + SECTION_GAP
-			item.header.top = y
-			item.header:SetPoint("TOPLEFT", child, "TOPLEFT", 0, -y)
-			item.header:SetSize(width, SECTION_TITLE_HEIGHT + 1)
-			y = y + SECTION_TITLE_HEIGHT + 1
-			previousLine = false
-		elseif item.note then
-			local note = item.note
-			note.text:SetWidth(width - 2 * INSET)
-			note.small:SetWidth(width - 2 * INSET)
-			local height = NOTE_TOP + note.text:GetStringHeight() + (note.small:IsShown() and note.small:GetStringHeight() or 0)
-			note:Show()
-			note:SetPoint("TOPLEFT", child, "TOPLEFT", 0, -y)
-			note:SetSize(width, height)
-			y = y + height
-			previousLine = false
 		else
-			-- One setting to a line: a declared pair is drawn as two lines, the first above the second.
-			for index = 1, 2 do
-				local half = item[index]
-				if half and not half.shown then
-					half:Hide()
-				elseif half then
-					if previousLine then
-						Rule(view, lib.COLOR.separator, 0, y, width, 1)
-						y = y + 1
+			y = y + SECTION_GAP
+			header:Show()
+			header.top = y
+			header:SetPoint("TOPLEFT", child, "TOPLEFT", 0, -y)
+			header:SetSize(width, SECTION_TITLE_HEIGHT)
+			y = y + SECTION_TITLE_HEIGHT
+			local cardTop = y
+			if block.grid then
+				y = Handlers.LayoutGrid(view, block.rows, child, width, y)
+			else
+				local previous = false
+				for _, half in ipairs(block.rows) do
+					local share = half.revealed or 0
+					if share <= 0 then
+						half:Hide()
+					else
+						if previous then
+							Rule(view, lib.COLOR.separator, INSET, y, width - INSET, 1, share)
+							y = y + 1
+						end
+						local height = half.tall and TALL_HEIGHT or ROW_HEIGHT
+						if half.setting.height then
+							height = math.max(height, half.setting.height + 16)
+						end
+						height = math.floor(height * share + 0.5)
+						PlaceHalf(half, child, 0, y, width, height)
+						half:SetAlpha(share)
+						half:SetClipsChildren(share < 1)
+						y = y + height
+						previous = true
 					end
-					local height = half.tall and TALL_HEIGHT or ROW_HEIGHT
-					if half.setting.height then
-						height = math.max(height, half.setting.height + 16)
-					end
-					PlaceHalf(half, child, 0, y, width, height)
-					y = y + height
-					previousLine = true
 				end
 			end
+			if y > cardTop then
+				Handlers.Card(view, cardTop, width, y - cardTop)
+			end
+			header.bottom = y
+			for _, note in ipairs(block.notes) do
+				local textWidth = width - 2 * HEADING_INSET
+				note.text:SetWidth(textWidth)
+				note.small:SetWidth(textWidth)
+				local height = NOTE_TOP + note.text:GetStringHeight()
+					+ (note.small:IsShown() and note.small:GetStringHeight() or 0)
+				note:Show()
+				note:SetPoint("TOPLEFT", child, "TOPLEFT", 0, -y)
+				note:SetSize(width, height)
+				y = y + height
+			end
 		end
-	end
-	if open then
-		open.bottom = y
 	end
 	view.scroll:SetContentHeight(y + BOTTOM_PADDING)
+end
+
+-- A card behind a section's rows: a faint fill inside a 1-unit edge.
+function Handlers.Card(view, top, width, height)
+	local fill = Acquire(view.fills)
+	fill:SetColorTexture(lib:Color("card"))
+	fill:SetPoint("TOPLEFT", view.scroll.child, "TOPLEFT", 0, -top)
+	fill:SetSize(width, height)
+	fill:Show()
+	Rule(view, lib.COLOR.cardEdge, 0, top, width, 1)
+	Rule(view, lib.COLOR.cardEdge, 0, top + height - 1, width, 1)
+	Rule(view, lib.COLOR.cardEdge, 0, top + 1, 1, height - 2)
+	Rule(view, lib.COLOR.cardEdge, width - 1, top + 1, 1, height - 2)
+end
+
+-- A choice card's rows, two to a line, left to right then down; a hidden row gives up its place. Returns the y
+-- below the last line.
+function Handlers.LayoutGrid(view, rows, child, width, y)
+	local columnWidth = math.floor(width / 2)
+	local column, lineTop, first = 0, y, true
+	for _, half in ipairs(rows) do
+		if not half.want then
+			half:Hide()
+		else
+			if column == 0 then
+				if not first then
+					Rule(view, lib.COLOR.separator, INSET, y, width - INSET, 1)
+					y = y + 1
+				end
+				lineTop, first = y, false
+			else
+				Rule(view, lib.COLOR.separator, columnWidth, lineTop, 1, ROW_HEIGHT)
+			end
+			PlaceHalf(half, child, column * columnWidth, lineTop, column == 0 and columnWidth or width - columnWidth,
+				ROW_HEIGHT)
+			half:SetAlpha(1)
+			half:SetClipsChildren(false)
+			y = lineTop + ROW_HEIGHT
+			column = 1 - column
+		end
+	end
+
+	return y
 end
 
 ---The row drawing a setting on the shown page, or nil.
@@ -658,10 +743,9 @@ function lib.Window:FlushChanges()
 			end
 		end
 		-- Rows following a shared value redraw it, in case one of the changes was the shared value.
-		for _, item in ipairs(view.items) do
-			for index = 1, 2 do
-				local half = item[index]
-				if half and not changed[half.setting] and half.setting.inherits and not half.setting:IsOverridden() then
+		for _, block in ipairs(view.items) do
+			for _, half in ipairs(block.rows) do
+				if not changed[half.setting] and half.setting.inherits and not half.setting:IsOverridden() then
 					half.view:Update(true)
 				end
 			end
@@ -700,6 +784,9 @@ function Handlers.LabelEnter(half)
 		local reason = select(2, setting:Activity())
 		local red = reason and half.small:GetText() == reason
 		lines[#lines + 1] = { half.small:GetText(), lib:Color(red and "destructive" or "text") }
+	end
+	if half.grid and half.reason then
+		lines[#lines + 1] = { half.reason, lib:Color("destructive") }
 	end
 	if half.inherited:IsShown() and half.inherited:IsTruncated() then
 		lines[#lines + 1] = { half.inherited:GetText(), 1, 1, 1 }
@@ -793,11 +880,9 @@ function lib.Window:Refresh()
 	for _, menu in pairs(view.menuOf) do
 		menu:Update(true)
 	end
-	for _, item in ipairs(view.items) do
-		for index = 1, 2 do
-			if item[index] then
-				item[index].view:Update(true)
-			end
+	for _, block in ipairs(view.items) do
+		for _, half in ipairs(block.rows) do
+			half.view:Update(true)
 		end
 	end
 	self:RefreshStates()

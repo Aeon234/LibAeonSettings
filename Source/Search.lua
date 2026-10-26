@@ -674,7 +674,7 @@ function Handlers.Choose(window, entry)
 end
 
 ---Opens a setting's page (and tab), reveals its section when search found it hidden, glides its row into view and
----flashes it gold.
+---flashes it gold. A row away under a parent that is off lands on that parent.
 function lib.Window:LandOn(setting)
 	local page = setting.page
 	local tab = setting.section and setting.section.tab
@@ -690,6 +690,12 @@ function lib.Window:LandOn(setting)
 		self:Refresh()
 	end
 	local half = self:RowOf(setting)
+	-- A row away under a parent that is off: land on the parent, whose turning on brings it in.
+	local parent, depth = setting:Parent(), 0
+	while half and not half:IsShown() and parent and depth < 16 do
+		half = self:RowOf(parent) or half
+		parent, depth = parent:Parent(), depth + 1
+	end
 	local view = self.pageView
 	if not half or not view or not half:IsShown() then
 		return

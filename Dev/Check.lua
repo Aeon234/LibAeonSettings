@@ -446,6 +446,64 @@ do
 	lib.windows = savedWindows
 end
 
+-- Cards: rows under their parents, choice cards
+
+do
+	local window = NewWindow({ show = true, a = false })
+	local page = NewPage(window, "cards", "Cards")
+	local section = page:Section("rows", "Rows")
+	section:Toggle({ id = "first", label = "First", path = "first", default = true })
+	section:Toggle({ id = "child", label = "Child", path = "child", default = true, depends = "show" })
+	section:Toggle({ id = "show", label = "Show", path = "show", default = true })
+	section:Toggle({ id = "grandchild", label = "Grandchild", path = "grandchild", default = true, depends = "child" })
+	section:Toggle({ id = "last", label = "Last", path = "last", default = true })
+	local other = page:Section("other", "Other")
+	local outside = other:Toggle({ id = "outside", label = "Outside", path = "outside", default = true, depends = "a" })
+	section:Toggle({ id = "a", label = "A", path = "a", default = false })
+	local rows = {}
+	for _, id in ipairs({ "first", "child", "show", "grandchild", "last", "a" }) do
+		rows[#rows + 1] = { setting = page.settings[id] }
+	end
+	lib.OrderUnderParents(rows)
+	local order = {}
+	for _, row in ipairs(rows) do
+		order[#order + 1] = row.setting.id
+	end
+	Check("cards: a row moves directly under the row it depends on, its own dependents under it",
+		table.concat(order, ",") == "first,show,child,grandchild,last,a")
+	local loop = { { setting = { Parent = function() return nil end } } }
+	loop[2] = { setting = { Parent = function() return loop[3].setting end } }
+	loop[3] = { setting = { Parent = function() return loop[2].setting end } }
+	lib.OrderUnderParents(loop)
+	Check("cards: rows in a dependency loop keep their place", #loop == 3)
+
+	page.settings.show:SetValue(false)
+	Check("cards: a row whose parent in its section is off leaves", lib.ParentOffInSection(page.settings.child)
+		and lib.ParentOffInSection(page.settings.grandchild))
+	Check("cards: a row whose parent is in another section stays, dimmed", not lib.ParentOffInSection(outside)
+		and select(3, outside:Activity()) == "depends")
+
+	local before = #errors
+	local choices = page:Section("choices", "Choices", { columns = 2 })
+	choices:Checkbox({ id = "c1", label = "One", path = "c1" })
+	choices:Checkbox({ id = "c2", label = "Two", path = "c2" })
+	Check("choice card: two checkboxes draw two to a line", lib.ChoiceGrid(window, choices) and #errors == before)
+	local mixed = page:Section("mixed", "Mixed", { columns = 2 })
+	mixed:Checkbox({ id = "m1", label = "One", path = "m1" })
+	mixed:Toggle({ id = "m2", label = "Two", path = "m2" })
+	Check("choice card: a non-checkbox draws one to a line and is reported",
+		not lib.ChoiceGrid(window, mixed) and #errors == before + 1)
+	local described = page:Section("described", "Described", { columns = 2 })
+	described:Checkbox({ id = "d1", label = "One", path = "d1", description = "Words." })
+	described:Checkbox({ id = "d2", label = "Two", path = "d2" })
+	Check("choice card: a description draws one to a line", not lib.ChoiceGrid(window, described))
+	local single = page:Section("single", "Single", { columns = 2 })
+	single:Checkbox({ id = "s1", label = "One", path = "s1" })
+	Check("choice card: one checkbox draws one to a line", not lib.ChoiceGrid(window, single))
+	page:Section("three", "Three", { columns = 3 })
+	Check("choice card: columns other than 1 or 2 are reported", errors[#errors]:find("columns must be 1 or 2") ~= nil)
+end
+
 -- Media pickers
 
 do

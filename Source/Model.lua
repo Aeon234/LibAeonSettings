@@ -1,5 +1,5 @@
 -- The settings model: pages hold sections, sections hold settings, notes and empty places, declared two to a line
--- and drawn one to a line.
+-- and drawn one to a line, or two to a line in a section declared with `columns = 2` (a choice card).
 -- Each setting is one object, made once at registration and holding no frames; its value is bound by a path in the
 -- adopter's store and a default, or by `get` and `set`. Pages draw settings with pooled views (Page.lua).
 
@@ -25,7 +25,7 @@ lib.EMPTY = lib.EMPTY or { empty = true }
 local SETTING_FIELDS = { id = true, label = true, description = true, path = true, default = true, get = true,
 	set = true, depends = true, blocked = true, show = true, wide = true, inherits = true, keywords = true,
 	tooltip = true, redraws = true, resettable = true }
-local SECTION_FIELDS = { show = true, reveal = true }
+local SECTION_FIELDS = { show = true, reveal = true, columns = true }
 local MAX_CHAIN = 16
 
 ---Registers a control kind: `section:<Kind>(info)` declares a setting drawn with it. `info.fields` lists the fields
@@ -94,6 +94,11 @@ function lib.PageModel:Section(id, title, info)
 				section.reveal = info.reveal
 			elseif info.reveal ~= nil then
 				lib:Report(addonName, ("%s/%s: section reveal must be a function"):format(self.id, tostring(id)))
+			end
+			if info.columns == 1 or info.columns == 2 then
+				section.columns = info.columns
+			elseif info.columns ~= nil then
+				lib:Report(addonName, ("%s/%s: section columns must be 1 or 2"):format(self.id, tostring(id)))
 			end
 		end
 	end
@@ -193,6 +198,40 @@ function lib.Section:Menu(info)
 	end
 
 	return setting
+end
+
+---Whether a section draws as a choice card, two checkboxes to a line: it asks for `columns = 2`, and every setting in
+---it is a checkbox with no description, two or more of them. A section that asks but breaks a rule is reported once
+---and drawn one to a line.
+---@return boolean
+function lib.ChoiceGrid(window, section)
+	if section.columns ~= 2 then
+		return false
+	end
+	local count, problem = 0, nil
+	for _, line in ipairs(section.lines) do
+		for index = 1, 2 do
+			local setting = not line.note and line[index]
+			if setting and setting ~= lib.EMPTY then
+				count = count + 1
+				if setting.kind ~= "Checkbox" then
+					problem = problem or ("%s is a %s, not a checkbox"):format(tostring(setting.id), setting.kind)
+				elseif setting.description then
+					problem = problem or ("%s has a description"):format(tostring(setting.id))
+				end
+			end
+		end
+	end
+	if count < 2 then
+		problem = problem or "fewer than two settings"
+	end
+	if problem then
+		lib:Report(window.addonName, ("%s/%s: columns = 2, but %s; drawn one to a line"):format(section.page.id,
+			tostring(section.id), problem))
+		return false
+	end
+
+	return true
 end
 
 ---@return boolean shown false while the section's `show()` hides it
@@ -515,6 +554,57 @@ function lib.Setting:Activity()
 	end
 
 	return true
+end
+
+---@return boolean off a setting up this one's `depends` chain, in its own section, is off
+function lib.ParentOffInSection(setting)
+	local parent, depth = setting:Parent(), 0
+	while parent and depth < 16 do
+		if parent.section == setting.section and not parent:GetValue() then
+			return true
+		end
+		parent, depth = parent:Parent(), depth + 1
+	end
+
+	return false
+end
+
+---Puts each row (anything with a `setting`) that depends on another row of its section directly under it, after any
+---earlier ones, keeping the declared order otherwise. Rows in a dependency loop keep their place.
+---@param rows table[] reordered in place
+function lib.OrderUnderParents(rows)
+	local rowOf, children, roots, placed = {}, {}, {}, {}
+	for _, half in ipairs(rows) do
+		rowOf[half.setting] = half
+	end
+	for _, half in ipairs(rows) do
+		local parent = half.setting:Parent()
+		local parentRow = parent and rowOf[parent]
+		if parentRow and parentRow ~= half then
+			children[parentRow] = children[parentRow] or {}
+			table.insert(children[parentRow], half)
+		else
+			table.insert(roots, half)
+		end
+	end
+	local declared = { unpack(rows) }
+	wipe(rows)
+	local function Add(half)
+		if placed[half] then
+			return
+		end
+		placed[half] = true
+		table.insert(rows, half)
+		for _, child in ipairs(children[half] or {}) do
+			Add(child)
+		end
+	end
+	for _, half in ipairs(roots) do
+		Add(half)
+	end
+	for _, half in ipairs(declared) do
+		Add(half)
+	end
 end
 
 ---@return boolean shown false while the setting's `show()` or its section's hides it

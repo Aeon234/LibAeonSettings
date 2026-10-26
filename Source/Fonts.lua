@@ -69,6 +69,8 @@ lib.COLOR = {
 	accent = { 1, 0.82, 0, 1 },
 	bronze = { 0.620, 0.459, 0.290, 1 },
 	separator = { 1, 1, 1, 0.08 },
+	card = { 1, 1, 1, 0.035 },
+	cardEdge = { 1, 1, 1, 0.07 },
 	destructive = { 1, 0.125, 0.125, 1 }, -- RED_FONT_COLOR's value, used where the client has none
 }
 
