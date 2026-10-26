@@ -420,6 +420,7 @@ function lib.Window:ShowPage(growIn)
 		self:StopPreview()
 		view.shownKey = page.tab and (page.id .. "/" .. page.tab) or page.id
 		view.scroll:SetContentHeight(0)
+		Handlers.Announce(self, view, page)
 		return
 	end
 
@@ -465,6 +466,15 @@ function lib.Window:ShowPage(growIn)
 	view.settling = nil
 	self:LayoutPage()
 	view.scroll:JumpTo(self.offsets[view.shownKey] or 0)
+	Handlers.Announce(self, view, page)
+end
+
+-- Tells adopters which page (and tab) shows, once per page or tab, and again after the window reopens.
+function Handlers.Announce(window, view, page)
+	if view.announced ~= view.shownKey then
+		view.announced = view.shownKey
+		lib:Fire("OnPageShown", window.addonName, page.id, page.tab)
+	end
 end
 
 -- States and layout ------------------------------------------------------------------------------------------

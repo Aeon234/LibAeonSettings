@@ -37,6 +37,22 @@ local DECLARATION_FIELDS = { title = true, version = true, store = true, write =
 
 lib.windows = lib.windows or {}
 
+-- Adopters hear of their window through CallbackHandler, which every adopter ships:
+-- `LibStub("LibAeonSettings-1.0").RegisterCallback(owner, event, method)`, events (each with the addon's name first)
+-- "OnOpen" (addonName), "OnClose" (addonName, once the window has hidden) and "OnPageShown" (addonName, pageId,
+-- tabId?), the last each time another page or tab shows, and again as the window opens.
+local CallbackHandler = LibStub("CallbackHandler-1.0", true)
+if CallbackHandler then
+	lib.callbacks = lib.callbacks or CallbackHandler:New(lib)
+end
+
+---Fires an event to the adopters registered for it.
+function lib:Fire(event, ...)
+	if self.callbacks then
+		self.callbacks:Fire(event, ...)
+	end
+end
+
 -- Window methods are looked up on the library at call time, so windows made through an older copy use the newest
 -- code after an upgrade.
 lib.Window = {}
@@ -282,6 +298,7 @@ function lib.Window:Open()
 		self.page = self.pageOrder[1].id
 	end
 	self:AddWindowSection()
+	local opening = not frame:IsShown() or self.closing
 	self.closing = false
 	local presence = Handlers.Presence(self)
 	if not frame:IsShown() then
@@ -296,6 +313,9 @@ function lib.Window:Open()
 	end
 	lib.combatWatch:RegisterEvent("PLAYER_REGEN_DISABLED")
 	presence:To(1)
+	if opening then
+		lib:Fire("OnOpen", self.addonName)
+	end
 end
 
 ---Closes the window: it shrinks a little and fades, the opening's path run back, then hides. `instant` hides it at
@@ -439,6 +459,10 @@ end
 
 function Handlers.Hidden(window)
 	window:StopPreview()
+	if window.pageView then
+		window.pageView.announced = nil
+	end
+	lib:Fire("OnClose", window.addonName)
 	for _, other in pairs(lib.windows) do
 		if other:IsShown() then
 			return

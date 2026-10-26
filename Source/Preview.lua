@@ -1,7 +1,9 @@
 -- The page's fixed part between its header and its scrolling sections: the Preview (the adopter draws a sample
--- into a canvas the library shrinks to fit, with state pills and a caption) and the page tabs (Blizzard's Options
--- tabs), allowed in two cases only: the same settings for different targets, and large parts sharing one preview.
--- The sample's parts find their settings: hovering one outlines it in gold, a left click lands on its row.
+-- into a canvas on a card the page's full width and at most a third of its height, with state pills and a caption)
+-- and the page tabs (Blizzard's Options tabs), allowed in two cases only: the same settings for different targets,
+-- and large parts sharing one preview. A sample too big for the card shrinks, down to half its size (an editor's,
+-- whose parts are clicked and dragged, down to 0.85); past that it scrolls sideways. The sample's parts find their
+-- settings: hovering one outlines it in gold, a left click lands on its row.
 
 local lib = LibStub("LibAeonSettings-1.0")
 if not lib.loading then
@@ -14,6 +16,9 @@ local L = lib.L
 local PREVIEW_GAP, PREVIEW_HEIGHT, CAPTION_HEIGHT = 18, 84, 16
 local SECTION_TITLE_HEIGHT = 30
 local ROOM_X, ROOM_Y = 24, 8 -- the canvas keeps this much of the stage free when it shrinks
+local LOOK_LEAST, EDITOR_LEAST = 0.5, 0.85 -- the smallest a sample shrinks to before it scrolls sideways instead
+local HEADING_INSET, HEADING_BOTTOM = 14, 6 -- the Preview heading, placed as a section's
+local WHEEL_STEP, EDGE_WIDTH = 60, 24 -- sideways scrolling: per wheel notch, and the faded edge over hidden sample
 local PILL_PAD, PILL_HEIGHT, PILL_GAP, PILL_TOP = 10, 18, 2, 4
 local PILL_LINE = { 1, 1, 1, 0.12 }
 local PILL_ON_FILL_ALPHA = 0.2 -- over the bronze edge's color
@@ -21,7 +26,7 @@ local TAB_GAP, TAB_TOP, TAB_HEIGHT, TAB_ACTIVE_HEIGHT = 4, 18, 23, 26
 local TAB_PAD, TAB_CAP, TAB_FIRST = 18, 7, 4
 local TAB_SOUND = SOUNDKIT and SOUNDKIT.IG_CHARACTER_INFO_TAB
 local PREVIEW_FIELDS = { height = true, states = true, create = true, refresh = true, caption = true, pick = true,
-	stop = true }
+	stop = true, editor = true }
 local PART_FIELDS = { text = true, key = true }
 local PART_TEXT_PAD, PART_OUTLINE = 2, 2 -- the pad in the sample's own units; the outline in the window's
 local PART_LEVEL, TEXT_PART_LEVEL = 50, 300 -- above the sample's own frames; text parts above every other part
@@ -37,13 +42,14 @@ local previewMeta = { __index = function(_, name) return lib.PreviewModel[name] 
 
 -- Model ------------------------------------------------------------------------------------------------------
 
----Gives the page a Preview above its sections. `info`: `height` (the stage, 84 by default); `states` (a list of
----names, or a function returning the ones that apply now; pills show when more than one does); `create(canvas,
----preview)` once; `refresh(canvas, state, preview)` on every change, returning the sample's natural width and
----height (the canvas shrinks to fit the stage) and marking its parts with `preview:Part`; `caption(state, scale)`
----returning a line under the stage; `pick(key, preview)` when a part with a key is clicked; `stop(canvas, preview)`
----to end the sample's animations, called when the state, the page or the window changes, and after every refresh
----while the page is switched off.
+---Gives the page a Preview above its sections. `info`: `height` (the stage, 84 by default, at most a third of the
+---page less the heading and caption); `editor` (true for a sample whose parts are clicked and dragged: it shrinks
+---only to 0.85); `states` (a list of names, or a function returning the ones that apply now; pills show when more
+---than one does); `create(canvas, preview)` once; `refresh(canvas, state, preview)` on every change, returning the
+---sample's natural width and height and marking its parts with `preview:Part` (`preview.room`, `{ width, height }`,
+---is the room at full size, for an editor to rearrange itself to fit before it shrinks); `caption(state, scale,
+---sideways)` returning a line under the stage; `pick(key, preview)` when a part with a key is clicked;
+---`stop(canvas, preview)` to end the sample's animations, called when the state, the page or the window changes.
 function lib.PageModel:Preview(info)
 	info = info or {}
 	for field in pairs(info) do
@@ -177,6 +183,31 @@ local function CreatePill(fixed)
 	return pill
 end
 
+-- Centers the canvas on the stage, or, when it is wider, sets it from the left at the sideways offset, with a faded
+-- edge on each side where some of it is out of view. The wheel scrolls only while there is something to scroll.
+function Handlers.PlaceCanvas(preview)
+	local canvas, stage, overflow = preview.canvas, preview.stage, preview.overflow or 0
+	canvas:ClearAllPoints()
+	if overflow > 0 then
+		-- A scaled frame's offsets count in its own scale.
+		canvas:SetPoint("LEFT", stage, "LEFT", (ROOM_X / 2 - preview.offset) / preview.scale, 0)
+	else
+		canvas:SetPoint("CENTER")
+	end
+	stage.fadeLeft:SetShown(overflow > 0 and preview.offset > 0)
+	stage.fadeRight:SetShown(overflow > 0 and preview.offset < overflow)
+	stage:EnableMouseWheel(overflow > 0)
+end
+
+function Handlers.Wheel(fixed, delta)
+	local preview = fixed.preview
+	if not preview.canvas or (preview.overflow or 0) <= 0 then
+		return
+	end
+	preview.offset = math.max(0, math.min(preview.overflow, preview.offset - delta * WHEEL_STEP))
+	Handlers.PlaceCanvas(preview)
+end
+
 function Handlers.PaintPill(pill)
 	for _, edge in ipairs(pill.edges) do
 		if pill.on then
@@ -243,24 +274,48 @@ function lib:BuildFixedArea(window, view)
 	preview:SetPoint("TOPRIGHT")
 	preview.title = preview:CreateFontString(nil, "OVERLAY")
 	lib:SetType(preview.title, "heading", "heading")
-	preview.title:SetPoint("TOPLEFT", 0, -PREVIEW_GAP)
-	preview.title:SetHeight(SECTION_TITLE_HEIGHT)
+	preview.title:SetJustifyV("BOTTOM")
+	preview.title:SetPoint("TOPLEFT", HEADING_INSET, -PREVIEW_GAP)
+	preview.title:SetHeight(SECTION_TITLE_HEIGHT - HEADING_BOTTOM)
 	preview.title:SetText(L.PREVIEW)
 	preview.hint = preview:CreateFontString(nil, "OVERLAY")
 	lib:SetType(preview.hint, "caption", "secondary")
-	preview.hint:SetPoint("LEFT", preview.title, "RIGHT", HINT_GAP, 0)
+	preview.hint:SetPoint("BOTTOMLEFT", preview.title, "BOTTOMRIGHT", HINT_GAP, 0)
 	preview.hint:SetText(L.PREVIEW_HINT)
 	preview.hint:Hide()
-	preview.rule = preview:CreateTexture(nil, "ARTWORK")
-	preview.rule:SetAtlas("Options_HorizontalDivider")
-	preview.rule:SetAlpha(0.9)
-	preview.rule:SetHeight(1)
-	preview.rule:SetPoint("TOPLEFT", 0, -(PREVIEW_GAP + SECTION_TITLE_HEIGHT))
-	preview.rule:SetPoint("TOPRIGHT", 0, -(PREVIEW_GAP + SECTION_TITLE_HEIGHT))
-	preview.stage = CreateFrame("Frame", nil, preview)
-	preview.stage:SetPoint("TOPLEFT", 0, -(PREVIEW_GAP + SECTION_TITLE_HEIGHT + 1))
-	preview.stage:SetPoint("TOPRIGHT", 0, -(PREVIEW_GAP + SECTION_TITLE_HEIGHT + 1))
-	preview.stage:SetClipsChildren(true)
+	-- The stage is a card; a sample wider than it scrolls sideways under the wheel, faded where it runs off.
+	local stage = CreateFrame("Frame", nil, preview)
+	stage:SetPoint("TOPLEFT", 0, -(PREVIEW_GAP + SECTION_TITLE_HEIGHT + 1))
+	stage:SetPoint("TOPRIGHT", 0, -(PREVIEW_GAP + SECTION_TITLE_HEIGHT + 1))
+	stage:SetClipsChildren(true)
+	local fill = stage:CreateTexture(nil, "BACKGROUND")
+	fill:SetColorTexture(lib:Color("card"))
+	fill:SetAllPoints()
+	for _, edge in ipairs({ { "TOPLEFT", "TOPRIGHT" }, { "BOTTOMLEFT", "BOTTOMRIGHT" }, { "TOPLEFT", "BOTTOMLEFT" },
+		{ "TOPRIGHT", "BOTTOMRIGHT" } }) do
+		local line = stage:CreateTexture(nil, "BORDER")
+		line:SetColorTexture(lib:Color("cardEdge"))
+		line:SetPoint(edge[1])
+		line:SetPoint(edge[2])
+		line:SetSize(1, 1)
+	end
+	for _, side in ipairs({ "LEFT", "RIGHT" }) do
+		local fade = CreateFrame("Frame", nil, stage)
+		fade:SetPoint("TOP" .. side)
+		fade:SetPoint("BOTTOM" .. side)
+		fade:SetWidth(EDGE_WIDTH)
+		fade:SetFrameLevel(stage:GetFrameLevel() + 400)
+		local texture = fade:CreateTexture(nil, "OVERLAY")
+		texture:SetAllPoints()
+		texture:SetColorTexture(1, 1, 1, 1)
+		local solid, clear = CreateColor(0.07, 0.07, 0.08, 0.9), CreateColor(0.07, 0.07, 0.08, 0)
+		texture:SetGradient("HORIZONTAL", side == "LEFT" and solid or clear, side == "LEFT" and clear or solid)
+		fade:Hide()
+		stage[side == "LEFT" and "fadeLeft" or "fadeRight"] = fade
+	end
+	stage:SetScript("OnMouseWheel", function(_, delta) Handlers.Wheel(fixed, delta) end)
+	stage:EnableMouseWheel(false)
+	preview.stage = stage
 	preview.caption = preview:CreateFontString(nil, "OVERLAY")
 	lib:SetType(preview.caption, "secondary", "secondary")
 	preview.caption:SetPoint("TOPLEFT", preview.stage, "BOTTOMLEFT")
@@ -307,11 +362,16 @@ function lib.Window:ShowFixedArea(page)
 	if view.previewPage ~= page then
 		self:StopPreview()
 		view.previewPage = page
+		preview.offset = 0
 	end
 
 	preview:SetShown(page.preview ~= nil)
 	if page.preview then
-		local stageHeight = page.preview.height or PREVIEW_HEIGHT
+		-- The preview takes at most a third of the page, heading and caption included.
+		local pageHeight = view.content:GetHeight()
+		local most = math.floor((pageHeight > 1 and pageHeight or 700) / 3)
+			- (PREVIEW_GAP + SECTION_TITLE_HEIGHT + 1 + CAPTION_HEIGHT)
+		local stageHeight = math.min(page.preview.height or PREVIEW_HEIGHT, most)
 		preview.stage:SetHeight(stageHeight)
 		local previewHeight = PREVIEW_GAP + SECTION_TITLE_HEIGHT + 1 + stageHeight + CAPTION_HEIGHT
 		preview:SetHeight(previewHeight)
@@ -388,15 +448,23 @@ function lib.Window:RefreshFixedArea()
 		local canvas = page.previewCanvas
 		local width, height
 		page.declaredParts = {}
+		local roomWidth = preview.stage:GetWidth() - ROOM_X
+		local roomHeight = preview.stage:GetHeight() - ROOM_Y
+		page.preview.room = { width = roomWidth, height = roomHeight }
 		if page.preview.refresh then
 			width, height = lib.CallAdopter(page.preview.refresh, canvas, current, page.preview)
 		end
 		width, height = tonumber(width) or 1, tonumber(height) or 1
 		canvas:SetSize(width, height)
-		local roomWidth = preview.stage:GetWidth() - ROOM_X
-		local roomHeight = preview.stage:GetHeight() - ROOM_Y
-		local scale = math.min(1, roomWidth / width, roomHeight / height)
-		canvas:SetScale(math.max(0.05, scale))
+		-- Shrinks to fit, but not past its least scale across; a sample still wider scrolls sideways. Its height
+		-- always fits.
+		local least = page.preview.editor and EDITOR_LEAST or LOOK_LEAST
+		local scale = math.max(0.05, math.min(1, roomHeight / height, math.max(least, roomWidth / width)))
+		canvas:SetScale(scale)
+		preview.canvas, preview.scale = canvas, scale
+		preview.overflow = math.max(0, width * scale - roomWidth)
+		preview.offset = math.min(preview.offset or 0, preview.overflow)
+		Handlers.PlaceCanvas(preview)
 		-- While the page is switched off the sample is faded and still; its parts still find their settings.
 		local off = page.switch ~= nil and not page.switch:GetValue()
 		canvas:SetAlpha(off and INACTIVE_ALPHA or 1)
@@ -407,11 +475,13 @@ function lib.Window:RefreshFixedArea()
 		local count = Handlers.PlaceParts(self, page)
 		preview.hint:SetShown(count > 0)
 		local caption
+		local sideways = preview.overflow > 0
 		if page.preview.caption then
-			caption = lib.CallAdopter(page.preview.caption, current, scale)
+			caption = lib.CallAdopter(page.preview.caption, current, scale, sideways)
 		end
-		if not caption and scale < 0.999 then
-			caption = L.PREVIEW_SHRUNK:format(math.floor(scale * 100 + 0.5))
+		if not caption then
+			local shrunk = scale < 0.999 and L.PREVIEW_SHRUNK:format(math.floor(scale * 100 + 0.5)) or nil
+			caption = sideways and (shrunk and shrunk .. " " or "") .. L.PREVIEW_SIDEWAYS or shrunk
 		end
 		preview.caption:SetText(caption or "")
 	end

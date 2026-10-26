@@ -402,9 +402,10 @@ function Harness:DeclareOverrides(page)
 		end })
 end
 
--- W6 test page: a preview (state pills, shrinking to fit with its caption) over tabs for Shared, Left and Right. Its
--- parts find their settings: a panel finds its tab's Color, a label its tab's Width and chooses that panel. A tick
--- counter runs while the preview shows and the page is on, so `stop` can be seen ending it.
+-- W6 test page: a preview (state pills, shrinking to fit with its caption, scrolling sideways past half size, or
+-- past 85% as an editor) over tabs for Shared, Left and Right. Its parts find their settings: a panel finds its
+-- tab's Color, a label its tab's Width and chooses that panel. A tick counter runs while the preview shows and the
+-- page is on, so `stop` can be seen ending it.
 function Harness:DeclareAppearance(page)
 	local function Get(path)
 		local value = Harness:Profile()
@@ -443,6 +444,7 @@ function Harness:DeclareAppearance(page)
 			canvas.tickCount = 0
 		end,
 		refresh = function(canvas, state, preview)
+			preview.editor = Get("look.editor") and true or nil
 			local x, height, gap = 0, 32, 12
 			for _, entry in ipairs(canvas.panels) do
 				local panel = Panel(entry.side)
@@ -489,6 +491,8 @@ function Harness:DeclareAppearance(page)
 		description = "Past about 480 each, the preview shrinks to fit." })
 	look:Color({ id = "color", label = "Color", path = "look.shared.color", default = { r = 0.62, g = 0.46, b = 0.29 } })
 	look:Checkbox({ id = "fade", label = "Fade Out", path = "look.fade", description = "Adds a Faded pill to the preview." })
+	look:Checkbox({ id = "previewEditor", label = "Preview as an Editor", path = "look.editor", default = false,
+		description = "Shrinks only to 85%, then scrolls sideways." })
 	for _, side in ipairs({ { "left", "Left" }, { "right", "Right" } }) do
 		local tab = page:Tab(side[1], side[2], { countOverrides = true })
 		local section = tab:Section(side[1] .. "Look", side[2] .. " Panel")
@@ -1300,6 +1304,21 @@ function COMMANDS.writes()
 	Print("Echoing writes %s (%d so far).", Harness.echoWrites and "on" or "off", Harness.writeCount or 0)
 end
 
+-- Prints the library's adopter events as they fire: OnOpen, OnClose and OnPageShown.
+function COMMANDS.callbacks()
+	Harness.watching = not Harness.watching
+	for _, event in ipairs({ "OnOpen", "OnClose", "OnPageShown" }) do
+		if Harness.watching then
+			lib.RegisterCallback(Harness, event, function(name, ...)
+				Print("%s: %s", name, table.concat({ tostringall(...) }, ", "))
+			end)
+		else
+			lib.UnregisterCallback(Harness, event)
+		end
+	end
+	Print("Watching the library's events %s.", Harness.watching and "on" or "off")
+end
+
 -- Reduce Motion until the settings window has its checkbox: springs jump to their targets while it is on.
 function COMMANDS.motion()
 	lib:SetReduceMotion(not lib:ReduceMotion())
@@ -1307,7 +1326,7 @@ function COMMANDS.motion()
 end
 
 function COMMANDS.help()
-	Print("/lasdev edit [second] | hide <key> | pend <key> <dx> <dy> | move | show | set <key> <POINT> <x> <y> | reset [key] | profile <name> | off <key> | scale <key> <n> | bad | media | tip | combat [key] [dx] [dy] | settings | status [text] | block | lock | shadow [on|off|size n|red|below|probe] | sound <kit> | icons | tint <percent> | writes | motion | pin | strip | places")
+	Print("/lasdev edit [second] | hide <key> | pend <key> <dx> <dy> | move | show | set <key> <POINT> <x> <y> | reset [key] | profile <name> | off <key> | scale <key> <n> | bad | media | tip | combat [key] [dx] [dy] | settings | status [text] | block | lock | shadow [on|off|size n|red|below|probe] | sound <kit> | icons | tint <percent> | writes | motion | callbacks | pin | strip | places")
 end
 
 SLASH_LIBAEONSETTINGSDEV1 = "/lasdev"
