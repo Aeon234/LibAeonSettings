@@ -743,14 +743,15 @@ function Handlers.LabelEnter(half)
 		return
 	end
 	GameTooltip:SetOwner(half.hover, "ANCHOR_TOP")
+	-- Every line is body text: the first takes the body font while this tooltip shows, set before Show sizes the
+	-- tooltip so its width fits the font drawn.
+	GameTooltipTextLeft1:SetFontObject(GameTooltipText)
+	GameTooltipTextRight1:SetFontObject(GameTooltipText)
+	half.tooltipShown = true
 	for _, line in ipairs(lines) do
 		GameTooltip:AddLine(line[1], line[2], line[3], line[4], true)
 	end
 	GameTooltip:Show()
-	-- Every line is body text: the first takes the body font while this tooltip shows.
-	GameTooltipTextLeft1:SetFontObject(GameTooltipText)
-	GameTooltipTextRight1:SetFontObject(GameTooltipText)
-	half.tooltipShown = true
 end
 
 function Handlers.LabelLeave(half)
