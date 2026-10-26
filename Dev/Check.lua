@@ -102,7 +102,7 @@ function strlenutf8(text)
 
 	return count
 end
-for _, file in ipairs({ "Model", "Search", "Undo", "TextInput", "Dropdown" }) do
+for _, file in ipairs({ "Model", "Details", "Search", "Undo", "TextInput", "Dropdown" }) do
 	dofile(root .. "/Source/" .. file .. ".lua")
 end
 
@@ -507,6 +507,32 @@ do
 	local named = NewPage(window, "broker", "DataBroker", { switch = { path = "broker.on", label = "Broker Hosting" } })
 	Check("page switch: named after its page unless it has a label of its own",
 		module.switch.label == "Clock" and named.switch.label == "Broker Hosting")
+
+	local store = {}
+	local detailsWindow = NewWindow(store)
+	local clock = NewPage(detailsWindow, "clock", "Clock")
+	local more = clock:Section("more", "More")
+	more:Toggle({ id = "rest", label = "Resting Glyph", path = "rest", default = true })
+	local text = more:Details({ id = "text", label = "Text", summary = function() return "Bar Style" end })
+	local font = more:Dropdown({ id = "font", label = "Font", path = "font", default = "A", details = "text",
+		choices = { { value = "A", text = "A" } } })
+	local classColor = more:Checkbox({ id = "class", label = "Class Color", path = "class", details = "text" })
+	local hover = more:Checkbox({ id = "hover", label = "Hover Class Color", path = "hover", depends = "class",
+		details = "text" })
+	Check("details: closed at first, holding its settings away", text:GetValue() == false
+		and lib.ParentOffInSection(font) and lib.ParentOffInSection(hover))
+	local rows = {}
+	for _, setting in ipairs({ font, more.lines[1][1], classColor, text, hover }) do
+		rows[#rows + 1] = { setting = setting }
+	end
+	lib.OrderUnderParents(rows)
+	Check("details: its settings sit under it", rows[2].setting == text and rows[3].setting == font
+		and rows[4].setting == classColor and rows[5].setting == hover)
+	text:SetValue(true)
+	Check("details: opened, its settings are there; one depending on another inside follows that one",
+		not lib.ParentOffInSection(font) and lib.ParentOffInSection(hover))
+	Check("details: open or closed lives in the window for the session, not in the store",
+		detailsWindow.openDetails["clock/text"] == true and store.text == nil and next(store) == nil)
 end
 
 -- Media pickers

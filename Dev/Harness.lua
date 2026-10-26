@@ -325,6 +325,20 @@ function Harness:DeclareGeneral(page)
 	reveal:Slider({ id = "idleAlpha", label = "Idle Opacity", path = "reveal.alpha", default = 0.3, min = 0, max = 1,
 		step = 0.05, depends = "fadeIdle" })
 
+	-- Details: a row whose settings open in place under it, with a summary of what they hold.
+	local details = page:Section("details", "Details")
+	details:Checkbox({ id = "detailsPlain", label = "A Plain Row", path = "details.plain", default = true })
+	details:Details({ id = "textDetails", label = "Text", summary = function(setting)
+		local settings = setting.page.settings
+		local outline = settings.textOutline:GetValue() and "Outline" or "No Outline"
+
+		return ("Size %d, %s"):format(settings.textSize:GetValue(), outline)
+	end })
+	details:Slider({ id = "textSize", label = "Font Size", path = "details.size", default = 12, min = 8, max = 24,
+		step = 1, details = "textDetails" })
+	details:Checkbox({ id = "textOutline", label = "Outline", path = "details.outline", default = false,
+		details = "textDetails" })
+
 	local custom = page:Section("custom", "Custom Rows")
 	custom:Custom({ id = "swatch", label = "Custom in a Half", width = 120, height = 24,
 		create = function(area)

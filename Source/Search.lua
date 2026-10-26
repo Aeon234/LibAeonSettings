@@ -685,6 +685,14 @@ function lib.Window:LandOn(setting)
 	if reveal then
 		lib.CallAdopter(setting.section.reveal, setting.section)
 	end
+	-- A setting inside closed details opens them (and any they sit in) first.
+	local inside, depth = setting.details and page.settings[setting.details], 0
+	while inside and depth < 16 do
+		if not inside:GetValue() then
+			inside:SetValue(true)
+		end
+		inside, depth = inside.details and page.settings[inside.details], depth + 1
+	end
 	self:SelectPage(page.id)
 	if reveal then
 		self:Refresh()

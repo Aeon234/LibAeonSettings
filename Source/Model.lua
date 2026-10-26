@@ -24,7 +24,7 @@ lib.EMPTY = lib.EMPTY or { empty = true }
 
 local SETTING_FIELDS = { id = true, label = true, description = true, path = true, default = true, get = true,
 	set = true, depends = true, blocked = true, show = true, wide = true, inherits = true, keywords = true,
-	tooltip = true, redraws = true, resettable = true }
+	tooltip = true, redraws = true, resettable = true, details = true }
 local SECTION_FIELDS = { show = true, reveal = true, columns = true }
 local MAX_CHAIN = 16
 
@@ -143,6 +143,11 @@ function lib.PageModel:NewSetting(kind, info)
 		end
 		inherits.from = inherits.from or L.SHARED
 		setting.inherits = inherits
+	end
+	-- A setting inside a details row is there while the row is open: it depends on the row unless it depends on
+	-- another setting inside it.
+	if info.details ~= nil and info.depends == nil then
+		setting.depends = info.details
 	end
 	if type(info.path) == "string" then
 		setting.keys = { strsplit(".", info.path) }

@@ -10,6 +10,8 @@ local L = lib.L
 -- Kit values: every value control is 220 in all (slider 168 + gap + number box 44), 64 from the half's right edge.
 lib.VALUE_WIDTH = 220
 lib.CONTROL_HEIGHT = 29
+-- A row's geometry: its label starts ROW_INSET in; its control ends CONTROL_RIGHT from the right, past the ◆/↺ gutter.
+lib.ROW_INSET, lib.CONTROL_RIGHT = 16, 64
 
 local SHAKE_SECONDS, SHAKE_PIXELS, SHAKE_CYCLES = 0.25, 3, 3 -- motion.reject
 
