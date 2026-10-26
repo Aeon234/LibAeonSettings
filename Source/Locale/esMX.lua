@@ -178,3 +178,7 @@ L.IMPORT_MESSAGE = "Pega una cadena de perfil. Al importar se crea un perfil nue
 L.IMPORT_SUMMARY = "Perfil de %s \"%s\"."
 L.NOT_A_PROFILE = "Esto no es una cadena de perfil."
 L.DELETE_CHOOSE = "¿Eliminar el perfil \"%s\"? Se perderá su configuración. Elige el perfil que se usará en su lugar:"
+L.SETTINGS_WINDOW = "Ventana de opciones"
+L.REDUCE_MOTION = "Reducir movimiento"
+L.REDUCE_MOTION_DESCRIPTION = "Los paneles y las filas aparecen al instante en lugar de moverse."
+L.REDUCE_MOTION_NOTE = "Se aplica en esta cuenta a todos los addons cuyas opciones usan esta ventana."

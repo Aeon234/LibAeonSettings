@@ -177,3 +177,7 @@ L.IMPORT_SUMMARY = "Profil %s \"%s\"."
 L.NOT_A_PROFILE = "Ce n'est pas une chaîne de profil."
 L.DELETE_CHOOSE =
 	"Supprimer le profil \"%s\" ? Ses réglages seront perdus. Choisissez le profil à utiliser à la place :"
+L.SETTINGS_WINDOW = "Fenêtre des réglages"
+L.REDUCE_MOTION = "Réduire les animations"
+L.REDUCE_MOTION_DESCRIPTION = "Les panneaux et les lignes apparaissent aussitôt au lieu de se déplacer."
+L.REDUCE_MOTION_NOTE = "S'applique sur ce compte à chaque addon dont les réglages utilisent cette fenêtre."

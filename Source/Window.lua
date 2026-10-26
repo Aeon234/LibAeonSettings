@@ -1,5 +1,6 @@
 -- Settings windows: one per registered addon, built on first open. This file holds the registration and the
--- window shell (frame, title, close, footer, dragging, Escape, combat); the sidebar, pages and controls are added by later files.
+-- window shell (frame, title, close, footer, dragging, opening and closing, Escape, combat); the sidebar, pages and
+-- controls are added by later files.
 
 local lib = LibStub("LibAeonSettings-1.0")
 if not lib.loading then
@@ -8,12 +9,14 @@ end
 
 local L = lib.L
 
-local WINDOW_WIDTH, WINDOW_HEIGHT = 1331, 900
+local WINDOW_WIDTH, WINDOW_HEIGHT = 1000, 800 -- every window, every page
+local OPEN_RESPONSE = 0.28 -- the open and close spring; closing runs the same path back
+local CLOSED_SCALE = 0.965 -- the scale the window grows from as it opens and shrinks to as it closes
 local TITLE_SIZE = 14
 local FOOTER_HEIGHT = 35
 local FOOTER_BOTTOM = 11 -- centers the band between the inner frame's bottom (46) and the frame's inner edge (11)
 local FOOTER_TEXT_SIZE = 14
-local STATUS_SECONDS = 6
+local STATUS_SECONDS = 4
 local TEXT_FADE_OUT, TEXT_FADE_IN = 0.15, 0.25 -- the footer text's crossfade when it changes
 local TITLE_GOLD = { 1, 0.82, 0 } -- the title's color in Blizzard's own panels
 
@@ -62,6 +65,13 @@ function lib:Settings(addonName, declaration)
 	end
 	if type(declaration.title) ~= "string" then
 		self:Report(addonName, "the settings declaration needs a title")
+	end
+	if declaration.width ~= nil or declaration.height ~= nil then
+		self:Report(addonName, ("width and height are no longer used: every settings window is %d by %d")
+			:format(WINDOW_WIDTH, WINDOW_HEIGHT))
+	end
+	if declaration.footer ~= nil then
+		self:Report(addonName, "footer is no longer used: the footer shows messages only, for a few seconds")
 	end
 
 	local window = self.windows[addonName]
@@ -182,10 +192,9 @@ function lib:CreateSettingsShell(name, parent, strata, onDragStop)
 end
 
 local function Build(window)
-	local declaration = window.declaration
 	local name = FrameName(window)
 	local frame = lib:CreateSettingsShell(name, UIParent, "HIGH", function() Handlers.Moved(window) end)
-	frame:SetSize(declaration.width or WINDOW_WIDTH, declaration.height or WINDOW_HEIGHT)
+	frame:SetSize(WINDOW_WIDTH, WINDOW_HEIGHT)
 	frame:SetScript("OnHide", function() Handlers.Hidden(window) end)
 	frame.ClosePanelButton:SetScript("OnClick", function() window:Close() end)
 
@@ -211,8 +220,12 @@ local function Build(window)
 	sidebarRegion:SetWidth(SIDEBAR_WIDTH)
 	frame.sidebarRegion = sidebarRegion
 
-	-- Escape closes the window, as it does Blizzard's panels.
-	tinsert(UISpecialFrames, name)
+	-- Escape closes the window, as it does Blizzard's panels, after any open menu: Blizzard hides the frames named in
+	-- UISpecialFrames at once, so a hidden stand-in is named there instead, and its hiding starts the closing motion.
+	local escape = CreateFrame("Frame", name .. "Escape", frame)
+	escape:SetScript("OnHide", function() Handlers.EscapeHidden(window) end)
+	tinsert(UISpecialFrames, escape:GetName())
+	frame.escape = escape
 
 	window.frame = frame
 	window:BuildSidebar(sidebarRegion)
@@ -232,7 +245,7 @@ function lib.Window:RefreshShell()
 	frame.title:SetText(declaration.title or self.addonName)
 	frame.version:SetText(declaration.version or "")
 	frame.version:SetShown(declaration.version ~= nil)
-	self:SetFooterText(self.statusText or declaration.footer or "", false)
+	self:SetFooterText(self.statusText or "", false)
 	frame.footer.editMode:SetShown(lib.registrations[self.addonName] ~= nil)
 	self:PlaceUndo()
 end
@@ -266,16 +279,39 @@ function lib.Window:Open()
 	if not self.page and self.pageOrder[1] then
 		self.page = self.pageOrder[1].id
 	end
+	self:AddWindowSection()
+	self.closing = false
+	local presence = Handlers.Presence(self)
+	if not frame:IsShown() then
+		Handlers.DrawPresence(self, presence.value)
+	end
 	frame:Show()
+	if frame.escape then
+		frame.escape:Show()
+	end
 	if self.page then
 		self:SelectPage(self.page)
 	end
 	lib.combatWatch:RegisterEvent("PLAYER_REGEN_DISABLED")
+	presence:To(1)
 end
 
-function lib.Window:Close()
-	if self.frame then
-		self.frame:Hide()
+---Closes the window: it shrinks a little and fades, the opening's path run back, then hides. `instant` hides it at
+---once.
+---@param instant boolean?
+function lib.Window:Close(instant)
+	local frame = self.frame
+	if not frame or not frame:IsShown() then
+		return
+	end
+	self.closing = true
+	if frame.escape then
+		frame.escape:Hide()
+	end
+	if instant then
+		Handlers.Presence(self):Jump(0)
+	else
+		Handlers.Presence(self):To(0)
 	end
 end
 
@@ -287,9 +323,50 @@ function lib.Window:Toggle()
 	end
 end
 
----@return boolean
+---@return boolean shown the window is open, not closing
 function lib.Window:IsShown()
-	return self.frame ~= nil and self.frame:IsShown()
+	return self.frame ~= nil and self.frame:IsShown() and not self.closing
+end
+
+-- The window's presence, 0 closed to 1 open, on a spring: alpha follows it, and the scale grows from CLOSED_SCALE
+-- about the window's center. At rest at 0 the window hides. Made on first use: a window built by an older copy has
+-- none.
+function Handlers.Presence(window)
+	if not window.presence then
+		window.presence = lib:CreateSpring(0, function(value) Handlers.DrawPresence(window, value) end, {
+			response = OPEN_RESPONSE,
+			onRest = function(value)
+				if value == 0 and window.closing then
+					window.frame:Hide()
+				end
+			end,
+		})
+	end
+
+	return window.presence
+end
+
+-- A scaled frame's anchor offsets count in its own scale, so they are divided by it to keep the center still.
+function Handlers.DrawPresence(window, value)
+	local frame = window.frame
+	local scale = CLOSED_SCALE + (1 - CLOSED_SCALE) * value
+	local point, relativeTo, relativePoint, x, y = unpack(window.position or { "CENTER", UIParent, "CENTER", 0, 0 })
+	local width, height = frame:GetSize()
+	local dx = (point:find("LEFT") and width / 2 or point:find("RIGHT") and -width / 2 or 0) * (1 - scale)
+	local dy = (point:find("BOTTOM") and height / 2 or point:find("TOP") and -height / 2 or 0) * (1 - scale)
+	frame:SetAlpha(math.max(0, math.min(1, value)))
+	frame:SetScale(scale)
+	frame:ClearAllPoints()
+	frame:SetPoint(point, relativeTo, relativePoint, (x + dx) / scale, (y + dy) / scale)
+end
+
+-- The stand-in stopped being visible. Only Escape hides it while the window is open; it also stops being visible
+-- when the window or the whole interface hides, and then it is still shown.
+function Handlers.EscapeHidden(window)
+	if window.frame.escape:IsShown() or window.closing or not window.frame:IsShown() then
+		return
+	end
+	window:Close()
 end
 
 -- The footer text fades out, changes, and fades back in. The tween's OnUpdate runs only while it fades.
@@ -326,7 +403,7 @@ function lib.Window:SetFooterText(text, animate)
 	if footer.text:GetText() == text then
 		return
 	end
-	if not animate or not self.frame:IsShown() then
+	if not animate or not self.frame:IsShown() or lib:ReduceMotion() then
 		footer.text:SetText(text)
 		footer.text:SetAlpha(1)
 		return
@@ -335,7 +412,7 @@ function lib.Window:SetFooterText(text, animate)
 	footer:SetScript("OnUpdate", function(frame, elapsed) Handlers.FooterFade(frame, elapsed) end)
 end
 
----Shows a message in the footer for a few seconds, then the footer's own text again, each change crossfading.
+---Shows a message in the footer for a few seconds, fading in and out; the footer has no text of its own.
 function lib.Window:ShowStatus(text)
 	self.statusText = text
 	self.statusToken = (self.statusToken or 0) + 1
@@ -344,7 +421,7 @@ function lib.Window:ShowStatus(text)
 	C_Timer.After(STATUS_SECONDS, function()
 		if self.statusToken == token then
 			self.statusText = nil
-			self:SetFooterText(self.declaration.footer or "", true)
+			self:SetFooterText("", true)
 		end
 	end)
 end
@@ -352,8 +429,10 @@ end
 function Handlers.Moved(window)
 	local frame = window.frame
 	frame:StopMovingOrSizing()
+	-- Offsets are kept at full scale; a drag that ends while the window still grows has smaller ones.
 	local point, _, relativePoint, x, y = frame:GetPoint(1)
-	window.position = { point, UIParent, relativePoint, x, y }
+	local scale = frame:GetScale()
+	window.position = { point, UIParent, relativePoint, x * scale, y * scale }
 end
 
 function Handlers.Hidden(window)

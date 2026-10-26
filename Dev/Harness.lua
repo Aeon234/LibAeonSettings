@@ -144,7 +144,6 @@ function Harness:Register()
 		store = function() return Harness:Profile() end,
 		write = function(path, value) Harness:Write(path, value) end,
 		account = function() return LibAeonSettingsDevDB end,
-		footer = "|cffffd100Changes|r apply immediately",
 	})
 	self:DeclarePages()
 end

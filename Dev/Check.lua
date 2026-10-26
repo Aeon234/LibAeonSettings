@@ -260,6 +260,7 @@ end
 Register("Toggle")
 Register("Slider", { min = true, max = true, step = true })
 Register("Color", { hasOpacity = true })
+Register("Checkbox")
 
 local function NewWindow(store)
 	local window = setmetatable({ addonName = "Check", declaration = { store = store }, pages = {}, pageOrder = {} },
@@ -415,6 +416,33 @@ do
 	Check("reduce motion: a spring jumps to its target", spring.value == 0 and not spring:IsMoving())
 	lib:SetReduceMotion(false)
 	Check("reduce motion: off again", lib:ReduceMotion() == false)
+	lib.windows = savedWindows
+end
+
+-- The library's Settings Window section
+
+do
+	local account = {}
+	local window = NewWindow({})
+	window.declaration.account = account
+	local first = NewPage(window, "first", "First")
+	first:Section("own", "Own"):Toggle({ id = "on", label = "On", path = "on", default = true })
+	NewPage(window, "second", "Second")
+	local savedWindows = lib.windows
+	lib.windows = { Check = window }
+	window:AddWindowSection()
+	window:AddWindowSection()
+	local last = first.sections[#first.sections]
+	Check("window section: added once, at the end of the first page only", #first.sections == 2
+		and last.title == lib.L.SETTINGS_WINDOW and #window.pages.second.sections == 0)
+	local setting = last.lines[1][1]
+	Check("window section: Reduce Motion starts off",
+		setting.label == lib.L.REDUCE_MOTION and setting:GetValue() == false)
+	setting:Request(true)
+	Check("window section: its checkbox turns Reduce Motion on account-wide",
+		lib:ReduceMotion() and account.settingsWindow.reduceMotion == true and setting:GetValue() == true)
+	setting:Request(false)
+	Check("window section: and off", not lib:ReduceMotion() and setting:GetValue() == false)
 	lib.windows = savedWindows
 end
 

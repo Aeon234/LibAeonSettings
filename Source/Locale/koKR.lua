@@ -177,3 +177,7 @@ L.IMPORT_MESSAGE = "프로필 문자열을 붙여 넣으세요. 가져오면 새
 L.IMPORT_SUMMARY = "%s 프로필 \"%s\"."
 L.NOT_A_PROFILE = "프로필 문자열이 아닙니다."
 L.DELETE_CHOOSE = "\"%s\" 프로필을 삭제하시겠습니까? 설정이 사라집니다. 대신 사용할 프로필을 선택하세요:"
+L.SETTINGS_WINDOW = "설정 창"
+L.REDUCE_MOTION = "동작 줄이기"
+L.REDUCE_MOTION_DESCRIPTION = "패널과 줄이 움직이지 않고 바로 나타납니다."
+L.REDUCE_MOTION_NOTE = "이 계정에서 이 창으로 설정을 여는 모든 애드온에 적용됩니다."

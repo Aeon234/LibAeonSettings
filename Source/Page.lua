@@ -14,7 +14,7 @@ local L = lib.L
 
 -- Kit values (Bronze Hearth).
 local PAGE_LEFT, PAGE_TOP, PAGE_RIGHT, PAGE_BOTTOM = 284, 42, 42, 58
-local DEFAULT_WIDTH = 1005
+local DEFAULT_WIDTH = 674 -- the 1000-wide window less the page's insets
 local TITLE_HEIGHT = 30
 local DESCRIPTION_GAP = 6
 local SWITCH_GAP, SWITCH_TOP = 12, 4
@@ -26,7 +26,6 @@ local INSET, CONTROL_RIGHT, LABEL_GAP, MIN_LABEL = 20, 64, 12, 80
 local LABEL_HEIGHT, SMALL_HEIGHT = 17, 15
 local NOTE_TOP, NOTE_LINE = 10, 20
 local BOTTOM_PADDING = 14
-local HALF_LINE = { 1, 1, 1, 0.12 }
 local INACTIVE_ALPHA, INACTIVE_DESATURATION = 0.5, 0.7
 local PAGE_OFF_ALPHA, PAGE_OFF_DESATURATION = 0.5, 0.6
 -- Overrides (Q30, Q70): the ◆/↺ gutter, reserved on every half between the control and the inset.
@@ -528,7 +527,6 @@ function lib.Window:LayoutPage()
 	if width <= 1 then
 		width = DEFAULT_WIDTH
 	end
-	local leftWidth = math.floor(width / 2)
 	ReleaseAll(view.lines)
 	local y, previousLine = 0, false
 	local open -- the section header whose rows are being laid out, so each section knows where it ends
@@ -569,44 +567,24 @@ function lib.Window:LayoutPage()
 			y = y + height
 			previousLine = false
 		else
-			local first, second = item[1], item[2]
-			local shown = (first and first.shown) or (second and second.shown)
-			if not shown then
-				for index = 1, 2 do
-					if item[index] then
-						item[index]:Hide()
+			-- One setting to a line: a declared pair is drawn as two lines, the first above the second.
+			for index = 1, 2 do
+				local half = item[index]
+				if half and not half.shown then
+					half:Hide()
+				elseif half then
+					if previousLine then
+						Rule(view, lib.COLOR.separator, 0, y, width, 1)
+						y = y + 1
 					end
-				end
-			else
-				if previousLine then
-					Rule(view, lib.COLOR.separator, 0, y, width, 1)
-					y = y + 1
-				end
-				local height = ROW_HEIGHT
-				for index = 1, 2 do
-					local half = item[index]
-					if half and half.shown then
-						if half.tall then
-							height = math.max(height, TALL_HEIGHT)
-						end
-						if half.setting.height then
-							height = math.max(height, half.setting.height + 16)
-						end
+					local height = half.tall and TALL_HEIGHT or ROW_HEIGHT
+					if half.setting.height then
+						height = math.max(height, half.setting.height + 16)
 					end
+					PlaceHalf(half, child, 0, y, width, height)
+					y = y + height
+					previousLine = true
 				end
-				if item.wide then
-					PlaceHalf(first, child, 0, y, width, height)
-				else
-					if first then
-						PlaceHalf(first, child, 0, y, leftWidth, height)
-					end
-					if second then
-						PlaceHalf(second, child, leftWidth, y, width - leftWidth, height)
-					end
-					Rule(view, HALF_LINE, leftWidth, y, 1, height)
-				end
-				y = y + height
-				previousLine = true
 			end
 		end
 	end

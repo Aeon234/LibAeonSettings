@@ -173,3 +173,7 @@ L.IMPORT_MESSAGE = "Incolla una stringa di profilo. L'importazione crea un nuovo
 L.IMPORT_SUMMARY = "Profilo %s \"%s\"."
 L.NOT_A_PROFILE = "Questa non è una stringa di profilo."
 L.DELETE_CHOOSE = "Eliminare il profilo \"%s\"? Le sue impostazioni andranno perse. Scegli il profilo da usare al suo posto:"
+L.SETTINGS_WINDOW = "Finestra delle impostazioni"
+L.REDUCE_MOTION = "Riduci movimento"
+L.REDUCE_MOTION_DESCRIPTION = "Pannelli e righe appaiono subito invece di muoversi."
+L.REDUCE_MOTION_NOTE = "Vale su questo account per ogni addon le cui impostazioni usano questa finestra."

@@ -1,4 +1,5 @@
--- The settings model: pages hold sections, sections hold settings, notes and empty places laid out two to a line.
+-- The settings model: pages hold sections, sections hold settings, notes and empty places, declared two to a line
+-- and drawn one to a line.
 -- Each setting is one object, made once at registration and holding no frames; its value is bound by a path in the
 -- adopter's store and a default, or by `get` and `set`. Pages draw settings with pooled views (Page.lua).
 
@@ -206,6 +207,23 @@ end
 ---Adds a line of text across the section, with an optional smaller second part.
 function lib.Section:Note(text, small)
 	table.insert(self.lines, { note = { text = text, small = small } })
+end
+
+---Adds the library's own section at the end of the addon's first page, once per page: Reduce Motion, which is
+---account-wide and the same in every addon on the library.
+function lib.Window:AddWindowSection()
+	local first = self.pageOrder[1]
+	if not first or not first.Section or first.windowSection then
+		return
+	end
+	local section = first:Section("libAeonSettings", L.SETTINGS_WINDOW)
+	section:Checkbox({
+		id = "reduceMotion", label = L.REDUCE_MOTION, description = L.REDUCE_MOTION_DESCRIPTION, default = false,
+		get = function() return lib:ReduceMotion() end,
+		set = function(value) lib:SetReduceMotion(value) end,
+	})
+	section:Note(L.REDUCE_MOTION_NOTE)
+	first.windowSection = section
 end
 
 -- Settings ----------------------------------------------------------------------------------------------------
