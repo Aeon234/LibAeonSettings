@@ -1010,7 +1010,7 @@ local ICON_MEDIA = {
 	{ "icon-snap-on" }, { "icon-snap-off" }, { "icon-coordinates-on" }, { "icon-coordinates-off" },
 	{ "icon-hover-top-bar-on" }, { "icon-hover-top-bar-off" }, { "icon-addons-on" }, { "icon-addons-off" },
 	{ "icon-cog-on" }, { "chevron" }, { "override-diamond" }, { "nav-row" }, { "nav-row-edge" },
-	{ "swatch-checker" }, { "toggle-track" }, { "search-box" }, { "search-box-focus" }, { "mover-fill" },
+	{ "swatch-checker" }, { "toggle-track" }, { "search-field" }, { "search-field-edge" }, { "search-field-ring" }, { "mover-fill" },
 	{ "mover-frame" }, { "anchor-line" }, { "pulse" }, { "shadow-glow" }, { "shadow-round" },
 }
 for _, size in ipairs({ 2, 4, 6, 8, 10 }) do

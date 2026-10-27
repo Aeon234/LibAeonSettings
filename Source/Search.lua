@@ -9,15 +9,24 @@ end
 
 local L = lib.L
 
--- Kit values (Bronze Hearth).
-local BOX_LEFT, BOX_TOP, BOX_WIDTH, BOX_HEIGHT = 16, 34, 242, 52 -- the search box art, its 12-unit border included
-local BOX_BORDER = 12
-local BOX_ART = lib.mediaPath .. "Textures\\search-box"
-local BOX_ART_FOCUS = lib.mediaPath .. "Textures\\search-box-focus"
-local ICON_LEFT, ICON_TOP, ICON_SIZE, ICON_ALPHA = 1, 6, 18, 0.85
-local INPUT_LEFT, INPUT_TOP, INPUT_HEIGHT = 22, -4, 36
-local TEXT_SIZE = 18 -- the magnifier's height
-local LIST_LEFT, LIST_TOP, LIST_WIDTH, LIST_PAD, LIST_MAX = 18, 84, 238, 7, 420
+-- The field: square with softened corners, as wide as the sidebar's rows, centered in the space above them.
+local FIELD_LEFT, FIELD_TOP, FIELD_WIDTH, FIELD_HEIGHT = 22, 46, 220, 30
+local FIELD_SLICE, RING_SLICE = 8, 16 -- texels; the field's art is drawn at half scale
+local RING_WIDTH = 4 -- how far the focus glow reaches outside the field
+local ICON_LEFT, ICON_SIZE = 9, 14
+local TEXT_LEFT, TEXT_RIGHT = 29, 26 -- the text's insets: past the magnifier, short of the clear button
+local CLEAR_SIZE, CLEAR_ART, CLEAR_RIGHT = 20, 10, 5 -- the clear button's hit square, its art, its inset
+-- The field by state: a dark well with a thin edge in the client's own metal, bronze on Forever and steel on Retail,
+-- brighter under the pointer; typing turns the edge gold and lets it glow outward.
+local FILL = { 0, 0, 0, 0.42 }
+local FOREVER = WOW_PROJECT_CAMELOT and WOW_PROJECT_ID == WOW_PROJECT_CAMELOT
+local EDGE = FOREVER and lib.COLOR.bronze or { 0.62, 0.66, 0.72 }
+local EDGE_ALPHA, EDGE_HOVER_ALPHA = FOREVER and 0.55 or 0.3, FOREVER and 0.85 or 0.5
+local EDGE_FOCUS_ALPHA, RING_ALPHA = 0.85, 0.4
+local ICON_ALPHA, ICON_FOCUS_ALPHA = 0.55, 0.9
+local CLEAR_ALPHA, CLEAR_HOVER_ALPHA = 0.5, 0.9
+local LIST_LEFT, LIST_TOP, LIST_WIDTH = FIELD_LEFT - 4, FIELD_TOP + FIELD_HEIGHT + 4, FIELD_WIDTH + 8
+local LIST_PAD, LIST_MAX = 7, 420
 local RESULT_PAD_X, RESULT_PAD_Y, RESULT_SIZE, RESULT_SMALL = 10, 5, 14, 12
 local RESULT_HEIGHT = RESULT_PAD_Y * 2 + 17 + 15
 local RESULT_ON_ALPHA = 0.28 -- the highlighted result's bronze fill
@@ -486,55 +495,78 @@ local function CreateResult(window, list)
 	return result
 end
 
+local function FieldTexture(box, name, sublevel, slice)
+	local texture = box:CreateTexture(nil, "BACKGROUND", nil, sublevel)
+	texture:SetTexture(lib.mediaPath .. "Textures\\" .. name)
+	texture:SetTextureSliceMargins(slice, slice, slice, slice)
+	if Enum.UITextureSliceMode then
+		texture:SetTextureSliceMode(Enum.UITextureSliceMode.Stretched)
+	end
+	texture:SetScale(0.5)
+
+	return texture
+end
+
 ---Builds the search box above the sidebar, and its results list.
 function lib.Window:BuildSearch()
 	local frame = self.frame
 	local box = CreateFrame("Frame", nil, frame)
-	box:SetPoint("TOPLEFT", BOX_LEFT, -BOX_TOP)
-	box:SetSize(BOX_WIDTH, BOX_HEIGHT)
-	-- A square frame drawn from the cross-section of Blizzard's `common-dropdown-textholder` edge (the atlas's own
-	-- beveled lip and chamfered corners read as stray lines on this taller box). A brighter copy shows while typing;
-	-- a vertex color cannot brighten past the art.
-	local function Art(path, sublevel)
-		local art = box:CreateTexture(nil, "BACKGROUND", nil, sublevel)
-		art:SetTexture(path)
-		art:SetTextureSliceMargins(24, 24, 24, 24)
-		if Enum.UITextureSliceMode then
-			art:SetTextureSliceMode(Enum.UITextureSliceMode.Stretched)
-		end
-		art:SetScale(0.5)
-		art:SetAllPoints()
+	box:SetPoint("TOPLEFT", FIELD_LEFT, -FIELD_TOP)
+	box:SetSize(FIELD_WIDTH, FIELD_HEIGHT)
+	box.fill = FieldTexture(box, "search-field", 0, FIELD_SLICE)
+	box.fill:SetAllPoints()
+	box.fill:SetVertexColor(unpack(FILL))
+	box.edge = FieldTexture(box, "search-field-edge", 2, FIELD_SLICE)
+	box.edge:SetAllPoints()
+	-- The glow starts under the edge and fades outward. A scaled texture's anchor offsets are in its own units, so
+	-- its reach outside the field is doubled.
+	box.ring = FieldTexture(box, "search-field-ring", 1, RING_SLICE)
+	box.ring:SetPoint("TOPLEFT", -2 * RING_WIDTH, 2 * RING_WIDTH)
+	box.ring:SetPoint("BOTTOMRIGHT", 2 * RING_WIDTH, -2 * RING_WIDTH)
+	box.ring:SetVertexColor(lib:GetColor("accent", RING_ALPHA))
+	box.ring:Hide()
+	box.icon = box:CreateTexture(nil, "ARTWORK")
+	box.icon:SetAtlas("common-search-magnifyingglass")
+	box.icon:SetSize(ICON_SIZE, ICON_SIZE)
+	box.icon:SetPoint("LEFT", ICON_LEFT, 0)
 
-		return art
-	end
-	box.art = Art(BOX_ART, 0)
-	box.focusArt = Art(BOX_ART_FOCUS, 1)
-	box.focusArt:Hide()
-	local icon = box:CreateTexture(nil, "ARTWORK")
-	icon:SetAtlas("common-search-magnifyingglass")
-	icon:SetSize(ICON_SIZE, ICON_SIZE)
-	icon:SetPoint("TOPLEFT", BOX_BORDER + ICON_LEFT, -(BOX_BORDER + ICON_TOP))
-	icon:SetAlpha(ICON_ALPHA)
-
+	-- The text spans the whole field, so a click anywhere in it starts typing.
 	local input = CreateFrame("EditBox", nil, box)
-	input:SetPoint("TOPLEFT", BOX_BORDER + INPUT_LEFT, -(BOX_BORDER + INPUT_TOP))
-	input:SetPoint("TOPRIGHT", -BOX_BORDER, -(BOX_BORDER + INPUT_TOP))
-	input:SetHeight(INPUT_HEIGHT)
+	input:SetAllPoints()
+	input:SetTextInsets(TEXT_LEFT, TEXT_RIGHT, 0, 0)
 	input:SetAutoFocus(false)
-	lib:SetFont(input, "body", TEXT_SIZE)
-	input:SetTextColor(1, 1, 1)
+	lib:SetType(input, "body")
 	input.placeholder = input:CreateFontString(nil, "OVERLAY")
-	lib:SetFont(input.placeholder, "body", TEXT_SIZE)
-	input.placeholder:SetTextColor(lib:GetColor("tertiary"))
-	input.placeholder:SetPoint("LEFT")
+	lib:SetType(input.placeholder, "body", "tertiary")
+	input.placeholder:SetPoint("LEFT", TEXT_LEFT, 0)
 	input.placeholder:SetText(L.SEARCH_SETTINGS)
 	input:SetScript("OnTextChanged", function(_, userInput) Handlers.Changed(self, userInput) end)
-	input:SetScript("OnEditFocusGained", function() box.focusArt:Show(); Handlers.Changed(self, true) end)
-	input:SetScript("OnEditFocusLost", function() box.focusArt:Hide(); Handlers.FocusLost(self) end)
-	input:SetScript("OnEscapePressed", function() input:ClearFocus() end)
+	input:SetScript("OnEditFocusGained", function() Handlers.PaintBox(self); Handlers.Changed(self, true) end)
+	input:SetScript("OnEditFocusLost", function() Handlers.PaintBox(self); Handlers.FocusLost(self) end)
+	input:SetScript("OnEscapePressed", function() Handlers.Escape(self) end)
 	input:SetScript("OnEnterPressed", function() Handlers.Enter(self) end)
 	input:SetScript("OnArrowPressed", function(_, key) Handlers.Arrow(self, key) end)
+	input:SetScript("OnEnter", function() box.hovered = true; Handlers.PaintBox(self) end)
+	input:SetScript("OnLeave", function() box.hovered = false; Handlers.PaintBox(self) end)
 	box.input = input
+
+	-- Blizzard's clear button, shown while there is text: it empties the field and keeps typing in it.
+	local clear = CreateFrame("Button", nil, box)
+	clear:SetSize(CLEAR_SIZE, CLEAR_SIZE)
+	clear:SetPoint("RIGHT", -CLEAR_RIGHT, 0)
+	clear:SetFrameLevel(input:GetFrameLevel() + 2)
+	clear.art = clear:CreateTexture(nil, "ARTWORK")
+	clear.art:SetAtlas("common-search-clearbutton")
+	clear.art:SetSize(CLEAR_ART, CLEAR_ART)
+	clear.art:SetPoint("CENTER")
+	clear.art:SetAlpha(CLEAR_ALPHA)
+	clear:SetScript("OnEnter", function() clear.art:SetAlpha(CLEAR_HOVER_ALPHA) end)
+	clear:SetScript("OnLeave", function() clear.art:SetAlpha(CLEAR_ALPHA) end)
+	clear:SetScript("OnMouseDown", function() clear.art:SetPoint("CENTER", 0, -1) end)
+	clear:SetScript("OnMouseUp", function() clear.art:SetPoint("CENTER") end)
+	clear:SetScript("OnClick", function() Handlers.Clear(self) end)
+	clear:Hide()
+	box.clear = clear
 
 	-- The results list: GameTooltip's frame over an opaque backing (the Bronze Hearth popup frame).
 	local list = CreateFrame("Frame", nil, frame)
@@ -566,6 +598,38 @@ function lib.Window:BuildSearch()
 	list.results = {}
 
 	self.search = { box = box, input = input, list = list, hits = {}, at = 1 }
+	Handlers.PaintBox(self)
+end
+
+-- The field's look for its state: idle, under the pointer, or typing in.
+function Handlers.PaintBox(window)
+	local box = window.search and window.search.box
+	if not box then
+		return
+	end
+	local focused = box.input:HasFocus()
+	if focused then
+		box.edge:SetVertexColor(lib:GetColor("accent", EDGE_FOCUS_ALPHA))
+	else
+		box.edge:SetVertexColor(EDGE[1], EDGE[2], EDGE[3], box.hovered and EDGE_HOVER_ALPHA or EDGE_ALPHA)
+	end
+	box.ring:SetShown(focused)
+	box.icon:SetAlpha(focused and ICON_FOCUS_ALPHA or ICON_ALPHA)
+end
+
+function Handlers.Clear(window)
+	window.search.input:SetText("")
+	window.search.input:SetFocus()
+	Handlers.Changed(window, true)
+end
+
+-- Escape empties the field first, then leaves it.
+function Handlers.Escape(window)
+	if window.search.input:GetText() ~= "" then
+		Handlers.Clear(window)
+	else
+		window.search.input:ClearFocus()
+	end
 end
 
 -- Results ----------------------------------------------------------------------------------------------------
@@ -581,6 +645,7 @@ function Handlers.Changed(window, userInput)
 	local search = window.search
 	local text = search.input:GetText()
 	search.input.placeholder:SetShown(text == "")
+	search.box.clear:SetShown(text ~= "")
 	if not userInput then
 		return
 	end
