@@ -52,7 +52,7 @@ end
 lib.TYPE = {
 	title = { "header", 26 },
 	heading = { "header", 12 },
-	navHeading = { "header", 11 },
+	navHeading = { "header", 13 },
 	body = { "body", 14 },
 	secondary = { "body", 12 },
 	caption = { "body", 11 },
