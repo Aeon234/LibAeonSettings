@@ -38,6 +38,7 @@ local TINT_DURATION = 0.5
 local MOVERS_DELAY, MOVERS_DURATION = 0, 0.5
 local TOOLBAR_SLIDE_DELAY, TOOLBAR_SLIDE_DURATION = 0, 0.5
 local OPENING_LENGTH = math.max(MOVERS_DELAY + MOVERS_DURATION, TOOLBAR_SLIDE_DELAY + TOOLBAR_SLIDE_DURATION)
+local CLOSING_SPEED = 2 -- the closing runs the opening backward this many times faster
 
 local function EaseOut(t)
 	return 1 - (1 - t) * (1 - t)
@@ -105,7 +106,7 @@ function lib:PlayOpening(from, quiet)
 	ui.openingDriver:Show()
 end
 
----Plays the opening sequence backward from where it is (from its end once it has finished), then runs `done`.
+---Plays the opening sequence backward, faster, from where it is (from its end once it has finished), then runs `done`.
 ---Reduce Motion runs `done` at once.
 function lib:PlayClosing(done)
 	local ui = self.ui
@@ -131,7 +132,7 @@ function lib:PlayClosing(done)
 end
 
 function Handlers.Closing(driver, elapsed)
-	driver.elapsed = driver.elapsed - elapsed
+	driver.elapsed = driver.elapsed - elapsed * CLOSING_SPEED
 	if driver.elapsed <= 0 then
 		Handlers.FinishClosing(lib.ui)
 		return

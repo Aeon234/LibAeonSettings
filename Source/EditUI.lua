@@ -530,8 +530,10 @@ function lib:ShowEditUI(opening)
 end
 
 ---Hides edit mode's screen: with `animated`, the opening sequence runs backward first and the movers stay as they
----were while it does.
-function lib:HideEditUI(animated)
+---were while it does. `after` runs once the screen is gone.
+---@param animated boolean?
+---@param after function?
+function lib:HideEditUI(animated, after)
 	local ui = self.ui
 	if not ui then
 		return
@@ -540,11 +542,19 @@ function lib:HideEditUI(animated)
 	self:WatchShift(false)
 	self:CloseAddonsWindow()
 	if animated and ui.screen:IsShown() then
-		self:PlayClosing(function() lib:FinishHideEditUI() end)
+		self:PlayClosing(function()
+			lib:FinishHideEditUI()
+			if after then
+				after()
+			end
+		end)
 		return
 	end
 	self:StopClosing()
 	self:FinishHideEditUI()
+	if after then
+		after()
+	end
 end
 
 function lib:FinishHideEditUI()

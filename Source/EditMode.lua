@@ -209,12 +209,19 @@ function lib:CloseEditMode(save)
 		return
 	end
 	-- A drop still settling lands first, so its position is among the pending ones. The screen starts fading
-	-- before anything else is undone, so the movers stay drawn as they were while it fades.
+	-- before anything else is undone, so the movers stay drawn as they were while it fades. Edit mode opened from a
+	-- settings window goes back to it once the screen is gone, so the window never shows beneath the fading movers.
 	lib.MoverHandlers.EndSettle()
-	self:HideEditUI(true)
-	local pending = session.pending
 	local returnTo = session.returnTo
 	session.returnTo = nil
+	self:HideEditUI(true, returnTo and function()
+		C_Timer.After(0, function()
+			if not InCombatLockdown() and not lib:IsEditing() then
+				returnTo:Open()
+			end
+		end)
+	end)
+	local pending = session.pending
 	session.open = false
 	session.paused = false
 	session.pending = {}
@@ -238,15 +245,6 @@ function lib:CloseEditMode(save)
 			end
 			registration:Apply()
 		end
-	end
-
-	-- Edit mode opened from a settings window goes back to it.
-	if returnTo then
-		C_Timer.After(0, function()
-			if not InCombatLockdown() and not lib:IsEditing() then
-				returnTo:Open()
-			end
-		end)
 	end
 end
 
