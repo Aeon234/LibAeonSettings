@@ -34,7 +34,6 @@ local BACKING = { 0.043, 0.043, 0.063, 1 }
 local TOOLTIP_CENTER = { 0.090, 0.090, 0.188 }
 local LANDING_MARGIN = 80 -- the found row lands this far below the list's top
 local FLASH_SECONDS, FLASH_HOLD, FLASH_EDGE = 2.4, 0.6, 2
-local FLASH_FILL = 0.12
 local CLOSE_DELAY = 0.1
 local MAX_RESULTS = 50 -- the list draws at most this many matches, best first
 
@@ -789,16 +788,13 @@ local function FlashEdge(flash, first, second, horizontal)
 	end
 end
 
----Flashes a row half (or, with `top` and `height`, a band of the page from `top`, such as a section): a gold outline
----and wash, held, then fading out. The flash stops if `region` leaves the page.
+---Flashes a row half (or, with `top` and `height`, a band of the page from `top`, such as a section): a gold outline,
+---held, then fading out. The flash stops if `region` leaves the page.
 function lib.Window:Flash(half, top, height)
 	local view = self.pageView
 	local flash = view.flash
 	if not flash then
 		flash = CreateFrame("Frame", nil, view.scroll.child)
-		local fill = flash:CreateTexture(nil, "ARTWORK")
-		fill:SetAllPoints()
-		fill:SetColorTexture(lib:GetColor("accent", FLASH_FILL))
 		FlashEdge(flash, "TOPLEFT", "TOPRIGHT", true)
 		FlashEdge(flash, "BOTTOMLEFT", "BOTTOMRIGHT", true)
 		FlashEdge(flash, "TOPLEFT", "BOTTOMLEFT", false)
