@@ -190,7 +190,7 @@ function Handlers.Generate(view, root)
 			if choice.blocked then
 				radio:SetEnabled(false)
 				radio:SetTooltip(function(tooltip)
-					local r, g, b = lib:Color("destructive")
+					local r, g, b = lib:GetColor("destructive")
 					tooltip:AddLine(choice.blocked, r, g, b, true)
 				end)
 			elseif choice.tooltip then

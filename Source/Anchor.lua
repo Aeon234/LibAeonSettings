@@ -230,7 +230,7 @@ function lib:Refuse(id, reason)
 		end
 	end)
 	GameTooltip:SetOwner(UIParent, "ANCHOR_CURSOR")
-	local r, g, b = lib:Color("destructive")
+	local r, g, b = lib:GetColor("destructive")
 	GameTooltip:SetText(reason, r, g, b, 1, true)
 	GameTooltip:Show()
 	C_Timer.After(REFUSE_TOOLTIP, function()

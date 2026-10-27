@@ -250,12 +250,12 @@ local function BuildPageView(window)
 	-- The page's switch, a card of its own under the title: the page's icon, its name and what it does, and a toggle.
 	local card = CreateFrame("Frame", nil, header)
 	local fill = card:CreateTexture(nil, "BACKGROUND")
-	fill:SetColorTexture(lib:Color("card"))
+	fill:SetColorTexture(lib:GetColor("card"))
 	fill:SetAllPoints()
 	for _, edge in ipairs({ { "TOPLEFT", "TOPRIGHT" }, { "BOTTOMLEFT", "BOTTOMRIGHT" }, { "TOPLEFT", "BOTTOMLEFT" },
 		{ "TOPRIGHT", "BOTTOMRIGHT" } }) do
 		local line = card:CreateTexture(nil, "BORDER")
-		line:SetColorTexture(lib:Color("cardEdge"))
+		line:SetColorTexture(lib:GetColor("cardEdge"))
 		line:SetPoint(edge[1])
 		line:SetPoint(edge[2])
 		line:SetSize(1, 1)
@@ -524,11 +524,11 @@ local function RefreshHalf(half)
 		half.inherited:Hide()
 	elseif rowInactive and reason then
 		half.small:SetText(reason)
-		half.small:SetTextColor(lib:Color("destructive"))
+		half.small:SetTextColor(lib:GetColor("destructive"))
 		half.small:Show()
 	elseif setting.description then
 		half.small:SetText(setting.description)
-		half.small:SetTextColor(lib:Color("secondary"))
+		half.small:SetTextColor(lib:GetColor("secondary"))
 		half.small:Show()
 	else
 		half.small:Hide()
@@ -737,7 +737,7 @@ end
 -- A card behind a section's rows: a faint fill inside a 1-unit edge.
 function Handlers.Card(view, top, width, height)
 	local fill = Acquire(view.fills)
-	fill:SetColorTexture(lib:Color("card"))
+	fill:SetColorTexture(lib:GetColor("card"))
 	fill:SetPoint("TOPLEFT", view.scroll.child, "TOPLEFT", 0, -top)
 	fill:SetSize(width, height)
 	fill:Show()
@@ -892,10 +892,10 @@ function Handlers.LabelEnter(half)
 	if half.small:IsShown() and half.small:IsTruncated() then
 		local reason = select(2, setting:Activity())
 		local red = reason and half.small:GetText() == reason
-		lines[#lines + 1] = { half.small:GetText(), lib:Color(red and "destructive" or "text") }
+		lines[#lines + 1] = { half.small:GetText(), lib:GetColor(red and "destructive" or "text") }
 	end
 	if half.grid and half.reason then
-		lines[#lines + 1] = { half.reason, lib:Color("destructive") }
+		lines[#lines + 1] = { half.reason, lib:GetColor("destructive") }
 	end
 	if half.inherited:IsShown() and half.inherited:IsTruncated() then
 		lines[#lines + 1] = { half.inherited:GetText(), 1, 1, 1 }
@@ -934,7 +934,7 @@ function Handlers.MenuBlockerEnter(header)
 		return
 	end
 	GameTooltip:SetOwner(menu.blocker, "ANCHOR_TOP")
-	local r, g, b = lib:Color("destructive")
+	local r, g, b = lib:GetColor("destructive")
 	GameTooltip:SetText(menu.reason, r, g, b, 1, true)
 	GameTooltip:Show()
 end

@@ -272,7 +272,7 @@ end
 ---mode is open (which is asked to close first).
 function lib.Window:Open()
 	if InCombatLockdown() then
-		UIErrorsFrame:AddMessage(L.UNAVAILABLE_IN_COMBAT, lib:Color("destructive"))
+		UIErrorsFrame:AddMessage(L.UNAVAILABLE_IN_COMBAT, lib:GetColor("destructive"))
 		return
 	end
 	if lib:IsEditing() then

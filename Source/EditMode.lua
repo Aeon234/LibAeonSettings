@@ -169,7 +169,7 @@ function lib:OpenEditMode(addonName)
 	end
 	if InCombatLockdown() then
 		session.waitingOpener = nil
-		UIErrorsFrame:AddMessage(L.COMBAT_REFUSED, lib:Color("destructive"))
+		UIErrorsFrame:AddMessage(L.COMBAT_REFUSED, lib:GetColor("destructive"))
 		return
 	end
 	if BlockingPanelShown() then

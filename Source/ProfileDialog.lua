@@ -135,7 +135,7 @@ local function Build(window)
 	nameBox:SetScript("OnEscapePressed", function() nameBox:ClearFocus() end)
 	dialog.nameBox = nameBox
 
-	dialog.errorLine = Text(dialog, SMALL_SIZE, { lib:Color("destructive") })
+	dialog.errorLine = Text(dialog, SMALL_SIZE, { lib:GetColor("destructive") })
 	dialog.errorLine:SetWordWrap(false)
 
 	local choice = CreateFrame("DropdownButton", nil, dialog, "WowStyle1DropdownTemplate")
@@ -376,7 +376,7 @@ function Handlers.WellChanged(window, userChanged)
 		dialog.summary:SetTextColor(1, 1, 1)
 	else
 		dialog.summary:SetText(reason or "")
-		dialog.summary:SetTextColor(lib:Color("destructive"))
+		dialog.summary:SetTextColor(lib:GetColor("destructive"))
 	end
 	local report = info and type(info.report) == "table" and info.report or nil
 	if report and #report > 0 then

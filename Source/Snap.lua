@@ -68,7 +68,7 @@ local function Guide(ui, index)
 	local guide = ui.guides[index]
 	if not guide then
 		guide = ui.guideLayer:CreateTexture(nil, "OVERLAY")
-		guide:SetColorTexture(lib:Color("accent", GUIDE_ALPHA))
+		guide:SetColorTexture(lib:GetColor("accent", GUIDE_ALPHA))
 		guide:SetAlpha(0)
 		guide:Hide()
 		ui.guides[index] = guide

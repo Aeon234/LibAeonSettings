@@ -78,7 +78,7 @@ lib.COLOR = {
 ---@param name string a key of `lib.COLOR`
 ---@param alpha number? replaces the color's own alpha
 ---@return number r, number g, number b, number a
-function lib:Color(name, alpha)
+function lib:GetColor(name, alpha)
 	if name == "destructive" and RED_FONT_COLOR and RED_FONT_COLOR.GetRGB then
 		local r, g, b = RED_FONT_COLOR:GetRGB()
 
@@ -96,7 +96,7 @@ end
 function lib:SetType(fontString, role, color)
 	local entry = self.TYPE[role] or self.TYPE.body
 	self:SetFont(fontString, entry[1], entry[2])
-	fontString:SetTextColor(self:Color(color or "text"))
+	fontString:SetTextColor(self:GetColor(color or "text"))
 end
 
 ---Gives a font string its font object's face and size with a thin outline, for text drawn over any background.

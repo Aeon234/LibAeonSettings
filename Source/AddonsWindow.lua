@@ -117,7 +117,7 @@ function lib:RefreshAddonsWindow()
 		row.check:SetChecked(session.shown[addonName] == true)
 		row.check:SetEnabled(addonName ~= session.opener)
 		row.label:SetText(registration.title or addonName)
-		row.label:SetTextColor(lib:Color(addonName == session.opener and "tertiary" or "text"))
+		row.label:SetTextColor(lib:GetColor(addonName == session.opener and "tertiary" or "text"))
 		row:Show()
 	end
 	for index = #self.order + 1, #window.rows do

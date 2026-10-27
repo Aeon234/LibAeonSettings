@@ -339,17 +339,46 @@ do
 			and type(entry[2]) == "number" and entry[2] > 0)
 	end
 	Check("type: the scale has its six roles", roles == 6)
-	local r, g, b, a = lib:Color("accent")
+	local r, g, b, a = lib:GetColor("accent")
 	Check("color: accent is Blizzard's gold", r == 1 and Near(g, 0.82) and b == 0 and a == 1)
-	Check("color: an alpha given replaces the color's own", select(4, lib:Color("bronze", 0.2)) == 0.2)
+	Check("color: an alpha given replaces the color's own", select(4, lib:GetColor("bronze", 0.2)) == 0.2)
 	Check("color: an unknown name falls back to white",
-		lib:Color("missing") == 1 and select(4, lib:Color("missing")) == 1)
+		lib:GetColor("missing") == 1 and select(4, lib:GetColor("missing")) == 1)
 	Check("color: destructive without the client's red keeps its own value",
-		Near(select(2, lib:Color("destructive")), 0.125))
+		Near(select(2, lib:GetColor("destructive")), 0.125))
 	RED_FONT_COLOR = { GetRGB = function() return 0.9, 0.1, 0.2 end }
-	r, g, b, a = lib:Color("destructive")
+	r, g, b, a = lib:GetColor("destructive")
 	Check("color: destructive reads the client's red at each call", r == 0.9 and g == 0.1 and b == 0.2 and a == 1)
 	RED_FONT_COLOR = nil
+end
+
+-- Names on the library: a method defined as `function lib:X` and a table assigned as `lib.X =` in another file
+-- would replace each other by load order.
+
+do
+	local methods, tables, clashes = {}, {}, {}
+	for line in io.lines(root .. "/LibAeonSettings.xml") do
+		local file = line:match('Script file="([^"]+)"')
+		if file then
+			for code in io.lines(root .. "/" .. file:gsub("\\", "/")) do
+				local method = code:match("^function lib:([%w_]+)%(")
+				local field = code:match("^lib%.([%w_]+) = ")
+				if method then
+					methods[method] = file
+				end
+				if field then
+					tables[field] = file
+				end
+			end
+		end
+	end
+	for name, file in pairs(methods) do
+		if tables[name] then
+			clashes[#clashes + 1] = ("%s (%s, %s)"):format(name, file, tables[name])
+		end
+	end
+	table.sort(clashes)
+	Check("library names: no method shares its name with a table (" .. table.concat(clashes, ", ") .. ")", #clashes == 0)
 end
 
 -- Springs and Reduce Motion

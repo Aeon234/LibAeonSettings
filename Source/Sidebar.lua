@@ -218,12 +218,12 @@ local function PaintRow(window, row)
 	row.icon:SetAlpha(off and OFF_ALPHA or 1)
 	local holding = false
 	if node.isPage then
-		row.label:SetTextColor(lib:Color(selected and "accent" or "text"))
+		row.label:SetTextColor(lib:GetColor(selected and "accent" or "text"))
 	elseif KINDS[node.kind] and KINDS[node.kind].heading then
 		-- A folded heading over the shown page turns gold and names it.
 		holding = window.collapsed[node.id] and Holds(window, node)
-		row.label:SetTextColor(lib:Color(holding and "accent" or "navHeading"))
-		row.chevron:SetVertexColor(lib:Color(holding and "accent" or "navHeading"))
+		row.label:SetTextColor(lib:GetColor(holding and "accent" or "navHeading"))
+		row.chevron:SetVertexColor(lib:GetColor(holding and "accent" or "navHeading"))
 		if holding then
 			row.holding:SetText(window.pages[window.page].title)
 		end

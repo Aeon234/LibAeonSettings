@@ -211,13 +211,13 @@ end
 function Handlers.PaintPill(pill)
 	for _, edge in ipairs(pill.edges) do
 		if pill.on then
-			edge:SetColorTexture(lib:Color("bronze"))
+			edge:SetColorTexture(lib:GetColor("bronze"))
 		else
 			edge:SetColorTexture(unpack(PILL_LINE))
 		end
 	end
-	pill.fill:SetColorTexture(lib:Color("bronze", pill.on and PILL_ON_FILL_ALPHA or 0))
-	pill.text:SetTextColor(lib:Color(pill.on and "accent" or "secondary"))
+	pill.fill:SetColorTexture(lib:GetColor("bronze", pill.on and PILL_ON_FILL_ALPHA or 0))
+	pill.text:SetTextColor(lib:GetColor(pill.on and "accent" or "secondary"))
 end
 
 local function TabPiece(tab, layer)
@@ -258,7 +258,7 @@ function Handlers.PaintTab(tab)
 	tab.right:SetAtlas(prefix .. "Right")
 	tab:SetHeight(tab.on and TAB_ACTIVE_HEIGHT or TAB_HEIGHT)
 	tab:SetFrameLevel(tab:GetParent():GetFrameLevel() + (tab.on and 2 or 1))
-	tab.text:SetTextColor(lib:Color(tab.on and "accent" or "secondary"))
+	tab.text:SetTextColor(lib:GetColor(tab.on and "accent" or "secondary"))
 end
 
 ---Builds the fixed part of the page view: called by the page view when it is built.
@@ -289,12 +289,12 @@ function lib:BuildFixedArea(window, view)
 	stage:SetPoint("TOPRIGHT", 0, -(PREVIEW_GAP + SECTION_TITLE_HEIGHT + 1))
 	stage:SetClipsChildren(true)
 	local fill = stage:CreateTexture(nil, "BACKGROUND")
-	fill:SetColorTexture(lib:Color("card"))
+	fill:SetColorTexture(lib:GetColor("card"))
 	fill:SetAllPoints()
 	for _, edge in ipairs({ { "TOPLEFT", "TOPRIGHT" }, { "BOTTOMLEFT", "BOTTOMRIGHT" }, { "TOPLEFT", "BOTTOMLEFT" },
 		{ "TOPRIGHT", "BOTTOMRIGHT" } }) do
 		local line = stage:CreateTexture(nil, "BORDER")
-		line:SetColorTexture(lib:Color("cardEdge"))
+		line:SetColorTexture(lib:GetColor("cardEdge"))
 		line:SetPoint(edge[1])
 		line:SetPoint(edge[2])
 		line:SetSize(1, 1)
@@ -540,7 +540,7 @@ local function CreateOutline(parent)
 	for _, side in ipairs({ { "TOPLEFT", "TOPRIGHT", true }, { "BOTTOMLEFT", "BOTTOMRIGHT", true },
 		{ "TOPLEFT", "BOTTOMLEFT", false }, { "TOPRIGHT", "BOTTOMRIGHT", false } }) do
 		local edge = outline:CreateTexture(nil, "OVERLAY")
-		edge:SetColorTexture(lib:Color("accent"))
+		edge:SetColorTexture(lib:GetColor("accent"))
 		edge:SetPoint(side[1])
 		edge:SetPoint(side[2])
 		edge.horizontal = side[3]
