@@ -526,6 +526,7 @@ function Handlers.TabClick(window, tabId)
 	local page = window.pageView and window.pageView.shownPage
 	if page and page.tab ~= tabId then
 		page.tab = tabId
+		Handlers.FollowTab(page, tabId)
 		PlaySound(TAB_SOUND)
 		window:ShowPage()
 	end
@@ -670,6 +671,14 @@ function Handlers.PartLeave(button)
 	end
 end
 
+-- A setting named by id on its page or by "page/id" on another.
+local function NamedSetting(page, target)
+	local pageId, id = target:match("^(.-)/(.+)$")
+	local owner = pageId and page.window.pages[pageId] or page
+
+	return owner and owner.settings and owner.settings[id or target]
+end
+
 -- A part's setting: by id on its page, "page/id" on another, or from a function at click time.
 local function PartSetting(page, target)
 	if type(target) == "function" then
@@ -678,14 +687,39 @@ local function PartSetting(page, target)
 	if type(target) ~= "string" then
 		return nil
 	end
-	local pageId, id = target:match("^(.-)/(.+)$")
-	local owner = pageId and page.window.pages[pageId] or page
-	local setting = owner and owner.settings and owner.settings[id or target]
+	local setting = NamedSetting(page, target)
 	if not setting then
 		lib:Report(page.window.addonName, ("%s: a preview part names unknown setting %q"):format(page.id, target))
 	end
 
 	return setting
+end
+
+---On a page whose keyed parts name settings on its tabs, the chosen part follows the tab: the part whose setting is
+---on `tabId`, or none when no part's is. Parts whose setting is named by a function are left out, so no adopter code
+---runs for it. Pages without such parts keep their chosen part.
+function Handlers.FollowTab(page, tabId)
+	local layer = page.partLayer
+	if not layer then
+		return
+	end
+	local bound, follow = false, nil
+	for _, button in ipairs(layer.buttons) do
+		local part = button.part
+		if button:IsShown() and part.key ~= nil and type(part.target) == "string" then
+			local setting = NamedSetting(page, part.target)
+			local tab = setting and setting.page == page and setting.section and setting.section.tab
+			if tab then
+				bound = true
+				if tab.id == tabId and follow == nil then
+					follow = part.key
+				end
+			end
+		end
+	end
+	if bound then
+		page.previewChosen = follow
+	end
 end
 
 -- A click chooses a keyed part (redrawing the page for it), then lands on the part's setting.
