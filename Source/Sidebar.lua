@@ -13,7 +13,12 @@ local ICON_SIZE, ICON_LEFT, ENTRY_TEXT = 18, 13, 40 -- an entry's icon and text
 local HEADING_TEXT, HEADING_BOTTOM = 28, 7 -- a heading's text: in from the left, up from the row's bottom
 local CHEVRON_SIZE, CHEVRON_CENTER = 10, 14
 local HOLDING_WIDTH = 110 -- room for the name of the page a folded heading holds
-local HOVER_ALPHA = 0.7 -- the hover art while hovered; full while pressed
+-- A row's fill by state: one rounded shape for every state, told apart by its tint. Hovered and pressed rows are
+-- lit white; the selected row is gold, a little stronger under the pointer, with a gold inner edge.
+local FILL_HOVER, FILL_PRESSED = 0.06, 0.12
+local FILL_SELECTED, FILL_SELECTED_HOVER, FILL_SELECTED_PRESSED = 0.14, 0.2, 0.26
+local EDGE_SELECTED = 0.5
+local ROW_SLICE = 12 -- texels; the row art is drawn at half scale
 local FOLD_RESPONSE = 0.3
 local OFF_ALPHA = 0.45 -- a page whose switch is off
 local SELECT_SOUND = SOUNDKIT and SOUNDKIT.IG_CHARACTER_INFO_TAB
@@ -144,18 +149,19 @@ local function CreateRow(window)
 	row:SetHeight(ROW_HEIGHT)
 	row:RegisterForClicks("LeftButtonUp")
 
-	row.selected = row:CreateTexture(nil, "BACKGROUND")
-	row.selected:SetAtlas("common-button-list-small-selected")
-	row.selected:SetAllPoints()
-	row.hover = row:CreateTexture(nil, "BACKGROUND", nil, 1)
-	row.hover:SetTexture(lib.mediaPath .. "Textures\\nav-hover")
-	row.hover:SetTextureSliceMargins(16, 16, 16, 16)
-	if Enum.UITextureSliceMode then
-		row.hover:SetTextureSliceMode(Enum.UITextureSliceMode.Stretched)
+	-- The row's fill and its edge, nine-sliced at half scale so the corners keep their size.
+	for _, piece in ipairs({ { "fill", "nav-row", 0 }, { "edge", "nav-row-edge", 1 } }) do
+		local texture = row:CreateTexture(nil, "BACKGROUND", nil, piece[3])
+		texture:SetTexture(lib.mediaPath .. "Textures\\" .. piece[2])
+		texture:SetTextureSliceMargins(ROW_SLICE, ROW_SLICE, ROW_SLICE, ROW_SLICE)
+		if Enum.UITextureSliceMode then
+			texture:SetTextureSliceMode(Enum.UITextureSliceMode.Stretched)
+		end
+		texture:SetScale(0.5)
+		texture:SetAllPoints()
+		texture:Hide()
+		row[piece[1]] = texture
 	end
-	row.hover:SetScale(0.5)
-	row.hover:SetAllPoints()
-	row.hover:Hide()
 
 	row.icon = row:CreateTexture(nil, "ARTWORK")
 	row.icon:SetSize(ICON_SIZE, ICON_SIZE)
@@ -207,11 +213,21 @@ end
 local function PaintRow(window, row)
 	local node = row.node
 	local selected = node.isPage and window.page == node.id
-	row.selected:SetShown(selected)
-	-- Pressing lights the hover art at once, full; hovering shows it softer.
-	local lit = (row.hovered or row.pressed) and node.kind ~= "divider" and (row.pressed or not selected)
-	row.hover:SetShown(lit and true or false)
-	row.hover:SetAlpha(row.pressed and 1 or HOVER_ALPHA)
+	-- Pressing lights the row at once; hovering lights it softer; the selected row stays gold.
+	local alpha
+	if selected then
+		alpha = row.pressed and FILL_SELECTED_PRESSED or row.hovered and FILL_SELECTED_HOVER or FILL_SELECTED
+	elseif node.kind ~= "divider" and (row.hovered or row.pressed) then
+		alpha = row.pressed and FILL_PRESSED or FILL_HOVER
+	end
+	row.fill:SetShown(alpha ~= nil)
+	if alpha then
+		row.fill:SetVertexColor(lib:GetColor(selected and "accent" or "text", alpha))
+	end
+	row.edge:SetShown(selected)
+	if selected then
+		row.edge:SetVertexColor(lib:GetColor("accent", EDGE_SELECTED))
+	end
 	local page = node.isPage and window.pages[node.id]
 	local off = page and page.switch and not page.switch:GetValue()
 	row.label:SetAlpha(off and OFF_ALPHA or 1)
@@ -260,8 +276,8 @@ local function SetUpRow(window, row, node)
 	row.icon:Hide()
 	row.chevron:Hide()
 	if isDivider then
-		row.selected:Hide()
-		row.hover:Hide()
+		row.fill:Hide()
+		row.edge:Hide()
 		row.holding:Hide()
 		return
 	end

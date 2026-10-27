@@ -1009,7 +1009,7 @@ local ICON_MEDIA = {
 	{ "icon-grid-dim" }, { "icon-grid-bright" }, { "icon-grid-off" }, { "icon-dark-overlays-on" }, { "icon-dark-overlays-off" },
 	{ "icon-snap-on" }, { "icon-snap-off" }, { "icon-coordinates-on" }, { "icon-coordinates-off" },
 	{ "icon-hover-top-bar-on" }, { "icon-hover-top-bar-off" }, { "icon-addons-on" }, { "icon-addons-off" },
-	{ "icon-cog-on" }, { "chevron" }, { "override-diamond" }, { "nav-hover" },
+	{ "icon-cog-on" }, { "chevron" }, { "override-diamond" }, { "nav-row" }, { "nav-row-edge" },
 	{ "swatch-checker" }, { "toggle-track" }, { "search-box" }, { "search-box-focus" }, { "mover-fill" },
 	{ "mover-frame" }, { "anchor-line" }, { "pulse" }, { "shadow-glow" }, { "shadow-round" },
 }
