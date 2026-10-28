@@ -101,7 +101,8 @@ local function CreateHalf(view)
 	half.small:SetWordWrap(false)
 	half.small:SetHeight(SMALL_HEIGHT)
 	half.small:SetPoint("TOPLEFT", half.label, "BOTTOMLEFT")
-	-- An overridden row's inherited value ("Whole Bar: 12"), under the label and any description.
+	-- A row with a shared value names its source ("Follows Whole Bar"), and once overridden the value it would
+	-- inherit ("Whole Bar: 12"), under the label and any description.
 	half.inherited = half:CreateFontString(nil, "OVERLAY")
 	lib:SetType(half.inherited, "secondary", "secondary")
 	half.inherited:SetJustifyH("LEFT")
@@ -514,7 +515,7 @@ local function RefreshHalf(half)
 	control:SetActive(active)
 	half.blocker:SetShown(not active)
 	half.label:SetAlpha(looksInactive and INACTIVE_ALPHA or 1)
-	-- A row following the shared value looks ordinary; changing it overrides it (◆, ↺, the inherited line).
+	-- A row following the shared value names its source; changing it overrides it (◆, ↺, the inherited value).
 	-- A resettable row changed from its default shows ↺ alone, in the same place.
 	local overridden = setting:IsOverridden()
 	local changed = not overridden and setting:IsChangedFromDefault()
@@ -525,6 +526,9 @@ local function RefreshHalf(half)
 	half.undo:SetEnabled(active)
 	if overridden then
 		half.inherited:SetFormattedText("%s: %s", setting.inherits.from, setting:FormatValue(setting:InheritedValue()))
+		half.inherited:Show()
+	elseif setting.inherits then
+		half.inherited:SetFormattedText(L.FOLLOWS, setting.inherits.from)
 		half.inherited:Show()
 	else
 		half.inherited:Hide()
