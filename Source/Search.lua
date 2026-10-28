@@ -27,9 +27,14 @@ local ICON_ALPHA, ICON_FOCUS_ALPHA = 0.55, 0.9
 local CLEAR_ALPHA, CLEAR_HOVER_ALPHA = 0.5, 0.9
 local LIST_LEFT, LIST_TOP, LIST_WIDTH = FIELD_LEFT - 4, FIELD_TOP + FIELD_HEIGHT + 4, FIELD_WIDTH + 8
 local LIST_PAD, LIST_MAX = 7, 420
-local RESULT_PAD_X, RESULT_PAD_Y, RESULT_SIZE, RESULT_SMALL = 10, 5, 14, 12
+local BAR_INSET = 5 -- the scroll bar keeps clear of the list's border
+local RESULT_PAD_X, RESULT_PAD_Y, RESULT_SIZE, RESULT_SMALL = 14, 5, 14, 12
 local RESULT_HEIGHT = RESULT_PAD_Y * 2 + 17 + 15
-local RESULT_ON_ALPHA = 0.28 -- the highlighted result's bronze fill
+-- The highlighted result: the sidebar row's rounded shape, inset from the list's sides and lit white, so the gold of
+-- the matched letters keeps its contrast.
+local RESULT_INSET_X, RESULT_INSET_Y = 6, 1
+local RESULT_ON_ALPHA = 0.1
+local ROW_SLICE = 12 -- texels; the row art is drawn at half scale
 local BACKING = { 0.043, 0.043, 0.063, 1 }
 local TOOLTIP_CENTER = { 0.090, 0.090, 0.188 }
 local LANDING_MARGIN = 80 -- the found row lands this far below the list's top
@@ -469,9 +474,17 @@ end
 local function CreateResult(window, list)
 	local result = CreateFrame("Button", nil, list.scroll.child)
 	result:SetHeight(RESULT_HEIGHT)
+	-- A scaled texture's anchor offsets are in its own units, so the insets are doubled.
 	result.fill = result:CreateTexture(nil, "BACKGROUND")
-	result.fill:SetAllPoints()
-	result.fill:SetColorTexture(lib:GetColor("bronze", RESULT_ON_ALPHA))
+	result.fill:SetTexture(lib.mediaPath .. "Textures\\nav-row")
+	result.fill:SetTextureSliceMargins(ROW_SLICE, ROW_SLICE, ROW_SLICE, ROW_SLICE)
+	if Enum.UITextureSliceMode then
+		result.fill:SetTextureSliceMode(Enum.UITextureSliceMode.Stretched)
+	end
+	result.fill:SetScale(0.5)
+	result.fill:SetPoint("TOPLEFT", 2 * RESULT_INSET_X, -2 * RESULT_INSET_Y)
+	result.fill:SetPoint("BOTTOMRIGHT", -2 * RESULT_INSET_X, 2 * RESULT_INSET_Y)
+	result.fill:SetVertexColor(lib:GetColor("text", RESULT_ON_ALPHA))
 	result.fill:Hide()
 	result.label = result:CreateFontString(nil, "OVERLAY")
 	lib:SetFont(result.label, "body", RESULT_SIZE)
@@ -588,7 +601,8 @@ function lib.Window:BuildSearch()
 	scrollRegion:SetPoint("TOPLEFT", 0, -LIST_PAD)
 	scrollRegion:SetPoint("BOTTOMRIGHT", 0, LIST_PAD)
 	scrollRegion:SetFrameLevel(list:GetFrameLevel() + 2)
-	list.scroll = lib:CreateScroll(scrollRegion, { step = RESULT_HEIGHT, row = RESULT_HEIGHT, slim = true, inside = true })
+	list.scroll = lib:CreateScroll(scrollRegion, { step = RESULT_HEIGHT, row = RESULT_HEIGHT, slim = true, inside = true,
+		laneWhenNeeded = true, barInset = BAR_INSET })
 	list.empty = list:CreateFontString(nil, "OVERLAY")
 	lib:SetFont(list.empty, "body", RESULT_SIZE)
 	list.empty:SetTextColor(lib:GetColor("secondary"))

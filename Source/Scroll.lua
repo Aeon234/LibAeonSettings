@@ -11,6 +11,7 @@ local SNAP_DISTANCE = 0.5   -- the glide stops within this many units
 local BAR_GAP = 6           -- between the list and its scroll bar
 local INSIDE_LANE = 16      -- an inside bar's lane at the list's right: the slim bar 8 from the list, at the edge
 local SLIM_TRACK_ALPHA = 0.35
+local OVERFLOW_MIN = 1      -- the list overflows once its content is at least this much taller than the view
 
 lib.ScrollHandlers = lib.ScrollHandlers or {}
 local Handlers = lib.ScrollHandlers
@@ -22,7 +23,9 @@ local scrollMeta = { __index = function(_, name) return lib.Scroll[name] end }
 ---Creates a smooth scrolling list in `parent`, filling it except for the scroll bar's room on the right.
 ---@param parent Frame
 ---@param options table { step: units per wheel notch, row?: snap targets to multiples of this, slim?: a bar with no
----arrows whose track spans the list, inside?: the bar sits inside the list's right edge }
+---arrows whose track spans the list, inside?: the bar sits inside the list's right edge, laneWhenNeeded?: an inside
+---bar's lane is taken from the list only while the list overflows, barInset?: an inside bar's distance from the
+---list's right edge, and from its top and bottom }
 ---@return table scroll with `.child`, the frame to fill
 function lib:CreateScroll(parent, options)
 	local scroll = setmetatable({ options = options, offset = 0, target = 0, contentHeight = 0 }, scrollMeta)
@@ -39,8 +42,9 @@ function lib:CreateScroll(parent, options)
 
 	local bar = CreateFrame("EventFrame", nil, parent, "MinimalScrollBar")
 	if options.inside then
-		bar:SetPoint("TOPRIGHT", parent, "TOPRIGHT", 0, 0)
-		bar:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", 0, 0)
+		local inset = options.barInset or 0
+		bar:SetPoint("TOPRIGHT", parent, "TOPRIGHT", -inset, -inset)
+		bar:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", -inset, inset)
 	else
 		bar:SetPoint("TOPLEFT", frame, "TOPRIGHT", BAR_GAP, 0)
 		bar:SetPoint("BOTTOMLEFT", frame, "BOTTOMRIGHT", BAR_GAP, 0)
@@ -87,7 +91,15 @@ function lib.Scroll:Layout()
 	child:SetHeight(math.max(1, self.contentHeight))
 	local viewHeight = frame:GetHeight()
 	local range = self:Range()
-	local overflows = range > 0 and viewHeight > 0
+	-- Content that fits exactly can measure a fraction over the snapped view, so overflow takes a whole unit.
+	local overflows = range >= OVERFLOW_MIN and viewHeight > 0
+	-- Narrowing the list fires OnSizeChanged, which lays out again with the same overflow and stops there. The width
+	-- comes from the parent, since the frame's own may not reflect the new anchor until the next layout.
+	if self.options.inside and self.options.laneWhenNeeded then
+		local lane = overflows and INSIDE_LANE or 0
+		frame:SetPoint("BOTTOMRIGHT", -lane, 0)
+		child:SetWidth(math.max(1, frame:GetParent():GetWidth() - lane))
+	end
 	self.bar:SetShown(overflows)
 	if overflows then
 		self.bar:SetVisibleExtentPercentage(viewHeight / self.contentHeight)
