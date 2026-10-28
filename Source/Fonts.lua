@@ -51,7 +51,7 @@ end
 -- The type scale: every text in the settings window takes one of these roles, as { font kind, size }.
 lib.TYPE = {
 	title = { "header", 26 },
-	heading = { "header", 12 },
+	heading = { "header", 14 },
 	navHeading = { "header", 13 },
 	body = { "body", 14 },
 	secondary = { "body", 12 },
