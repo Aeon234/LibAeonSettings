@@ -156,6 +156,7 @@ local function ResetHalf(half)
 		half.reveal:Stop()
 	end
 	half.setting, half.view, half.want, half.revealed, half.grid, half.reason = nil, nil, nil, nil, nil, nil
+	half.looksInactive, half.looksReason = nil, nil
 	half:SetAlpha(1)
 	half:SetClipsChildren(false)
 end
@@ -488,10 +489,20 @@ local function RefreshHalf(half)
 	-- A row whose parent in its own card is off leaves, under that parent; a choice-card row stays, dimmed.
 	half.want = setting:IsShown() and not (cause == "depends" and not half.grid and lib.ParentOffInSection(setting))
 	local rowInactive = not active and cause ~= "page" and cause ~= "class"
+	-- A row on its way out keeps the look it had, so its exit shows no dimming or inactive reason; its control still
+	-- stops answering at once.
+	local leaving = not half.want and (half.revealed or 0) > 0
+	local looksInactive, looksReason = rowInactive, reason
+	if leaving then
+		looksInactive, looksReason = half.looksInactive, half.looksReason
+	else
+		half.looksInactive, half.looksReason = rowInactive, reason
+	end
 	-- A swatch following the class color dims only its control: the label stays and needs no reason.
-	local controlDimmed = rowInactive or cause == "class"
+	local controlDimmed = looksInactive or cause == "class"
 	-- Desaturate before SetActive, which may set its own (Blizzard's slider dims a step arrow at the range's end).
-	local desaturation = controlDimmed and INACTIVE_DESATURATION or not active and PAGE_OFF_DESATURATION or 0
+	local desaturation = controlDimmed and INACTIVE_DESATURATION or not active and not leaving and PAGE_OFF_DESATURATION
+		or 0
 	if control.desaturation ~= desaturation then
 		control.desaturation = desaturation
 		if control.Desaturate then
@@ -502,7 +513,7 @@ local function RefreshHalf(half)
 	end
 	control:SetActive(active)
 	half.blocker:SetShown(not active)
-	half.label:SetAlpha(rowInactive and INACTIVE_ALPHA or 1)
+	half.label:SetAlpha(looksInactive and INACTIVE_ALPHA or 1)
 	-- A row following the shared value looks ordinary; changing it overrides it (◆, ↺, the inherited line).
 	-- A resettable row changed from its default shows ↺ alone, in the same place.
 	local overridden = setting:IsOverridden()
@@ -510,7 +521,7 @@ local function RefreshHalf(half)
 	control.frame:SetAlpha(controlDimmed and INACTIVE_ALPHA or 1)
 	half.gutter:SetShown(overridden or changed)
 	half.diamond:SetShown(overridden)
-	half.gutter:SetAlpha(rowInactive and INACTIVE_ALPHA or 1)
+	half.gutter:SetAlpha(looksInactive and INACTIVE_ALPHA or 1)
 	half.undo:SetEnabled(active)
 	if overridden then
 		half.inherited:SetFormattedText("%s: %s", setting.inherits.from, setting:FormatValue(setting:InheritedValue()))
@@ -523,8 +534,8 @@ local function RefreshHalf(half)
 	if half.grid then
 		half.small:Hide()
 		half.inherited:Hide()
-	elseif rowInactive and reason then
-		half.small:SetText(reason)
+	elseif looksInactive and looksReason then
+		half.small:SetText(looksReason)
 		half.small:SetTextColor(lib:GetColor("destructive"))
 		half.small:Show()
 	elseif setting.description then
@@ -682,18 +693,21 @@ function lib.Window:LayoutPage()
 					if share <= 0 then
 						half:Hide()
 					else
+						-- The separator above and the row shrink together, unrounded, so a row ends without a step.
 						if previous then
 							Rule(view, lib.COLOR.separator, INSET, y, width - INSET, 1, share)
-							y = y + 1
+							y = y + share
 						end
 						local height = half.tall and TALL_HEIGHT or ROW_HEIGHT
 						if half.setting.height then
 							height = math.max(height, half.setting.height + 16)
 						end
-						height = math.floor(height * share + 0.5)
+						height = height * share
 						PlaceHalf(half, child, 0, y, width, height)
-						half:SetAlpha(share)
-						half:SetClipsChildren(share < 1)
+						-- Not clipped: a row clipping its children while it grows in from nothing draws none of them
+						-- until it is whole. Its content fades with the square of its share instead, so it stays faint
+						-- while the row is too short to hold it.
+						half:SetAlpha(share * share)
 						y = y + height
 						previous = true
 					end
