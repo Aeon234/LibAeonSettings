@@ -10,7 +10,7 @@ end
 local L = lib.L
 
 -- The field: square with softened corners, as wide as the sidebar's rows, centered in the space above them.
-local FIELD_LEFT, FIELD_TOP, FIELD_WIDTH, FIELD_HEIGHT = 22, 46, 220, 30
+local FIELD_LEFT, FIELD_TOP, FIELD_WIDTH, FIELD_HEIGHT = 22, 46, 214, 30 -- as wide as the sidebar's rows
 local FIELD_SLICE, RING_SLICE = 8, 16 -- texels; the field's art is drawn at half scale
 local RING_WIDTH = 4 -- how far the focus glow reaches outside the field
 local ICON_LEFT, ICON_SIZE = 9, 14

@@ -9,6 +9,7 @@ end
 local EASE_RATE = 14        -- the glide closes 1 - e^(-14 dt) of the distance each frame
 local SNAP_DISTANCE = 0.5   -- the glide stops within this many units
 local BAR_GAP = 6           -- between the list and its scroll bar
+local INSIDE_LANE = 16      -- an inside bar's lane at the list's right: the slim bar 8 from the list, at the edge
 local SLIM_TRACK_ALPHA = 0.35
 
 lib.ScrollHandlers = lib.ScrollHandlers or {}
@@ -28,7 +29,7 @@ function lib:CreateScroll(parent, options)
 
 	local frame = CreateFrame("ScrollFrame", nil, parent)
 	frame:SetPoint("TOPLEFT")
-	frame:SetPoint("BOTTOMRIGHT", options.inside and -10 or 0, 0)
+	frame:SetPoint("BOTTOMRIGHT", options.inside and -INSIDE_LANE or 0, 0)
 	frame:EnableMouseWheel(true)
 	frame:SetScript("OnMouseWheel", function(_, delta) scroll:ScrollBy(-delta) end)
 	frame:SetScript("OnSizeChanged", function() scroll:Layout() end)
