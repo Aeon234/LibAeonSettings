@@ -177,5 +177,4 @@ L.DELETE_CHOOSE = "要刪除設定檔「%s」嗎？其設定將會遺失。請�
 L.SETTINGS_WINDOW = "設定視窗"
 L.REDUCE_MOTION = "減少動態效果"
 L.REDUCE_MOTION_DESCRIPTION = "面板與列會直接出現，不再移動。"
-L.REDUCE_MOTION_NOTE = "對此帳號中所有使用此視窗進行設定的插件生效。"
 L.PREVIEW_SIDEWAYS = "左右捲動以查看全部。"

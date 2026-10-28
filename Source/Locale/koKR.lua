@@ -180,5 +180,4 @@ L.DELETE_CHOOSE = "\"%s\" 프로필을 삭제하시겠습니까? 설정이 사�
 L.SETTINGS_WINDOW = "설정 창"
 L.REDUCE_MOTION = "동작 줄이기"
 L.REDUCE_MOTION_DESCRIPTION = "패널과 줄이 움직이지 않고 바로 나타납니다."
-L.REDUCE_MOTION_NOTE = "이 계정에서 이 창으로 설정을 여는 모든 애드온에 적용됩니다."
 L.PREVIEW_SIDEWAYS = "옆으로 스크롤하면 전체를 볼 수 있습니다."

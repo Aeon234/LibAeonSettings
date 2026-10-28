@@ -180,5 +180,4 @@ L.DELETE_CHOOSE =
 L.SETTINGS_WINDOW = "Fenêtre des réglages"
 L.REDUCE_MOTION = "Réduire les animations"
 L.REDUCE_MOTION_DESCRIPTION = "Les panneaux et les lignes apparaissent aussitôt au lieu de se déplacer."
-L.REDUCE_MOTION_NOTE = "S'applique sur ce compte à chaque addon dont les réglages utilisent cette fenêtre."
 L.PREVIEW_SIDEWAYS = "Faites défiler sur le côté pour tout voir."

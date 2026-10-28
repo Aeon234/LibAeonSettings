@@ -181,5 +181,4 @@ L.DELETE_CHOOSE = "¿Eliminar el perfil \"%s\"? Se perderá su configuración. E
 L.SETTINGS_WINDOW = "Ventana de opciones"
 L.REDUCE_MOTION = "Reducir movimiento"
 L.REDUCE_MOTION_DESCRIPTION = "Los paneles y las filas aparecen al instante en lugar de moverse."
-L.REDUCE_MOTION_NOTE = "Se aplica en esta cuenta a todos los addons cuyas opciones usan esta ventana."
 L.PREVIEW_SIDEWAYS = "Desplázate a los lados para verlo entero."

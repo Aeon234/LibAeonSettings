@@ -177,5 +177,4 @@ L.DELETE_CHOOSE = "删除配置文件“%s”？其设置将会丢失。请选�
 L.SETTINGS_WINDOW = "设置窗口"
 L.REDUCE_MOTION = "减弱动态效果"
 L.REDUCE_MOTION_DESCRIPTION = "面板和行会直接出现，不再移动。"
-L.REDUCE_MOTION_NOTE = "对此账号中所有使用此窗口进行设置的插件生效。"
 L.PREVIEW_SIDEWAYS = "左右滚动以查看全部。"

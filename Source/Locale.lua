@@ -186,4 +186,3 @@ L.DELETE_CHOOSE = "Delete the profile \"%s\"? Its settings will be lost. Choose 
 L.SETTINGS_WINDOW = "Settings Window"
 L.REDUCE_MOTION = "Reduce Motion"
 L.REDUCE_MOTION_DESCRIPTION = "Panels and rows appear at once instead of moving."
-L.REDUCE_MOTION_NOTE = "Applies on this account to every addon whose settings use this window."

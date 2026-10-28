@@ -267,7 +267,6 @@ function lib.Window:AddWindowSection()
 		get = function() return lib:ReduceMotion() end,
 		set = function(value) lib:SetReduceMotion(value) end,
 	})
-	section:Note(L.REDUCE_MOTION_NOTE)
 	first.windowSection = section
 end
 

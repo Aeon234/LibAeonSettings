@@ -180,5 +180,4 @@ L.DELETE_CHOOSE =
 L.SETTINGS_WINDOW = "Einstellungsfenster"
 L.REDUCE_MOTION = "Bewegung reduzieren"
 L.REDUCE_MOTION_DESCRIPTION = "Fenster und Zeilen erscheinen sofort, statt sich zu bewegen."
-L.REDUCE_MOTION_NOTE = "Gilt auf diesem Account für jedes Addon, dessen Einstellungen dieses Fenster verwenden."
 L.PREVIEW_SIDEWAYS = "Seitwärts scrollen, um alles zu sehen."
