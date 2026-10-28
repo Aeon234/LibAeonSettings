@@ -24,6 +24,7 @@ local PILL_LINE = { 1, 1, 1, 0.12 }
 local PILL_ON_FILL_ALPHA = 0.2 -- over the bronze edge's color
 local TAB_GAP, TAB_TOP, TAB_HEIGHT, TAB_ACTIVE_HEIGHT = 4, 18, 23, 26
 local TAB_PAD, TAB_CAP, TAB_FIRST = 18, 7, 4
+local TAB_HOVER, TAB_PRESSED = 0.25, 0.5 -- how strongly a tab's added art lights it
 local TAB_SOUND = SOUNDKIT and SOUNDKIT.IG_CHARACTER_INFO_TAB
 local PREVIEW_FIELDS = { height = true, states = true, create = true, refresh = true, caption = true, pick = true,
 	stop = true, editor = true }
@@ -220,45 +221,71 @@ function Handlers.PaintPill(pill)
 	pill.text:SetTextColor(lib:GetColor(pill.on and "accent" or "secondary"))
 end
 
-local function TabPiece(tab, layer)
-	local texture = tab:CreateTexture(nil, layer)
-	texture:SetPoint("BOTTOM")
+-- A tab's art in three pieces: fixed-width caps and a middle that stretches between them.
+local function TabPieces(tab, sublevel)
+	local pieces = {}
+	for index, side in ipairs({ "Left", "Middle", "Right" }) do
+		pieces[index] = tab:CreateTexture(nil, "BACKGROUND", nil, sublevel)
+		pieces[index].side = side
+	end
+	local left, middle, right = pieces[1], pieces[2], pieces[3]
+	left:SetPoint("BOTTOMLEFT")
+	left:SetPoint("TOPLEFT")
+	left:SetWidth(TAB_CAP)
+	right:SetPoint("BOTTOMRIGHT")
+	right:SetPoint("TOPRIGHT")
+	right:SetWidth(TAB_CAP)
+	middle:SetPoint("TOPLEFT", left, "TOPRIGHT")
+	middle:SetPoint("BOTTOMRIGHT", right, "BOTTOMLEFT")
 
-	return texture
+	return pieces
+end
+
+local function ShowPieces(pieces, shown, alpha)
+	for _, piece in ipairs(pieces) do
+		piece:SetShown(shown and true or false)
+		if alpha then
+			piece:SetAlpha(alpha)
+		end
+	end
 end
 
 local function CreateTab(fixed)
 	local tab = CreateFrame("Button", nil, fixed.tabs)
-	tab.left, tab.middle, tab.right = TabPiece(tab, "BACKGROUND"), TabPiece(tab, "BACKGROUND"), TabPiece(tab, "BACKGROUND")
-	tab.left:ClearAllPoints()
-	tab.left:SetPoint("BOTTOMLEFT")
-	tab.left:SetPoint("TOPLEFT")
-	tab.left:SetWidth(TAB_CAP)
-	tab.right:ClearAllPoints()
-	tab.right:SetPoint("BOTTOMRIGHT")
-	tab.right:SetPoint("TOPRIGHT")
-	tab.right:SetWidth(TAB_CAP)
-	tab.middle:ClearAllPoints()
-	tab.middle:SetPoint("TOPLEFT", tab.left, "TOPRIGHT")
-	tab.middle:SetPoint("BOTTOMRIGHT", tab.right, "BOTTOMLEFT")
+	tab.art = TabPieces(tab, 0)
+	-- The same art again, added over itself, lights a tab under the pointer and more while it is pressed.
+	tab.lit = TabPieces(tab, 1)
+	for _, piece in ipairs(tab.lit) do
+		piece:SetBlendMode("ADD")
+	end
 	tab.text = tab:CreateFontString(nil, "OVERLAY")
 	lib:SetType(tab.text, "body")
-	tab.text:SetPoint("CENTER", 0, -1)
 	tab:SetScript("OnClick", function(self) Handlers.TabClick(fixed.window, self.tabId) end)
-	tab:SetScript("OnEnter", function(self) if not self.on then self.text:SetTextColor(1, 1, 1) end end)
-	tab:SetScript("OnLeave", function(self) Handlers.PaintTab(self) end)
+	tab:SetScript("OnEnter", function(self) self.hovered = true; Handlers.PaintTab(self) end)
+	tab:SetScript("OnLeave", function(self) self.hovered, self.pressed = nil, nil; Handlers.PaintTab(self) end)
+	tab:SetScript("OnMouseDown", function(self, button)
+		self.pressed = button == "LeftButton" or nil
+		Handlers.PaintTab(self)
+	end)
+	tab:SetScript("OnMouseUp", function(self) self.pressed = nil; Handlers.PaintTab(self) end)
 
 	return tab
 end
 
 function Handlers.PaintTab(tab)
 	local prefix = tab.on and "Options_Tab_Active_" or "Options_Tab_"
-	tab.left:SetAtlas(prefix .. "Left")
-	tab.middle:SetAtlas(prefix .. "Middle")
-	tab.right:SetAtlas(prefix .. "Right")
+	for index, piece in ipairs(tab.art) do
+		piece:SetAtlas(prefix .. piece.side)
+		tab.lit[index]:SetAtlas(prefix .. piece.side)
+	end
 	tab:SetHeight(tab.on and TAB_ACTIVE_HEIGHT or TAB_HEIGHT)
 	tab:SetFrameLevel(tab:GetParent():GetFrameLevel() + (tab.on and 2 or 1))
-	tab.text:SetTextColor(lib:GetColor(tab.on and "accent" or "secondary"))
+	-- The selected tab stays as it is; another lights at once on the press, softer under the pointer.
+	local pressed = not tab.on and tab.pressed
+	local lit = pressed or (not tab.on and tab.hovered)
+	ShowPieces(tab.lit, lit, pressed and TAB_PRESSED or TAB_HOVER)
+	tab.text:SetTextColor(lib:GetColor(tab.on and "accent" or lit and "text" or "secondary"))
+	tab.text:SetPoint("CENTER", 0, pressed and -2 or -1)
 end
 
 ---Builds the fixed part of the page view: called by the page view when it is built.
