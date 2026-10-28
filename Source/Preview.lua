@@ -43,7 +43,9 @@ local previewMeta = { __index = function(_, name) return lib.PreviewModel[name] 
 -- Model ------------------------------------------------------------------------------------------------------
 
 ---Gives the page a Preview above its sections. `info`: `height` (the stage, 84 by default, at most a third of the
----page less the heading and caption); `editor` (true for a sample whose parts are clicked and dragged: it shrinks
+---page less the heading and caption; or a function returning it, read each time the page or a tab is shown and held
+---while the page stays shown, so a sample sized by settings on other pages fits them without moving as this page's
+---settings change); `editor` (true for a sample whose parts are clicked and dragged: it shrinks
 ---only to 0.85); `states` (a list of names, or a function returning the ones that apply now; pills show when more
 ---than one does); `create(canvas, preview)` once; `refresh(canvas, state, preview)` on every change, returning the
 ---sample's natural width and height and marking its parts with `preview:Part` (`preview.room`, `{ width, height }`,
@@ -382,7 +384,11 @@ function lib.Window:ShowFixedArea(page)
 		local pageHeight = view.content:GetHeight()
 		local most = math.floor((pageHeight > 1 and pageHeight or 700) / 3)
 			- (PREVIEW_GAP + SECTION_TITLE_HEIGHT + 1 + CAPTION_HEIGHT)
-		local stageHeight = math.min(page.preview.height or PREVIEW_HEIGHT, most)
+		local stageHeight = page.preview.height
+		if type(stageHeight) == "function" then
+			stageHeight = lib.CallAdopter(stageHeight, page.preview)
+		end
+		stageHeight = math.min(tonumber(stageHeight) or PREVIEW_HEIGHT, most)
 		preview.stage:SetHeight(stageHeight)
 		local previewHeight = PREVIEW_GAP + SECTION_TITLE_HEIGHT + 1 + stageHeight + CAPTION_HEIGHT
 		preview:SetHeight(previewHeight)
