@@ -19,9 +19,8 @@ local ROOM_X, ROOM_Y = 24, 8 -- the canvas keeps this much of the stage free whe
 local LOOK_LEAST, EDITOR_LEAST = 0.5, 0.85 -- the smallest a sample shrinks to before it scrolls sideways instead
 local HEADING_INSET, HEADING_BOTTOM = 14, 6 -- the Preview heading, placed as a section's
 local WHEEL_STEP, EDGE_WIDTH = 60, 24 -- sideways scrolling: per wheel notch, and the faded edge over hidden sample
-local PILL_PAD, PILL_HEIGHT, PILL_GAP, PILL_TOP = 10, 18, 2, 4
-local PILL_LINE = { 1, 1, 1, 0.12 }
-local PILL_ON_FILL_ALPHA = 0.2 -- over the bronze edge's color
+local PILL_PAD, PILL_HEIGHT, PILL_GAP, PILL_TOP = 12, 24, 2, 1
+local PILL_ART = "common-button-tertiary-%s-small" -- Blizzard's filter buttons: normal, hover, pressed, selected
 local TAB_GAP, TAB_TOP, TAB_HEIGHT, TAB_ACTIVE_HEIGHT = 4, 18, 23, 26
 local TAB_PAD, TAB_CAP, TAB_FIRST = 18, 7, 4
 local TAB_HOVER, TAB_PRESSED = 0.25, 0.5 -- how strongly a tab's added art lights it
@@ -159,27 +158,15 @@ end
 local function CreatePill(fixed)
 	local pill = CreateFrame("Button", nil, fixed.preview)
 	pill:SetHeight(PILL_HEIGHT)
-	pill.fill = pill:CreateTexture(nil, "BACKGROUND")
-	pill.fill:SetAllPoints()
-	pill.edges = {}
-	for _, side in ipairs({ { "TOPLEFT", "TOPRIGHT", true }, { "BOTTOMLEFT", "BOTTOMRIGHT", true },
-		{ "TOPLEFT", "BOTTOMLEFT", false }, { "TOPRIGHT", "BOTTOMRIGHT", false } }) do
-		local edge = pill:CreateTexture(nil, "BORDER")
-		edge:SetPoint(side[1])
-		edge:SetPoint(side[2])
-		if side[3] then
-			edge:SetHeight(1)
-		else
-			edge:SetWidth(1)
-		end
-		table.insert(pill.edges, edge)
-	end
+	pill.art = pill:CreateTexture(nil, "BACKGROUND")
+	pill.art:SetAllPoints()
 	pill.text = pill:CreateFontString(nil, "OVERLAY")
 	lib:SetType(pill.text, "secondary")
-	pill.text:SetPoint("CENTER")
 	pill:SetScript("OnClick", function(self) Handlers.PillClick(fixed.window, self.state) end)
-	pill:SetScript("OnEnter", function(self) if not self.on then self.text:SetTextColor(1, 1, 1) end end)
-	pill:SetScript("OnLeave", function(self) Handlers.PaintPill(self) end)
+	pill:SetScript("OnEnter", function(self) self.hovered = true; Handlers.PaintPill(self) end)
+	pill:SetScript("OnLeave", function(self) self.hovered = false; Handlers.PaintPill(self) end)
+	pill:SetScript("OnMouseDown", function(self) self.pressed = true; Handlers.PaintPill(self) end)
+	pill:SetScript("OnMouseUp", function(self) self.pressed = false; Handlers.PaintPill(self) end)
 
 	return pill
 end
@@ -209,16 +196,13 @@ function Handlers.Wheel(fixed, delta)
 	Handlers.PlaceCanvas(preview)
 end
 
+-- The chosen state stays as it is; another sinks at once on the press and lights under the pointer.
 function Handlers.PaintPill(pill)
-	for _, edge in ipairs(pill.edges) do
-		if pill.on then
-			edge:SetColorTexture(lib:GetColor("bronze"))
-		else
-			edge:SetColorTexture(unpack(PILL_LINE))
-		end
-	end
-	pill.fill:SetColorTexture(lib:GetColor("bronze", pill.on and PILL_ON_FILL_ALPHA or 0))
-	pill.text:SetTextColor(lib:GetColor(pill.on and "accent" or "secondary"))
+	local pressed = not pill.on and pill.pressed
+	local look = pill.on and "selected" or pressed and "pressed" or pill.hovered and "hover" or "normal"
+	pill.art:SetAtlas(PILL_ART:format(look))
+	pill.text:SetTextColor(lib:GetColor((pill.on or pill.hovered) and "text" or "secondary"))
+	pill.text:SetPoint("CENTER", 0, pressed and -1 or 0)
 end
 
 -- A tab's art in three pieces: fixed-width caps and a middle that stretches between them.
