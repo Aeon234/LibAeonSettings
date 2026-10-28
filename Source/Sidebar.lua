@@ -85,11 +85,12 @@ function lib.Window:Divider()
 	return AddNode(self, { kind = "divider", id = "\0divider" .. self.dividers })
 end
 
-local PAGE_FIELDS = { title = true, description = true, under = true, icon = true, iconCrop = true, slot = true,
-	switch = true }
+local PAGE_FIELDS = { title = true, description = true, under = true, icon = true, iconCrop = true, iconTint = true,
+	slot = true, switch = true }
 
 ---Adds a page: at the top level, under a header, or under a group. `info.icon` (a file or atlas) draws before its
----title; `info.iconCrop` cuts that share of a file icon from each edge; `info.slot` is accepted and no longer needed,
+---title; `info.iconCrop` cuts that share of a file icon from each edge; `info.iconTint` (true for a white glyph)
+---colors the icon as its title, gold while the page is selected, where other icons keep their own colors; `info.slot` is accepted and no longer needed,
 ---as every entry keeps the icon's room. `info.switch` (true, or a setting's fields such as `path` and `default`)
 ---gives the page a switch on a card of its own, the rest of the page there only while it is on.
 ---@return table? page
@@ -106,7 +107,7 @@ function lib.Window:Page(id, info)
 	end
 	local kind = not parent and "top" or parent.kind == "header" and "sub" or "item"
 	local page = AddNode(self, { kind = kind, id = id, title = info.title or id, description = info.description,
-		parent = parent, icon = info.icon, iconCrop = info.iconCrop, isPage = true })
+		parent = parent, icon = info.icon, iconCrop = info.iconCrop, iconTint = info.iconTint, isPage = true })
 	if page then
 		self.pages[id] = page
 		table.insert(self.pageOrder, page)
@@ -236,6 +237,11 @@ local function PaintRow(window, row)
 	local holding = false
 	if node.isPage then
 		row.label:SetTextColor(lib:GetColor(selected and "accent" or "text"))
+		if node.iconTint then
+			row.icon:SetVertexColor(lib:GetColor(selected and "accent" or "text"))
+		else
+			row.icon:SetVertexColor(1, 1, 1)
+		end
 	elseif KINDS[node.kind] and KINDS[node.kind].heading then
 		-- A folded heading over the shown page turns gold and names it.
 		holding = window.collapsed[node.id] and Holds(window, node)
