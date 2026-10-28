@@ -12,7 +12,8 @@ local DIVIDER_HEIGHT = 19       -- a 1-unit rule with 9 above and below
 local ICON_SIZE, ICON_LEFT, ENTRY_TEXT = 18, 13, 40 -- an entry's icon and text
 local HEADING_TEXT, HEADING_BOTTOM = 28, 7 -- a heading's text: in from the left, up from the row's bottom
 local CHEVRON_SIZE, CHEVRON_CENTER = 10, 14
-local HOLDING_WIDTH = 110 -- room for the name of the page a folded heading holds
+local HOLDING_WIDTH, HOLDING_GAP = 110, 8 -- the most room for the name of the page a folded heading holds
+local ROW_RIGHT = 12 -- a heading's text ends this far in from the row's right edge
 -- A row's fill by state: one rounded shape for every state, told apart by its tint. Hovered and pressed rows are
 -- lit white; the selected row is gold, a little stronger under the pointer, with a gold inner edge.
 local FILL_HOVER, FILL_PRESSED = 0.06, 0.12
@@ -240,8 +241,13 @@ local function PaintRow(window, row)
 		holding = window.collapsed[node.id] and Holds(window, node)
 		row.label:SetTextColor(lib:GetColor(holding and "accent" or "navHeading"))
 		row.chevron:SetVertexColor(lib:GetColor(holding and "accent" or "navHeading"))
+		-- The heading's name runs to the row's right edge and makes way only for the name of a page it holds.
 		if holding then
 			row.holding:SetText(window.pages[window.page].title)
+			row.holding:SetWidth(math.min(HOLDING_WIDTH, math.ceil(row.holding:GetUnboundedStringWidth())))
+			row.label:SetPoint("RIGHT", row.holding, "LEFT", -HOLDING_GAP, 0)
+		else
+			row.label:SetPoint("RIGHT", -ROW_RIGHT, 0)
 		end
 	end
 	row.holding:SetShown(holding and true or false)
@@ -291,12 +297,11 @@ local function SetUpRow(window, row, node)
 	if kind.heading then
 		-- Headings sit low in their row, over the entries they hold; the chevron turns as they fold.
 		row.label:SetPoint("BOTTOMLEFT", HEADING_TEXT, HEADING_BOTTOM)
-		row.label:SetPoint("RIGHT", -(HOLDING_WIDTH + 12), 0)
 		row.chevron:ClearAllPoints()
 		row.chevron:SetPoint("CENTER", row.label, "LEFT", -(HEADING_TEXT - CHEVRON_CENTER), 0)
 		row.chevron:SetRotation((1 - FoldShare(window, node)) * math.pi / 2)
 		row.chevron:Show()
-		row.holding:SetPoint("BOTTOMRIGHT", -12, HEADING_BOTTOM)
+		row.holding:SetPoint("BOTTOMRIGHT", -ROW_RIGHT, HEADING_BOTTOM)
 	else
 		if node.icon then
 			row.icon:ClearAllPoints()
@@ -391,7 +396,6 @@ end
 function Handlers.Hover(window, row, hovered)
 	row.hovered = hovered
 	PaintRow(window, row)
-	window.sidebar:UpdateLit()
 end
 
 function Handlers.Press(window, row, pressed)

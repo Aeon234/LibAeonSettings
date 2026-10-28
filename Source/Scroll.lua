@@ -9,7 +9,6 @@ end
 local EASE_RATE = 14        -- the glide closes 1 - e^(-14 dt) of the distance each frame
 local SNAP_DISTANCE = 0.5   -- the glide stops within this many units
 local BAR_GAP = 6           -- between the list and its scroll bar
-local THUMB_REST, THUMB_LIT = 0.45, 1
 local SLIM_TRACK_ALPHA = 0.35
 
 lib.ScrollHandlers = lib.ScrollHandlers or {}
@@ -33,8 +32,6 @@ function lib:CreateScroll(parent, options)
 	frame:EnableMouseWheel(true)
 	frame:SetScript("OnMouseWheel", function(_, delta) scroll:ScrollBy(-delta) end)
 	frame:SetScript("OnSizeChanged", function() scroll:Layout() end)
-	frame:SetScript("OnEnter", function() scroll:UpdateLit() end)
-	frame:SetScript("OnLeave", function() scroll:UpdateLit() end)
 	local child = CreateFrame("Frame", nil, frame)
 	child:SetSize(1, 1)
 	frame:SetScrollChild(child)
@@ -61,8 +58,6 @@ function lib:CreateScroll(parent, options)
 	bar:RegisterCallback(ScrollBarMixin.Event.OnScroll, function(_, percentage)
 		Handlers.BarScrolled(scroll, percentage)
 	end, scroll)
-	bar:HookScript("OnEnter", function() scroll:UpdateLit() end)
-	bar:HookScript("OnLeave", function() scroll:UpdateLit() end)
 
 	local driver = CreateFrame("Frame", nil, frame)
 	driver:Hide()
@@ -70,7 +65,6 @@ function lib:CreateScroll(parent, options)
 
 	scroll.frame, scroll.child, scroll.bar, scroll.driver = frame, child, bar, driver
 	scroll:Layout()
-	scroll:UpdateLit()
 
 	return scroll
 end
@@ -127,7 +121,6 @@ function lib.Scroll:ScrollBy(notches)
 	end
 	self.target = math.max(0, math.min(range, target))
 	self.driver:Show()
-	self:UpdateLit()
 end
 
 ---Moves at once to an offset, stopping any glide.
@@ -135,14 +128,12 @@ function lib.Scroll:JumpTo(offset)
 	self.target = math.max(0, math.min(self:Range(), offset))
 	self.driver:Hide()
 	self:SetOffset(self.target)
-	self:UpdateLit()
 end
 
 ---Glides to an offset (clamped to the list's range).
 function lib.Scroll:GlideTo(offset)
 	self.target = math.max(0, math.min(self:Range(), offset))
 	self.driver:Show()
-	self:UpdateLit()
 end
 
 ---Keeps a band (top and height in list units) in view, gliding the least distance needed.
@@ -159,13 +150,12 @@ function lib.Scroll:Reveal(top, height)
 	self.driver:Show()
 end
 
--- The thumb rests dim and lights up while the pointer is over the list or its bar, or the list moves.
+-- The thumb keeps Blizzard's look. Lists made by an older copy of the library still call this from their scripts.
 function lib.Scroll:UpdateLit()
-	local lit = self.frame:IsMouseOver() or self.bar:IsMouseOver() or self.driver:IsShown()
-	self.bar:GetThumb():SetAlpha(lit and THUMB_LIT or THUMB_REST)
+	self.bar:GetThumb():SetAlpha(1)
 	if not self.options.slim then
-		self.bar.Back:SetAlpha(lit and 1 or THUMB_REST)
-		self.bar.Forward:SetAlpha(lit and 1 or THUMB_REST)
+		self.bar.Back:SetAlpha(1)
+		self.bar.Forward:SetAlpha(1)
 	end
 end
 
@@ -174,7 +164,6 @@ function Handlers.Glide(scroll, elapsed)
 	if math.abs(distance) <= SNAP_DISTANCE then
 		scroll:SetOffset(scroll.target)
 		scroll.driver:Hide()
-		scroll:UpdateLit()
 		return
 	end
 	local nextOffset = scroll.offset + distance * (1 - math.exp(-EASE_RATE * math.min(elapsed, 0.1)))
