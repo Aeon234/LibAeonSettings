@@ -36,6 +36,7 @@ local GUTTER_RIGHT, GUTTER_WIDTH, GUTTER_HEIGHT = 20, 44, 16
 local DIAMOND_SIZE, UNDO_SIZE, UNDO_ALPHA = 14, 16, 0.85
 local RESET_SOUND = SOUNDKIT and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON
 local HOVER_MARGIN = 4 -- the label's hover region reaches this far past its text lines
+local TOOLTIP_GAP = 2 -- the label's tooltip sits this far above its row
 
 lib.PageHandlers = lib.PageHandlers or {}
 local Handlers = lib.PageHandlers
@@ -904,7 +905,10 @@ function Handlers.LabelEnter(half)
 		Handlers.LabelLeave(half)
 		return
 	end
-	GameTooltip:SetOwner(half.hover, "ANCHOR_TOP")
+	-- Above the row, its left edge on the label's, wherever the row's control sits and however wide it is.
+	GameTooltip:SetOwner(half.hover, "ANCHOR_NONE")
+	GameTooltip:ClearAllPoints()
+	GameTooltip:SetPoint("BOTTOMLEFT", half, "TOPLEFT", INSET, TOOLTIP_GAP)
 	-- Every line is body text: the first takes the body font while this tooltip shows, set before Show sizes the
 	-- tooltip so its width fits the font drawn.
 	GameTooltipTextLeft1:SetFontObject(GameTooltipText)
