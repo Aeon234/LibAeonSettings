@@ -850,6 +850,7 @@ function lib.Window:FlushChanges()
 	if not changed or not next(changed) then
 		return
 	end
+	self:RefreshReloadNeeded()
 	-- A page that the change hid gives way to another, which draws every value afresh.
 	if self:IsShown() and self:RefreshPageShows() then
 		wipe(changed)
@@ -1010,6 +1011,7 @@ function lib.Window:Refresh()
 	if not self:IsShown() or not view or not view.shownPage then
 		return
 	end
+	self:RefreshReloadNeeded()
 	if self:RefreshPageShows() then
 		return
 	end

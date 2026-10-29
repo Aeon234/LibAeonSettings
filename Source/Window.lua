@@ -33,7 +33,7 @@ local INNER_COLUMNS = { { 0, 12, 12 }, { 12, 184, SIDEBAR_WIDTH }, { 196, 8, 8 }
 local INNER_ROWS = { { 0, 60, 60 }, { 60, 480, false }, { 540, 78, 78 } }
 
 local DECLARATION_FIELDS = { title = true, version = true, store = true, write = true, account = true, width = true,
-	height = true, footer = true, frameName = true }
+	height = true, footer = true, frameName = true, reloadNeeded = true }
 
 lib.windows = lib.windows or {}
 
@@ -67,7 +67,8 @@ local Handlers = lib.WindowHandlers
 ---instead, so the addon writes its own store and hears of each change (the player's, Undo's, ↺, Clear Overrides);
 ---it may return false and a reason to refuse.
 ---@param addonName string the addon's folder name
----@param declaration table { title, version?, store?, write?, account?, width?, height?, footer?, frameName? }
+---@param declaration table { title, version?, store?, write?, account?, width?, height?, footer?, frameName?,
+---reloadNeeded? }; `reloadNeeded()` returns true while a change waits for a reload, which the footer then says
 ---@return table? window
 function lib:Settings(addonName, declaration)
 	if type(addonName) ~= "string" or type(declaration) ~= "table" then
@@ -127,6 +128,14 @@ local function BuildFooter(window, frame)
 	lib:SetFont(footer.text, "body", FOOTER_TEXT_SIZE)
 	footer.text:SetPoint("LEFT", 14, 0)
 	footer.text:SetJustifyH("LEFT")
+
+	-- Beside the reload notice; a message shown for a few seconds takes its place meanwhile.
+	footer.reload = CreateFrame("Button", nil, footer, "SharedButtonTemplate")
+	footer.reload:SetText(RELOADUI)
+	footer.reload:SetSize(footer.reload:GetFontString():GetStringWidth() + 40, 30)
+	footer.reload:SetPoint("LEFT", footer.text, "RIGHT", 12, 0)
+	footer.reload:SetScript("OnClick", function() C_UI.Reload() end)
+	footer.reload:Hide()
 
 	footer.editMode = CreateFrame("Button", nil, footer, "SharedButtonTemplate")
 	footer.editMode:SetText(L.OPEN_EDIT_MODE)
@@ -261,7 +270,8 @@ function lib.Window:RefreshShell()
 	frame.title:SetText(declaration.title or self.addonName)
 	frame.version:SetText(declaration.version or "")
 	frame.version:SetShown(declaration.version ~= nil)
-	self:SetFooterText(self.statusText or "", false)
+	self:SetFooterText(self:FooterText(), false)
+	frame.footer.reload:SetShown(self.reloadNeeded == true and not self.statusText)
 	frame.footer.editMode:SetShown(lib.registrations[self.addonName] ~= nil)
 	self:PlaceUndo()
 end
@@ -299,6 +309,7 @@ function lib.Window:Open()
 	end
 	self:AddWindowSection()
 	self:RefreshPageShows()
+	self:RefreshReloadNeeded()
 	local opening = not frame:IsShown() or self.closing
 	self.closing = false
 	local presence = Handlers.Presence(self)
@@ -430,18 +441,44 @@ function lib.Window:SetFooterText(text, animate)
 	footer:SetScript("OnUpdate", function(frame, elapsed) Handlers.FooterFade(frame, elapsed) end)
 end
 
----Shows a message in the footer for a few seconds, fading in and out; the footer has no text of its own.
+---@return string text the footer's text: a message being shown, else the reload notice while a change waits, else none
+function lib.Window:FooterText()
+	return self.statusText or self.reloadNeeded and L.RELOAD_NEEDED or ""
+end
+
+---Shows a message in the footer for a few seconds, fading in and out, then the reload notice again when one stands.
 function lib.Window:ShowStatus(text)
 	self.statusText = text
 	self.statusToken = (self.statusToken or 0) + 1
 	local token = self.statusToken
 	self:SetFooterText(text, true)
+	if self.frame then
+		self.frame.footer.reload:Hide()
+	end
 	C_Timer.After(STATUS_SECONDS, function()
 		if self.statusToken == token then
 			self.statusText = nil
-			self:SetFooterText("", true)
+			self:SetFooterText(self:FooterText(), true)
+			if self.frame then
+				self.frame.footer.reload:SetShown(self.reloadNeeded == true)
+			end
 		end
 	end)
+end
+
+---Asks the declaration's `reloadNeeded` again and shows or clears the footer's reload notice and its Reload UI button.
+function lib.Window:RefreshReloadNeeded()
+	local check = self.declaration.reloadNeeded
+	local needed = type(check) == "function" and lib.CallAdopter(check) == true
+	if needed == (self.reloadNeeded == true) then
+		return
+	end
+	self.reloadNeeded = needed
+	if not self.frame then
+		return
+	end
+	self:SetFooterText(self:FooterText(), true)
+	self.frame.footer.reload:SetShown(needed and not self.statusText)
 end
 
 function Handlers.Moved(window)
