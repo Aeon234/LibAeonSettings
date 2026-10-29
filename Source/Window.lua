@@ -10,7 +10,7 @@ end
 local L = lib.L
 
 local WINDOW_WIDTH, WINDOW_HEIGHT = 1000, 800 -- every window, every page
-local OPEN_RESPONSE = 0.28 -- the open and close spring; closing runs the same path back
+local OPEN_RESPONSE = 0.28 -- the opening spring; closing hides at once
 local CLOSED_SCALE = 0.965 -- the scale the window grows from as it opens and shrinks to as it closes
 local TITLE_SIZE = 14
 local FOOTER_HEIGHT = 35
@@ -237,7 +237,7 @@ local function Build(window)
 	frame.sidebarRegion = sidebarRegion
 
 	-- Escape closes the window, as it does Blizzard's panels, after any open menu: Blizzard hides the frames named in
-	-- UISpecialFrames at once, so a hidden stand-in is named there instead, and its hiding starts the closing motion.
+	-- UISpecialFrames at once, so a hidden stand-in is named there instead, and its hiding closes the window.
 	local escape = CreateFrame("Frame", name .. "Escape", frame)
 	escape:SetScript("OnHide", function() Handlers.EscapeHidden(window) end)
 	tinsert(UISpecialFrames, escape:GetName())
@@ -318,10 +318,9 @@ function lib.Window:Open()
 	end
 end
 
----Closes the window: it shrinks a little and fades, the opening's path run back, then hides. `instant` hides it at
----once.
----@param instant boolean?
-function lib.Window:Close(instant)
+---Closes the window at once, so a click or camera turn right after it reaches the world. An opening still running
+---stops where it is.
+function lib.Window:Close()
 	local frame = self.frame
 	if not frame or not frame:IsShown() then
 		return
@@ -330,11 +329,7 @@ function lib.Window:Close(instant)
 	if frame.escape then
 		frame.escape:Hide()
 	end
-	if instant then
-		Handlers.Presence(self):Jump(0)
-	else
-		Handlers.Presence(self):To(0)
-	end
+	Handlers.Presence(self):Jump(0)
 end
 
 function lib.Window:Toggle()
