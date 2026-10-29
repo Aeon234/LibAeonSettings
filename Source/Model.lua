@@ -52,6 +52,16 @@ lib.CallAdopter = Call
 
 -- Pages -------------------------------------------------------------------------------------------------------
 
+---@return boolean shown the page's `show` lets it into the sidebar and search
+function lib.PageShown(page)
+	if not page.show then
+		return true
+	end
+
+	return Call(page.show, page) and true or false
+end
+
+
 -- Called by window:Page once the navigation entry exists: gives it its sections and its switch.
 function lib:InitPage(window, page, info)
 	setmetatable(page, pageMeta)

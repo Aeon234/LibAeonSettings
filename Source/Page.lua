@@ -850,6 +850,11 @@ function lib.Window:FlushChanges()
 	if not changed or not next(changed) then
 		return
 	end
+	-- A page that the change hid gives way to another, which draws every value afresh.
+	if self:IsShown() and self:RefreshPageShows() then
+		wipe(changed)
+		return
+	end
 	local view = self.pageView
 	if self:IsShown() and view and view.shownPage then
 		-- A setting marked `redraws` may change what other rows show (a picked slot): every row redraws.
@@ -1003,6 +1008,9 @@ end
 function lib.Window:Refresh()
 	local view = self.pageView
 	if not self:IsShown() or not view or not view.shownPage then
+		return
+	end
+	if self:RefreshPageShows() then
 		return
 	end
 	local switch = view.shownPage.switch

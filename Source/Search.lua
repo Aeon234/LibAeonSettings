@@ -435,6 +435,7 @@ function lib.Window:FindSettings(text)
 			end
 			visible = entry.setting ~= nil
 		end
+		visible = visible and lib.PageShown(entry.page)
 		local score = visible and Score(entry, query, phrase, squeezed, respelled)
 		if score then
 			entry.score = score

@@ -298,6 +298,7 @@ function lib.Window:Open()
 		self.page = self.pageOrder[1].id
 	end
 	self:AddWindowSection()
+	self:RefreshPageShows()
 	local opening = not frame:IsShown() or self.closing
 	self.closing = false
 	local presence = Handlers.Presence(self)

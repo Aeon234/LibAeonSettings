@@ -858,6 +858,23 @@ do
 	Check("search: letters in order find the label", Finds("shwclk", "Show Clock"))
 	Check("search: a typed British stem finds the word", Finds("centr", "Centered Text"))
 	Check("search: descriptions are searched", Finds("middle", "Centered Text"))
+
+	local unitsShown = false
+	local units = NewPage(window, "units", "Unit Tooltips")
+	units.show = function() return unitsShown end
+	local names = units:Section("names", "Names")
+	names:Toggle({ id = "rank", label = "Guild Rank", path = "rank" })
+	window.searchIndex = nil
+	Check("search: a page its show hides is left out, with its settings",
+		not Finds("unit tooltips", "Unit Tooltips") and not Finds("rank", "Guild Rank"))
+	unitsShown = true
+	Check("search: shown again, it is found", Finds("unit tooltips", "Unit Tooltips") and Finds("rank", "Guild Rank"))
+	units.show = function() error("broken show") end
+	local handler = geterrorhandler
+	geterrorhandler = function() return function() end end
+	Check("page show: an error hides the page instead of breaking search", not lib.PageShown(units)
+		and not Finds("rank", "Guild Rank"))
+	geterrorhandler = handler
 	Check("search: a section is found", Finds("appearance", "Appearance"))
 	Check("search: a hidden setting is not listed", not Finds("hidden", hidden.label))
 	Check("search: nothing matches nonsense", First("zzqx") == nil)
