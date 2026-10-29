@@ -3,6 +3,8 @@
 -- texture picker over a sample of its texture, and a sound picker has a speaker left of the button that plays the
 -- saved choice (Media.lua). A choice may ask before it saves; a dropdown may be narrower than 220, or fit its choices.
 -- An action dropdown keeps no choice: picking runs its `set`, Undo leaves it out and the button shows its placeholder.
+-- A dropdown with `multiple` lists checkboxes instead: each choice is on or off at `path .. "." .. value`, `default`
+-- holds each choice's state, the list stays open while they are checked, and the button names the choices that are on.
 
 local lib = LibStub("LibAeonSettings-1.0")
 if not lib.loading then
@@ -156,6 +158,11 @@ function Handlers.Generate(view, root)
 		local text = isPicker and choice.text or lib.TitleCase(tostring(choice.text or choice.value))
 		if choice.title then
 			root:CreateTitle(text)
+		elseif setting.multiple then
+			local item = { value = choice.value, text = text }
+			root:CreateCheckbox(text,
+				function() return view.setting and view.setting:ItemEnabled(item.value) end,
+				function() Handlers.Toggled(view, item) end, item.value)
 		else
 			local value = choice.value
 			local radio = root:CreateRadio(text,
@@ -236,8 +243,47 @@ function Handlers.Picked(view, value)
 	end)
 end
 
+-- Turns a choice of a dropdown with several on or off; the list stays open.
+function Handlers.Toggled(view, item)
+	local setting = view.setting
+	if setting then
+		setting:SetItemEnabled(item, not setting:ItemEnabled(item.value))
+	end
+end
+
+-- The names of the choices that are on, in the list's order, for a dropdown with several; the placeholder, or None,
+-- when none is. `states` is a stored table of each choice's state; nil reads the store.
+local function ChosenText(setting, states)
+	local names = {}
+	for _, choice in ipairs(Choices(setting)) do
+		if not choice.title then
+			local on
+			if states == nil then
+				on = setting:ItemEnabled(choice.value)
+			else
+				on = states[choice.value]
+				if on == nil and type(setting.default) == "table" then
+					on = setting.default[choice.value]
+				end
+			end
+			if on then
+				names[#names + 1] = setting.titleCase == false and choice.text
+					or lib.TitleCase(tostring(choice.text or choice.value))
+			end
+		end
+	end
+	if #names == 0 then
+		return setting.placeholder or NONE or "None"
+	end
+
+	return table.concat(names, ", ")
+end
+
 -- A value's name in the list, or the value as it is when the list no longer has it.
 local function ChoiceText(setting, value)
+	if setting.multiple then
+		return ChosenText(setting, type(value) == "table" and value or {})
+	end
 	-- A font's or texture's name is its value, so the list is not built only to show it.
 	if setting.picker == "font" or setting.picker == "texture" then
 		return value ~= nil and tostring(value) or nil
@@ -255,6 +301,11 @@ end
 -- The closed button shows the saved choice's name, and a texture picker's texture behind it.
 function lib.Dropdown:ShowValue()
 	local setting = self.setting
+	if setting.multiple then
+		self.dropdown:OverrideText(ChosenText(setting))
+		self.sample:Hide()
+		return
+	end
 	local value = setting:GetValue()
 	self.dropdown:OverrideText(ChoiceText(setting, value) or setting.placeholder or "")
 	local texture = setting.picker == "texture" and lib:TextureFile(value)
@@ -341,8 +392,18 @@ function lib.Dropdown:GetWidth()
 	return self.total or lib.VALUE_WIDTH
 end
 
--- An action dropdown needs only `set`: it reads as no choice, and Undo does not record its picks.
+-- An action dropdown needs only `set`: it reads as no choice, and Undo does not record its picks. A dropdown with
+-- several choices keeps each at its own path, under the setting's.
 local function Init(setting)
+	if setting.multiple then
+		if not setting.path or setting.picker or setting.action then
+			lib:Report(setting.window.addonName, ("%s/%s: a dropdown with several choices needs a path, and no picker "
+				.. "or action"):format(setting.page.id, tostring(setting.id)))
+		end
+		setting.noUndo = true
+		setting.enabled = { path = setting.path or "", default = setting.default }
+		return
+	end
 	if not setting.action then
 		return
 	end
@@ -358,7 +419,7 @@ end
 
 lib:RegisterControl("Dropdown", {
 	fields = { options = true, picker = true, placeholder = true, titleCase = true, confirm = true, verb = true,
-		width = true, action = true },
+		width = true, action = true, multiple = true },
 	Init = Init,
 	Format = ChoiceText,
 	Create = function(half) return lib:CreateDropdown(half) end,

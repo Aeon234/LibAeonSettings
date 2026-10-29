@@ -650,6 +650,34 @@ do
 		picked == "other" and #(window.undoHistory or {}) == 0)
 end
 
+-- Dropdowns with several choices
+
+do
+	local store = {}
+	local window = NewWindow(store)
+	window.RefreshUndo = function() end
+	local recorded = {}
+	window.RecordChange = function(_, change) recorded[#recorded + 1] = change end
+	window.SettingChanged = function() end
+	local page = NewPage(window, "effects", "Effects")
+	local section = page:Section("look", "Look")
+	local effects = section:Dropdown({ id = "effects", label = "Effects", path = "look.effects", multiple = true,
+		default = { grow = true, edge = false },
+		options = { { value = "edge", text = "Highlight Border" }, { value = "grow", text = "Grow" } } })
+	Check("multiple: each choice reads its default until stored",
+		effects:ItemEnabled("grow") and not effects:ItemEnabled("edge"))
+	Check("multiple: the closed text names the choices on", effects:FormatValue({}) == "Grow")
+	effects:SetItemEnabled({ value = "edge", text = "Highlight Border" }, true)
+	Check("multiple: a choice is stored at its own path, one Undo step",
+		store.look.effects.edge == true and #recorded == 1 and recorded[1].path == "look.effects.edge")
+	Check("multiple: in the list's order", effects:FormatValue(store.look.effects) == "Highlight Border, Grow")
+	Check("multiple: none on reads None", effects:FormatValue({ grow = false }) == (NONE or "None"))
+	Check("multiple: its picks are left out of the setting's own Undo", effects.noUndo == true)
+	local before = #errors
+	section:Dropdown({ id = "noPath", multiple = true, options = {} })
+	Check("multiple: a dropdown with several choices without a path is reported", #errors > before)
+end
+
 -- Resettable settings
 
 do

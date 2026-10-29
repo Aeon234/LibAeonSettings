@@ -507,6 +507,40 @@ function lib.Setting:Refuse(reason)
 	self.window:SettingChanged(self, true, true)
 end
 
+-- Items: a setting whose `enabled = { path, default }` keeps one item on or off at `path .. "." .. value` each (the
+-- ordered list's checkboxes, a dropdown with several choices); `default` is a table of each item's state.
+local function ItemPath(setting, value)
+	return setting.enabled.path .. "." .. tostring(value)
+end
+
+---@return boolean on whether the item is on; true for a setting without items to turn on and off
+function lib.Setting:ItemEnabled(value)
+	local enabled = self.enabled
+	if not enabled then
+		return true
+	end
+	local stored = lib.ReadStorePath(self.window, ItemPath(self, value))
+	if stored == nil and type(enabled.default) == "table" then
+		stored = enabled.default[value]
+	end
+
+	return stored and true or false
+end
+
+---Turns an item on or off, recorded for Undo.
+function lib.Setting:SetItemEnabled(item, on)
+	local path = ItemPath(self, item.value)
+	local before = lib.ReadStorePath(self.window, path)
+	local ok, reason = Write({ window = self.window, path = path, keys = { strsplit(".", path) } }, on)
+	if not ok then
+		self:ShowRefusal(reason)
+	else
+		self.window:RecordChange({ path = path, before = before, page = self.page.id,
+			text = L.UNDO_TO:format(item.text, before and L.ON or L.OFF) })
+	end
+	self.window:SettingChanged(self, true, not ok)
+end
+
 -- The setting this one depends on, found by id on its page, or "page/id" on another page of the window.
 function lib.Setting:Parent()
 	local depends = self.depends
