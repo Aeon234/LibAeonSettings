@@ -373,8 +373,31 @@ local function Share(window, node)
 	return share
 end
 
+---@return number share how much of a page its `show` lets into the sidebar: 1 shown, 0 hidden, between while it
+---slides in or out
+local function ShowShare(window, page)
+	local slide = window.slides and window.slides[page.id]
+	if slide and slide:IsMoving() then
+		return slide.value
+	end
+
+	return lib.PageShown(page) and 1 or 0
+end
+
+-- Slides a page whose `show` changed its answer into or out of the sidebar on the fold's spring.
+function Handlers.Slide(window, page, shown)
+	window.slides = window.slides or {}
+	local slide = window.slides[page.id]
+	if not slide then
+		slide = lib:CreateSpring(shown and 0 or 1, function() window:RefreshSidebar() end,
+			{ response = FOLD_RESPONSE, epsilon = 0.002 })
+		window.slides[page.id] = slide
+	end
+	slide:To(shown and 1 or 0)
+end
+
 ---Lays out the sidebar's rows, one level: headers and groups are headings, every page an entry under them. A row
----under a folding heading takes its share of its height, faded by as much.
+---under a folding heading, or of a page sliding in or out, takes its share of its height, faded by as much.
 function lib.Window:RefreshSidebar()
 	local sidebar = self.sidebar
 	if not sidebar then
@@ -383,7 +406,10 @@ function lib.Window:RefreshSidebar()
 	sidebar.rows = sidebar.rows or {}
 	local y, count = 0, 0
 	for _, node in ipairs(self.nav) do
-		local share = node.isPage and not lib.PageShown(node) and 0 or Share(self, node)
+		local share = Share(self, node)
+		if node.isPage and share > 0 then
+			share = share * ShowShare(self, node)
+		end
 		if share > 0 then
 			count = count + 1
 			local row = sidebar.rows[count] or CreateRow(self)
@@ -408,13 +434,22 @@ function lib.Window:RefreshSidebar()
 end
 
 ---Lays the sidebar out again when a page's `show` changed its answer, and moves off the shown page when it is hidden.
+---A change while the window is open slides the page's row in or out; any other change lands at once.
 ---@return boolean moved another page is shown now
 function lib.Window:RefreshPageShows()
 	local changed = false
+	local open = self.frame and self.frame:IsShown() and not self.closing
 	for _, page in ipairs(self.pageOrder) do
 		if page.show then
 			local shown = lib.PageShown(page)
 			if shown ~= page.wasShown then
+				local slide = self.slides and self.slides[page.id]
+				if open and page.wasShown ~= nil then
+					Handlers.Slide(self, page, shown)
+				elseif slide then
+					slide:Stop()
+					self.slides[page.id] = nil
+				end
 				page.wasShown = shown
 				changed = true
 			end
