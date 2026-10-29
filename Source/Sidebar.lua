@@ -86,13 +86,15 @@ function lib.Window:Divider()
 end
 
 local PAGE_FIELDS = { title = true, description = true, under = true, icon = true, iconCrop = true, iconTint = true,
-	slot = true, switch = true }
+	slot = true, switch = true, show = true }
 
 ---Adds a page: at the top level, under a header, or under a group. `info.icon` (a file or atlas) draws before its
 ---title; `info.iconCrop` cuts that share of a file icon from each edge; `info.iconTint` (true for a white glyph)
 ---colors the icon as its title, gold while the page is selected, where other icons keep their own colors; `info.slot` is accepted and no longer needed,
 ---as every entry keeps the icon's room. `info.switch` (true, or a setting's fields such as `path` and `default`)
----gives the page a switch on a card of its own, the rest of the page there only while it is on.
+---gives the page a switch on a card of its own, the rest of the page there only while it is on. `info.show(page)`,
+---when given, leaves the page out of the sidebar and search while it returns false; a window showing it moves to the
+---nearest page above it.
 ---@return table? page
 function lib.Window:Page(id, info)
 	info = info or {}
@@ -106,8 +108,12 @@ function lib.Window:Page(id, info)
 		return
 	end
 	local kind = not parent and "top" or parent.kind == "header" and "sub" or "item"
+	if info.show ~= nil and type(info.show) ~= "function" then
+		lib:Report(self.addonName, ("page %s: show must be a function"):format(tostring(id)))
+	end
 	local page = AddNode(self, { kind = kind, id = id, title = info.title or id, description = info.description,
-		parent = parent, icon = info.icon, iconCrop = info.iconCrop, iconTint = info.iconTint, isPage = true })
+		parent = parent, icon = info.icon, iconCrop = info.iconCrop, iconTint = info.iconTint, isPage = true,
+		show = type(info.show) == "function" and info.show or nil })
 	if page then
 		self.pages[id] = page
 		table.insert(self.pageOrder, page)
@@ -117,12 +123,41 @@ function lib.Window:Page(id, info)
 	return page
 end
 
----Shows a page, opening any collapsed header or group above it.
+-- The nearest shown page above `page` in the declared order, else the nearest below it.
+local function NearestShown(window, page)
+	local at
+	for index, other in ipairs(window.pageOrder) do
+		if other == page then
+			at = index
+			break
+		end
+	end
+	for index = (at or 1) - 1, 1, -1 do
+		if lib.PageShown(window.pageOrder[index]) then
+			return window.pageOrder[index]
+		end
+	end
+	for index = (at or 0) + 1, #window.pageOrder do
+		if lib.PageShown(window.pageOrder[index]) then
+			return window.pageOrder[index]
+		end
+	end
+end
+
+---Shows a page, opening any collapsed header or group above it. A page its `show` hides gives way to the nearest
+---shown one.
 function lib.Window:SelectPage(id)
 	local page = self.pages[id]
 	if not page then
 		lib:Report(self.addonName, ("SelectPage: no page %q"):format(tostring(id)))
 		return
+	end
+	if not lib.PageShown(page) then
+		page = NearestShown(self, page)
+		if not page then
+			return
+		end
+		id = page.id
 	end
 	local changed = self.page ~= id
 	self.page = id
@@ -348,7 +383,7 @@ function lib.Window:RefreshSidebar()
 	sidebar.rows = sidebar.rows or {}
 	local y, count = 0, 0
 	for _, node in ipairs(self.nav) do
-		local share = Share(self, node)
+		local share = node.isPage and not lib.PageShown(node) and 0 or Share(self, node)
 		if share > 0 then
 			count = count + 1
 			local row = sidebar.rows[count] or CreateRow(self)
@@ -370,6 +405,34 @@ function lib.Window:RefreshSidebar()
 	end
 	sidebar:SetContentHeight(math.floor(y + 0.5))
 	self.navChanged = nil
+end
+
+---Lays the sidebar out again when a page's `show` changed its answer, and moves off the shown page when it is hidden.
+---@return boolean moved another page is shown now
+function lib.Window:RefreshPageShows()
+	local changed = false
+	for _, page in ipairs(self.pageOrder) do
+		if page.show then
+			local shown = lib.PageShown(page)
+			if shown ~= page.wasShown then
+				page.wasShown = shown
+				changed = true
+			end
+		end
+	end
+	if not changed then
+		return false
+	end
+	self.searchIndex = nil
+	self:RefreshSidebar()
+	local page = self.page and self.pages[self.page]
+	if page and not lib.PageShown(page) and self.frame then
+		self:SelectPage(page.id)
+
+		return true
+	end
+
+	return false
 end
 
 ---Redraws the shown rows' states (selection, hover, a page switched off) without laying them out again.
