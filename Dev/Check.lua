@@ -530,6 +530,33 @@ do
 	described:Checkbox({ id = "d1", label = "One", path = "d1", description = "Words." })
 	described:Checkbox({ id = "d2", label = "Two", path = "d2" })
 	Check("choice card: a description draws one to a line", not lib.ChoiceGrid(window, described))
+	local reported = #errors
+	local tail = page:Section("tail", "Tail", { columns = 2 })
+	tail:Checkbox({ id = "t1", label = "One", path = "t1" })
+	tail:Checkbox({ id = "t2", label = "Two", path = "t2" })
+	tail:Color({ id = "t3", label = "Three", path = "t3", depends = "t1" })
+	tail:Checkbox({ id = "t4", label = "Four", path = "t4", depends = "t1" })
+	tail:Color({ id = "t5", label = "Five", path = "t5", depends = "t4" })
+	Check("choice card: dependents at the card's end draw two to a line",
+		lib.ChoiceGrid(window, tail) and #errors == reported)
+	local early = page:Section("early", "Early", { columns = 2 })
+	early:Color({ id = "e1", label = "One", path = "e1", depends = "e2" })
+	early:Checkbox({ id = "e2", label = "Two", path = "e2" })
+	Check("choice card: a dependent before its parent draws one to a line and is reported",
+		not lib.ChoiceGrid(window, early) and errors[#errors]:find("comes before") ~= nil)
+	local after = page:Section("after", "After", { columns = 2 })
+	after:Checkbox({ id = "a1", label = "One", path = "a1" })
+	after:Color({ id = "a2", label = "Two", path = "a2", depends = "a1" })
+	after:Checkbox({ id = "a3", label = "Three", path = "a3" })
+	Check("choice card: an independent row after a dependent draws one to a line and is reported",
+		not lib.ChoiceGrid(window, after) and errors[#errors]:find("does not depend") ~= nil)
+	local crossed = page:Section("crossed", "Crossed", { columns = 2 })
+	crossed:Checkbox({ id = "x1", label = "One", path = "x1" })
+	crossed:Checkbox({ id = "x2", label = "Two", path = "x2" })
+	crossed:Color({ id = "x3", label = "Three", path = "x3", depends = "x1" })
+	crossed:Color({ id = "x4", label = "Four", path = "x4", depends = "x2" })
+	Check("choice card: another parent's dependent after a dependent draws one to a line and is reported",
+		not lib.ChoiceGrid(window, crossed) and errors[#errors]:find("does not depend") ~= nil)
 	local single = page:Section("single", "Single", { columns = 2 })
 	single:Checkbox({ id = "s1", label = "One", path = "s1" })
 	Check("choice card: one checkbox draws one to a line", not lib.ChoiceGrid(window, single))

@@ -487,8 +487,8 @@ local function RefreshHalf(half)
 	local setting, control = half.setting, half.view
 	local wasWant, wasLines = half.want, half.lines
 	local active, reason, cause = setting:Activity()
-	-- A row whose parent in its own card is off leaves, under that parent; a choice-card row stays, dimmed.
-	half.want = setting:IsShown() and not (cause == "depends" and not half.grid and lib.ParentOffInSection(setting))
+	-- A row whose parent in its own card is off leaves.
+	half.want = setting:IsShown() and not (cause == "depends" and lib.ParentOffInSection(setting))
 	local rowInactive = not active and cause ~= "page" and cause ~= "class"
 	-- A row on its way out keeps the look it had, so its exit shows no dimming or inactive reason; its control still
 	-- stops answering at once.
@@ -579,7 +579,7 @@ function Handlers.Reveal(half)
 			end
 		end, { response = REVEAL_RESPONSE, epsilon = 0.002 })
 	end
-	if half.revealed == nil or view.settling or half.grid or not view.window:IsShown() then
+	if half.revealed == nil or view.settling or not view.window:IsShown() then
 		half.settling = true
 		half.reveal:Jump(target)
 		half.settling = nil
@@ -766,31 +766,35 @@ function Handlers.Card(view, top, width, height)
 	Rule(view, lib.COLOR.cardEdge, width - 1, top + 1, 1, height - 2)
 end
 
--- A choice card's rows, two to a line, left to right then down; a hidden row gives up its place. Returns the y
--- below the last line.
+-- A choice card's rows, two to a line, left to right then down; a row gone gives up its place, one in motion keeps it.
+-- A line takes the larger share of its two rows' heights, and each row fades by its own share. Returns the y below the
+-- last line.
 function Handlers.LayoutGrid(view, rows, child, width, y)
 	local columnWidth = math.floor(width / 2)
-	local column, lineTop, first = 0, y, true
+	local present = {}
 	for _, half in ipairs(rows) do
-		if not half.want then
-			half:Hide()
+		if (half.revealed or 0) > 0 then
+			present[#present + 1] = half
 		else
-			if column == 0 then
-				if not first then
-					Rule(view, lib.COLOR.separator, INSET, y, width - INSET, 1)
-					y = y + 1
-				end
-				lineTop, first = y, false
-			else
-				Rule(view, lib.COLOR.separator, columnWidth, lineTop, 1, ROW_HEIGHT)
-			end
-			PlaceHalf(half, child, column * columnWidth, lineTop, column == 0 and columnWidth or width - columnWidth,
-				ROW_HEIGHT)
-			half:SetAlpha(1)
-			half:SetClipsChildren(false)
-			y = lineTop + ROW_HEIGHT
-			column = 1 - column
+			half:Hide()
 		end
+	end
+	for index = 1, #present, 2 do
+		local left, right = present[index], present[index + 1]
+		local share = math.max(left.revealed, right and right.revealed or 0)
+		if index > 1 then
+			Rule(view, lib.COLOR.separator, INSET, y, width - INSET, 1, share)
+			y = y + share
+		end
+		local height = ROW_HEIGHT * share
+		PlaceHalf(left, child, 0, y, columnWidth, height)
+		left:SetAlpha(left.revealed * left.revealed)
+		if right then
+			Rule(view, lib.COLOR.separator, columnWidth, y, 1, height, right.revealed)
+			PlaceHalf(right, child, columnWidth, y, width - columnWidth, height)
+			right:SetAlpha(right.revealed * right.revealed)
+		end
+		y = y + height
 	end
 
 	return y

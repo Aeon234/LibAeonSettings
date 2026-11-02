@@ -319,7 +319,7 @@ function Harness:DeclareGeneral(page)
 		default = { r = 1, g = 0.82, b = 0 }, depends = "arrows" })
 	choices:Color({ id = "arrowTint", label = "Arrow Tint", path = "choices.arrowTint",
 		default = { r = 0.4, g = 0.7, b = 1 }, depends = "arrows" })
-	choices:Note("Animate Arrows and the swatches dim while Show Arrows is off; their tooltips say why.")
+	choices:Note("Animate Arrows and the swatches leave while Show Arrows is off.")
 
 	-- A row that depends on another row of its card leaves while it is off, growing back in under it.
 	local reveal = page:Section("reveal", "Rows Under Their Switch")

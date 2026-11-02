@@ -216,20 +216,54 @@ function lib.Section:Menu(info)
 	return setting
 end
 
+-- Whether `ancestor` is up `setting`'s `depends` chain.
+local function DependsOn(setting, ancestor)
+	local parent, depth = setting:Parent(), 0
+	while parent and depth < 16 do
+		if parent == ancestor then
+			return true
+		end
+		parent, depth = parent:Parent(), depth + 1
+	end
+
+	return false
+end
+
+-- Why a choice card's order would let a row leaving move another: a row must follow any row of the card it depends on,
+-- and everything after a row's first dependent must depend on that row too, so only the card's end ever changes.
+local function OrderProblem(section, rows)
+	for index, setting in ipairs(rows) do
+		local parent, depth = setting:Parent(), 0
+		while parent and depth < 16 do
+			if parent.section == section then
+				for other = index + 1, #rows do
+					if rows[other] == parent then
+						return ("%s comes before %s, which it depends on"):format(tostring(setting.id), tostring(parent.id))
+					elseif not DependsOn(rows[other], parent) then
+						return ("%s follows %s, a dependent of %s, but does not depend on it"):format(
+							tostring(rows[other].id), tostring(setting.id), tostring(parent.id))
+					end
+				end
+			end
+			parent, depth = parent:Parent(), depth + 1
+		end
+	end
+end
+
 ---Whether a section draws as a choice card, two rows to a line: it asks for `columns = 2`, and every setting in it is a
----checkbox or color swatch with no description, two or more of them. A section that asks but breaks a rule is reported
----once and drawn one to a line.
+---checkbox or color swatch with no description, two or more of them, in an order that keeps a row's leaving from
+---moving another. A section that asks but breaks a rule is reported once and drawn one to a line.
 ---@return boolean
 function lib.ChoiceGrid(window, section)
 	if section.columns ~= 2 then
 		return false
 	end
-	local count, problem = 0, nil
+	local rows, problem = {}, nil
 	for _, line in ipairs(section.lines) do
 		for index = 1, 2 do
 			local setting = not line.note and line[index]
 			if setting and setting ~= lib.EMPTY then
-				count = count + 1
+				rows[#rows + 1] = setting
 				if setting.kind ~= "Checkbox" and setting.kind ~= "Color" then
 					problem = problem or ("%s is a %s, not a checkbox or color"):format(tostring(setting.id), setting.kind)
 				elseif setting.description then
@@ -238,9 +272,10 @@ function lib.ChoiceGrid(window, section)
 			end
 		end
 	end
-	if count < 2 then
+	if #rows < 2 then
 		problem = problem or "fewer than two settings"
 	end
+	problem = problem or OrderProblem(section, rows)
 	if problem then
 		lib:Report(window.addonName, ("%s/%s: columns = 2, but %s; drawn one to a line"):format(section.page.id,
 			tostring(section.id), problem))
