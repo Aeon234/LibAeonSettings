@@ -306,7 +306,7 @@ function Harness:DeclareGeneral(page)
 	intro:Checkbox({ id = "extraB", label = "Extra B (whole line hidden)", path = "general.extraB", show = extras })
 	intro:Checkbox({ id = "after", label = "After the Hidden Line", path = "general.after" })
 
-	-- A choice card: short checkboxes two to a line, the last pair a switch and the choice that needs it.
+	-- A choice card: short checkboxes two to a line, then a switch, the choice that needs it and two swatches.
 	local choices = page:Section("choices", "Choice Card", { columns = 2 })
 	for _, name in ipairs({ "Experience", "Reputation", "Honor", "Pet Experience", "Azerite" }) do
 		choices:Checkbox({ id = "type" .. name:gsub(" ", ""), label = name, path = "choices." .. name:gsub(" ", ""),
@@ -315,7 +315,11 @@ function Harness:DeclareGeneral(page)
 	choices:Checkbox({ id = "arrows", label = "Show Arrows", path = "choices.arrows", default = true })
 	choices:Checkbox({ id = "arrowsAnimate", label = "Animate Arrows", path = "choices.arrowsAnimate", default = true,
 		depends = "arrows" })
-	choices:Note("Animate Arrows dims while Show Arrows is off; its tooltip says why.")
+	choices:Color({ id = "arrowColor", label = "Arrow Color", path = "choices.arrowColor",
+		default = { r = 1, g = 0.82, b = 0 }, depends = "arrows" })
+	choices:Color({ id = "arrowTint", label = "Arrow Tint", path = "choices.arrowTint",
+		default = { r = 0.4, g = 0.7, b = 1 }, depends = "arrows" })
+	choices:Note("Animate Arrows and the swatches dim while Show Arrows is off; their tooltips say why.")
 
 	-- A row that depends on another row of its card leaves while it is off, growing back in under it.
 	local reveal = page:Section("reveal", "Rows Under Their Switch")

@@ -216,9 +216,9 @@ function lib.Section:Menu(info)
 	return setting
 end
 
----Whether a section draws as a choice card, two checkboxes to a line: it asks for `columns = 2`, and every setting in
----it is a checkbox with no description, two or more of them. A section that asks but breaks a rule is reported once
----and drawn one to a line.
+---Whether a section draws as a choice card, two rows to a line: it asks for `columns = 2`, and every setting in it is a
+---checkbox or color swatch with no description, two or more of them. A section that asks but breaks a rule is reported
+---once and drawn one to a line.
 ---@return boolean
 function lib.ChoiceGrid(window, section)
 	if section.columns ~= 2 then
@@ -230,8 +230,8 @@ function lib.ChoiceGrid(window, section)
 			local setting = not line.note and line[index]
 			if setting and setting ~= lib.EMPTY then
 				count = count + 1
-				if setting.kind ~= "Checkbox" then
-					problem = problem or ("%s is a %s, not a checkbox"):format(tostring(setting.id), setting.kind)
+				if setting.kind ~= "Checkbox" and setting.kind ~= "Color" then
+					problem = problem or ("%s is a %s, not a checkbox or color"):format(tostring(setting.id), setting.kind)
 				elseif setting.description then
 					problem = problem or ("%s has a description"):format(tostring(setting.id))
 				end
