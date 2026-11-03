@@ -144,7 +144,6 @@ function Harness:Register()
 		store = function() return Harness:Profile() end,
 		write = function(path, value) Harness:Write(path, value) end,
 		account = function() return LibAeonSettingsDevDB end,
-		footer = "|cffffd100Changes|r apply immediately",
 	})
 	self:DeclarePages()
 end
@@ -307,6 +306,43 @@ function Harness:DeclareGeneral(page)
 	intro:Checkbox({ id = "extraB", label = "Extra B (whole line hidden)", path = "general.extraB", show = extras })
 	intro:Checkbox({ id = "after", label = "After the Hidden Line", path = "general.after" })
 
+	-- A choice card: short checkboxes two to a line, then a switch, the choice that needs it and two swatches.
+	local choices = page:Section("choices", "Choice Card", { columns = 2 })
+	for _, name in ipairs({ "Experience", "Reputation", "Honor", "Pet Experience", "Azerite" }) do
+		choices:Checkbox({ id = "type" .. name:gsub(" ", ""), label = name, path = "choices." .. name:gsub(" ", ""),
+			default = true })
+	end
+	choices:Checkbox({ id = "arrows", label = "Show Arrows", path = "choices.arrows", default = true })
+	choices:Checkbox({ id = "arrowsAnimate", label = "Animate Arrows", path = "choices.arrowsAnimate", default = true,
+		depends = "arrows" })
+	choices:Color({ id = "arrowColor", label = "Arrow Color", path = "choices.arrowColor",
+		default = { r = 1, g = 0.82, b = 0 }, depends = "arrows" })
+	choices:Color({ id = "arrowTint", label = "Arrow Tint", path = "choices.arrowTint",
+		default = { r = 0.4, g = 0.7, b = 1 }, depends = "arrows" })
+	choices:Note("Animate Arrows and the swatches leave while Show Arrows is off.")
+
+	-- A row that depends on another row of its card leaves while it is off, growing back in under it.
+	local reveal = page:Section("reveal", "Rows Under Their Switch")
+	reveal:Checkbox({ id = "fadeIdle", label = "Fade While Idle", path = "reveal.fade", default = false })
+	reveal:Checkbox({ id = "idleOther", label = "Declared Before Its Dependent", path = "reveal.other",
+		default = true })
+	reveal:Slider({ id = "idleAlpha", label = "Idle Opacity", path = "reveal.alpha", default = 0.3, min = 0, max = 1,
+		step = 0.05, depends = "fadeIdle" })
+
+	-- Details: a row whose settings open in place under it, with a summary of what they hold.
+	local details = page:Section("details", "Details")
+	details:Checkbox({ id = "detailsPlain", label = "A Plain Row", path = "details.plain", default = true })
+	details:Details({ id = "textDetails", label = "Text", summary = function(setting)
+		local settings = setting.page.settings
+		local outline = settings.textOutline:GetValue() and "Outline" or "No Outline"
+
+		return ("Size %d, %s"):format(settings.textSize:GetValue(), outline)
+	end })
+	details:Slider({ id = "textSize", label = "Font Size", path = "details.size", default = 12, min = 8, max = 24,
+		step = 1, details = "textDetails" })
+	details:Checkbox({ id = "textOutline", label = "Outline", path = "details.outline", default = false,
+		details = "textDetails" })
+
 	local custom = page:Section("custom", "Custom Rows")
 	custom:Custom({ id = "swatch", label = "Custom in a Half", width = 120, height = 24,
 		create = function(area)
@@ -370,9 +406,10 @@ function Harness:DeclareOverrides(page)
 		end })
 end
 
--- W6 test page: a preview (state pills, shrinking to fit with its caption) over tabs for Shared, Left and Right. Its
--- parts find their settings: a panel finds its tab's Color, a label its tab's Width and chooses that panel. A tick
--- counter runs while the preview shows and the page is on, so `stop` can be seen ending it.
+-- W6 test page: a preview (state pills, shrinking to fit with its caption, scrolling sideways past half size, or
+-- past 85% as an editor) over tabs for Shared, Left and Right. Its parts find their settings: a panel finds its
+-- tab's Color, a label its tab's Width and chooses that panel. A tick counter runs while the preview shows and the
+-- page is on, so `stop` can be seen ending it.
 function Harness:DeclareAppearance(page)
 	local function Get(path)
 		local value = Harness:Profile()
@@ -411,6 +448,7 @@ function Harness:DeclareAppearance(page)
 			canvas.tickCount = 0
 		end,
 		refresh = function(canvas, state, preview)
+			preview.editor = Get("look.editor") and true or nil
 			local x, height, gap = 0, 32, 12
 			for _, entry in ipairs(canvas.panels) do
 				local panel = Panel(entry.side)
@@ -457,6 +495,8 @@ function Harness:DeclareAppearance(page)
 		description = "Past about 480 each, the preview shrinks to fit." })
 	look:Color({ id = "color", label = "Color", path = "look.shared.color", default = { r = 0.62, g = 0.46, b = 0.29 } })
 	look:Checkbox({ id = "fade", label = "Fade Out", path = "look.fade", description = "Adds a Faded pill to the preview." })
+	look:Checkbox({ id = "previewEditor", label = "Preview as an Editor", path = "look.editor", default = false,
+		description = "Shrinks only to 85%, then scrolls sideways." })
 	for _, side in ipairs({ { "left", "Left" }, { "right", "Right" } }) do
 		local tab = page:Tab(side[1], side[2], { countOverrides = true })
 		local section = tab:Section(side[1] .. "Look", side[2] .. " Panel")
@@ -973,8 +1013,8 @@ local ICON_MEDIA = {
 	{ "icon-grid-dim" }, { "icon-grid-bright" }, { "icon-grid-off" }, { "icon-dark-overlays-on" }, { "icon-dark-overlays-off" },
 	{ "icon-snap-on" }, { "icon-snap-off" }, { "icon-coordinates-on" }, { "icon-coordinates-off" },
 	{ "icon-hover-top-bar-on" }, { "icon-hover-top-bar-off" }, { "icon-addons-on" }, { "icon-addons-off" },
-	{ "icon-cog-on" }, { "chevron" }, { "override-diamond" }, { "nav-hover" },
-	{ "swatch-checker" }, { "toggle-track" }, { "search-box" }, { "search-box-focus" }, { "mover-fill" },
+	{ "icon-cog-on" }, { "chevron" }, { "override-diamond" }, { "nav-row" }, { "nav-row-edge" },
+	{ "swatch-checker" }, { "toggle-track" }, { "search-field" }, { "search-field-edge" }, { "search-field-ring" }, { "mover-fill" },
 	{ "mover-frame" }, { "anchor-line" }, { "pulse" }, { "shadow-glow" }, { "shadow-round" },
 }
 for _, size in ipairs({ 2, 4, 6, 8, 10 }) do
@@ -1268,8 +1308,29 @@ function COMMANDS.writes()
 	Print("Echoing writes %s (%d so far).", Harness.echoWrites and "on" or "off", Harness.writeCount or 0)
 end
 
+-- Prints the library's adopter events as they fire: OnOpen, OnClose and OnPageShown.
+function COMMANDS.callbacks()
+	Harness.watching = not Harness.watching
+	for _, event in ipairs({ "OnOpen", "OnClose", "OnPageShown" }) do
+		if Harness.watching then
+			lib.RegisterCallback(Harness, event, function(name, ...)
+				Print("%s: %s", name, table.concat({ tostringall(...) }, ", "))
+			end)
+		else
+			lib.UnregisterCallback(Harness, event)
+		end
+	end
+	Print("Watching the library's events %s.", Harness.watching and "on" or "off")
+end
+
+-- Reduce Motion until the settings window has its checkbox: springs jump to their targets while it is on.
+function COMMANDS.motion()
+	lib:SetReduceMotion(not lib:ReduceMotion())
+	Print("Reduce Motion %s.", lib:ReduceMotion() and "on" or "off")
+end
+
 function COMMANDS.help()
-	Print("/lasdev edit [second] | hide <key> | pend <key> <dx> <dy> | move | show | set <key> <POINT> <x> <y> | reset [key] | profile <name> | off <key> | scale <key> <n> | bad | media | tip | combat [key] [dx] [dy] | settings | status [text] | block | lock | shadow [on|off|size n|red|below|probe] | sound <kit> | icons | tint <percent> | writes | pin | strip | places")
+	Print("/lasdev edit [second] | hide <key> | pend <key> <dx> <dy> | move | show | set <key> <POINT> <x> <y> | reset [key] | profile <name> | off <key> | scale <key> <n> | bad | media | tip | combat [key] [dx] [dy] | settings | status [text] | block | lock | shadow [on|off|size n|red|below|probe] | sound <kit> | icons | tint <percent> | writes | motion | callbacks | pin | strip | places")
 end
 
 SLASH_LIBAEONSETTINGSDEV1 = "/lasdev"

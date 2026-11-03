@@ -9,8 +9,9 @@ end
 local EASE_RATE = 14        -- the glide closes 1 - e^(-14 dt) of the distance each frame
 local SNAP_DISTANCE = 0.5   -- the glide stops within this many units
 local BAR_GAP = 6           -- between the list and its scroll bar
-local THUMB_REST, THUMB_LIT = 0.45, 1
+local INSIDE_LANE = 16      -- an inside bar's lane at the list's right: the slim bar 8 from the list, at the edge
 local SLIM_TRACK_ALPHA = 0.35
+local OVERFLOW_MIN = 1      -- the list overflows once its content is at least this much taller than the view
 
 lib.ScrollHandlers = lib.ScrollHandlers or {}
 local Handlers = lib.ScrollHandlers
@@ -22,27 +23,28 @@ local scrollMeta = { __index = function(_, name) return lib.Scroll[name] end }
 ---Creates a smooth scrolling list in `parent`, filling it except for the scroll bar's room on the right.
 ---@param parent Frame
 ---@param options table { step: units per wheel notch, row?: snap targets to multiples of this, slim?: a bar with no
----arrows whose track spans the list, inside?: the bar sits inside the list's right edge }
+---arrows whose track spans the list, inside?: the bar sits inside the list's right edge, laneWhenNeeded?: an inside
+---bar's lane is taken from the list only while the list overflows, barInset?: an inside bar's distance from the
+---list's right edge, and from its top and bottom }
 ---@return table scroll with `.child`, the frame to fill
 function lib:CreateScroll(parent, options)
 	local scroll = setmetatable({ options = options, offset = 0, target = 0, contentHeight = 0 }, scrollMeta)
 
 	local frame = CreateFrame("ScrollFrame", nil, parent)
 	frame:SetPoint("TOPLEFT")
-	frame:SetPoint("BOTTOMRIGHT", options.inside and -10 or 0, 0)
+	frame:SetPoint("BOTTOMRIGHT", options.inside and -INSIDE_LANE or 0, 0)
 	frame:EnableMouseWheel(true)
 	frame:SetScript("OnMouseWheel", function(_, delta) scroll:ScrollBy(-delta) end)
 	frame:SetScript("OnSizeChanged", function() scroll:Layout() end)
-	frame:SetScript("OnEnter", function() scroll:UpdateLit() end)
-	frame:SetScript("OnLeave", function() scroll:UpdateLit() end)
 	local child = CreateFrame("Frame", nil, frame)
 	child:SetSize(1, 1)
 	frame:SetScrollChild(child)
 
 	local bar = CreateFrame("EventFrame", nil, parent, "MinimalScrollBar")
 	if options.inside then
-		bar:SetPoint("TOPRIGHT", parent, "TOPRIGHT", 0, 0)
-		bar:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", 0, 0)
+		local inset = options.barInset or 0
+		bar:SetPoint("TOPRIGHT", parent, "TOPRIGHT", -inset, -inset)
+		bar:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", -inset, inset)
 	else
 		bar:SetPoint("TOPLEFT", frame, "TOPRIGHT", BAR_GAP, 0)
 		bar:SetPoint("BOTTOMLEFT", frame, "BOTTOMRIGHT", BAR_GAP, 0)
@@ -61,8 +63,6 @@ function lib:CreateScroll(parent, options)
 	bar:RegisterCallback(ScrollBarMixin.Event.OnScroll, function(_, percentage)
 		Handlers.BarScrolled(scroll, percentage)
 	end, scroll)
-	bar:HookScript("OnEnter", function() scroll:UpdateLit() end)
-	bar:HookScript("OnLeave", function() scroll:UpdateLit() end)
 
 	local driver = CreateFrame("Frame", nil, frame)
 	driver:Hide()
@@ -70,7 +70,6 @@ function lib:CreateScroll(parent, options)
 
 	scroll.frame, scroll.child, scroll.bar, scroll.driver = frame, child, bar, driver
 	scroll:Layout()
-	scroll:UpdateLit()
 
 	return scroll
 end
@@ -92,7 +91,15 @@ function lib.Scroll:Layout()
 	child:SetHeight(math.max(1, self.contentHeight))
 	local viewHeight = frame:GetHeight()
 	local range = self:Range()
-	local overflows = range > 0 and viewHeight > 0
+	-- Content that fits exactly can measure a fraction over the snapped view, so overflow takes a whole unit.
+	local overflows = range >= OVERFLOW_MIN and viewHeight > 0
+	-- Narrowing the list fires OnSizeChanged, which lays out again with the same overflow and stops there. The width
+	-- comes from the parent, since the frame's own may not reflect the new anchor until the next layout.
+	if self.options.inside and self.options.laneWhenNeeded then
+		local lane = overflows and INSIDE_LANE or 0
+		frame:SetPoint("BOTTOMRIGHT", -lane, 0)
+		child:SetWidth(math.max(1, frame:GetParent():GetWidth() - lane))
+	end
 	self.bar:SetShown(overflows)
 	if overflows then
 		self.bar:SetVisibleExtentPercentage(viewHeight / self.contentHeight)
@@ -127,7 +134,6 @@ function lib.Scroll:ScrollBy(notches)
 	end
 	self.target = math.max(0, math.min(range, target))
 	self.driver:Show()
-	self:UpdateLit()
 end
 
 ---Moves at once to an offset, stopping any glide.
@@ -135,14 +141,12 @@ function lib.Scroll:JumpTo(offset)
 	self.target = math.max(0, math.min(self:Range(), offset))
 	self.driver:Hide()
 	self:SetOffset(self.target)
-	self:UpdateLit()
 end
 
 ---Glides to an offset (clamped to the list's range).
 function lib.Scroll:GlideTo(offset)
 	self.target = math.max(0, math.min(self:Range(), offset))
 	self.driver:Show()
-	self:UpdateLit()
 end
 
 ---Keeps a band (top and height in list units) in view, gliding the least distance needed.
@@ -159,13 +163,12 @@ function lib.Scroll:Reveal(top, height)
 	self.driver:Show()
 end
 
--- The thumb rests dim and lights up while the pointer is over the list or its bar, or the list moves.
+-- The thumb keeps Blizzard's look. Lists made by an older copy of the library still call this from their scripts.
 function lib.Scroll:UpdateLit()
-	local lit = self.frame:IsMouseOver() or self.bar:IsMouseOver() or self.driver:IsShown()
-	self.bar:GetThumb():SetAlpha(lit and THUMB_LIT or THUMB_REST)
+	self.bar:GetThumb():SetAlpha(1)
 	if not self.options.slim then
-		self.bar.Back:SetAlpha(lit and 1 or THUMB_REST)
-		self.bar.Forward:SetAlpha(lit and 1 or THUMB_REST)
+		self.bar.Back:SetAlpha(1)
+		self.bar.Forward:SetAlpha(1)
 	end
 end
 
@@ -174,7 +177,6 @@ function Handlers.Glide(scroll, elapsed)
 	if math.abs(distance) <= SNAP_DISTANCE then
 		scroll:SetOffset(scroll.target)
 		scroll.driver:Hide()
-		scroll:UpdateLit()
 		return
 	end
 	local nextOffset = scroll.offset + distance * (1 - math.exp(-EASE_RATE * math.min(elapsed, 0.1)))

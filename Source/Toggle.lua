@@ -8,7 +8,7 @@ if not lib.loading then
 	return
 end
 
-local SLIDE_SECONDS = 0.2 -- for the full distance, scaled by the distance left; out-cubic
+local SLIDE_RESPONSE = 0.25 -- the knob's spring, critically damped
 local SHAKE_SECONDS, SHAKE_PIXELS, SHAKE_CYCLES = 0.25, 3, 3
 local PRESSED_SCALE = 0.95
 local SOUND_ON = SOUNDKIT and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON
@@ -27,6 +27,18 @@ lib.Toggle = {}
 local toggleMeta = { __index = function(_, name) return lib.Toggle[name] end }
 lib.ToggleHandlers = lib.ToggleHandlers or {}
 local Handlers = lib.ToggleHandlers
+
+-- The knob's spring, made on first use: a toggle built by an older copy has none.
+local function Knob(view)
+	if not view.spring then
+		view.spring = lib:CreateSpring(view.position or 0, function(position)
+			view.position = position
+			view:Draw()
+		end, { response = SLIDE_RESPONSE })
+	end
+
+	return view.spring
+end
 
 local function Art(size, piece)
 	local client = WOW_PROJECT_CAMELOT and WOW_PROJECT_ID == WOW_PROJECT_CAMELOT and "forever" or "retail"
@@ -105,33 +117,20 @@ function lib.Toggle:Paint()
 	self.knobOn:SetTexture(Art(self.size, self.hovered and "knob-on-hover" or "knob-on"))
 end
 
----Draws a value: at once with `instant` (or when hidden), else sliding from where the knob is.
+---Draws a value: at once with `instant` (or when hidden), else sliding from where the knob is, keeping its speed
+---when the value turns back mid-slide.
 function lib.Toggle:SetChecked(value, instant)
 	self.value = value and true or false
-	local target = self.value and 1 or 0
 	if instant or not self.button:IsVisible() then
 		self:Stop()
-		self.position = target
-		self:Draw()
 		return
 	end
-	if self.slide and self.slide.to == target then
-		return
-	end
-	local distance = math.abs(target - self.position)
-	if distance == 0 then
-		-- A refusal answered before the first frame: the knob never left, so the slide just ends.
-		self.slide = nil
-		return
-	end
-	self.slide = { from = self.position, to = target, elapsed = 0, duration = SLIDE_SECONDS * distance }
-	self.button:SetScript("OnUpdate", Handlers.Update)
-	self.button.view = self
+	Knob(self):To(self.value and 1 or 0)
 end
 
----Shakes the knob sideways after a refused save.
+---Shakes the knob sideways after a refused save; not with Reduce Motion.
 function lib.Toggle:Reject()
-	if not self.button:IsVisible() then
+	if not self.button:IsVisible() or lib:ReduceMotion() then
 		return
 	end
 	self.shake = 0
@@ -143,8 +142,7 @@ end
 function lib.Toggle:Stop()
 	self.slide, self.shake, self.shakeOffset = nil, nil, nil
 	self.button:SetScript("OnUpdate", nil)
-	self.position = self.value and 1 or 0
-	self:Draw()
+	Knob(self):Jump(self.value and 1 or 0)
 end
 
 function lib.Toggle:SetActive(active)
@@ -219,16 +217,12 @@ function Handlers.Show(view, shown)
 	end
 end
 
+-- Steps the shake. A slide an older copy started ends at its stop.
 function Handlers.Update(button, elapsed)
 	local view = button.view
-	local slide = view.slide
-	if slide then
-		slide.elapsed = slide.elapsed + elapsed
-		local t = math.min(1, slide.elapsed / slide.duration)
-		view.position = slide.from + (slide.to - slide.from) * (1 - (1 - t) ^ 3)
-		if t >= 1 then
-			view.slide = nil
-		end
+	if view.slide then
+		view.slide = nil
+		Knob(view):Jump(view.value and 1 or 0)
 	end
 	if view.shake then
 		view.shake = view.shake + elapsed
@@ -239,7 +233,7 @@ function Handlers.Update(button, elapsed)
 		end
 	end
 	view:Draw()
-	if not view.slide and not view.shake then
+	if not view.shake then
 		button:SetScript("OnUpdate", nil)
 	end
 end

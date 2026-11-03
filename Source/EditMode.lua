@@ -29,28 +29,13 @@ local PREFERENCE_DEFAULTS = {
 	toolbarScale = 1, tipSeen = false,
 }
 
--- Edit mode preferences are account-wide and live in each adopting addon's `account` table, kept identical in all
--- of them; the library itself has no saved variables.
-local function AccountTables()
-	local tables = {}
-	for _, addonName in ipairs(lib.order) do
-		local account = lib.registrations[addonName].declaration.account
-		if type(account) == "function" then
-			account = account()
-		end
-		if type(account) == "table" then
-			table.insert(tables, account)
-		end
-	end
-
-	return tables
-end
+-- Edit mode preferences are account-wide, kept under `editMode` in every adopting addon's `account` table.
 
 ---@return any
 function lib:GetPreference(name)
 	local opener = self.session.opener and self.registrations[self.session.opener]
 	local first = { opener and opener.declaration.account }
-	for _, account in ipairs(AccountTables()) do
+	for _, account in ipairs(lib:AccountTables()) do
 		table.insert(first, account)
 	end
 	for _, account in ipairs(first) do
@@ -67,7 +52,7 @@ function lib:GetPreference(name)
 end
 
 function lib:SetPreference(name, value)
-	for _, account in ipairs(AccountTables()) do
+	for _, account in ipairs(lib:AccountTables()) do
 		account.editMode = account.editMode or {}
 		account.editMode[name] = value
 	end
@@ -184,7 +169,7 @@ function lib:OpenEditMode(addonName)
 	end
 	if InCombatLockdown() then
 		session.waitingOpener = nil
-		UIErrorsFrame:AddMessage(L.COMBAT_REFUSED, 1, 0.1, 0.1)
+		UIErrorsFrame:AddMessage(L.COMBAT_REFUSED, lib:GetColor("destructive"))
 		return
 	end
 	if BlockingPanelShown() then
@@ -223,9 +208,20 @@ function lib:CloseEditMode(save)
 	if not session.open then
 		return
 	end
-	local pending = session.pending
+	-- A drop still settling lands first, so its position is among the pending ones. The screen starts fading
+	-- before anything else is undone, so the movers stay drawn as they were while it fades. Edit mode opened from a
+	-- settings window goes back to it once the screen is gone, so the window never shows beneath the fading movers.
+	lib.MoverHandlers.EndSettle()
 	local returnTo = session.returnTo
 	session.returnTo = nil
+	self:HideEditUI(true, returnTo and function()
+		C_Timer.After(0, function()
+			if not InCombatLockdown() and not lib:IsEditing() then
+				returnTo:Open()
+			end
+		end)
+	end)
+	local pending = session.pending
 	session.open = false
 	session.paused = false
 	session.pending = {}
@@ -236,7 +232,6 @@ function lib:CloseEditMode(save)
 		self:EndPick()
 	end
 	self:RestoreSizes(save)
-	self:HideEditUI()
 	ShowSamples(session, false)
 	session.selected, session.hovered, session.drag = nil, nil, nil
 
@@ -250,15 +245,6 @@ function lib:CloseEditMode(save)
 			end
 			registration:Apply()
 		end
-	end
-
-	-- Edit mode opened from a settings window goes back to it.
-	if returnTo then
-		C_Timer.After(0, function()
-			if not InCombatLockdown() and not lib:IsEditing() then
-				returnTo:Open()
-			end
-		end)
 	end
 end
 
@@ -294,17 +280,18 @@ lib.editEvents:SetScript("OnEvent", function(_, event)
 	end
 	if event == "PLAYER_REGEN_DISABLED" then
 		session.paused = true
+		lib.MoverHandlers.EndSettle()
+		lib:HideEditUI(true)
 		lib:CloseMenus()
 		if session.pick then
 			lib:EndPick()
 		end
 		StaticPopup_Hide("LIBAEONSETTINGS_EDIT_EXIT")
-		lib:HideEditUI()
 	elseif event == "PLAYER_REGEN_ENABLED" then
 		C_Timer.After(0.5, function()
 			if session.open and session.paused and not InCombatLockdown() then
 				session.paused = false
-				lib:ShowEditUI()
+				lib:ShowEditUI("return")
 			end
 		end)
 	end

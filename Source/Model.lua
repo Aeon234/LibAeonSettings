@@ -1,4 +1,5 @@
--- The settings model: pages hold sections, sections hold settings, notes and empty places laid out two to a line.
+-- The settings model: pages hold sections, sections hold settings, notes and empty places, declared two to a line
+-- and drawn one to a line, or two to a line in a section declared with `columns = 2` (a choice card).
 -- Each setting is one object, made once at registration and holding no frames; its value is bound by a path in the
 -- adopter's store and a default, or by `get` and `set`. Pages draw settings with pooled views (Page.lua).
 
@@ -23,8 +24,8 @@ lib.EMPTY = lib.EMPTY or { empty = true }
 
 local SETTING_FIELDS = { id = true, label = true, description = true, path = true, default = true, get = true,
 	set = true, depends = true, blocked = true, show = true, wide = true, inherits = true, keywords = true,
-	tooltip = true, redraws = true, resettable = true }
-local SECTION_FIELDS = { show = true, reveal = true }
+	tooltip = true, redraws = true, resettable = true, details = true }
+local SECTION_FIELDS = { show = true, reveal = true, columns = true }
 local MAX_CHAIN = 16
 
 ---Registers a control kind: `section:<Kind>(info)` declares a setting drawn with it. `info.fields` lists the fields
@@ -51,6 +52,16 @@ lib.CallAdopter = Call
 
 -- Pages -------------------------------------------------------------------------------------------------------
 
+---@return boolean shown the page's `show` lets it into the sidebar and search
+function lib.PageShown(page)
+	if not page.show then
+		return true
+	end
+
+	return Call(page.show, page) and true or false
+end
+
+
 -- Called by window:Page once the navigation entry exists: gives it its sections and its switch.
 function lib:InitPage(window, page, info)
 	setmetatable(page, pageMeta)
@@ -60,16 +71,17 @@ function lib:InitPage(window, page, info)
 	if info.switch ~= nil then
 		local switch = type(info.switch) == "table" and info.switch or {}
 		switch.id = switch.id or "enabled"
-		switch.label = switch.label or L.ENABLED
+		switch.label = switch.label or page.title
 		page.switch = page:NewSetting("Toggle", switch)
 	end
 end
 
----Adds a section with a gold title and a rule; its settings follow it. `info.show(section)`, when given, hides the
----whole section (title, rule, rows, notes and menu) and leaves it out of search while it returns false.
+---Adds a section: a heading over a card of its settings, its notes under the card. `info.show(section)`, when given,
+---hides the whole section (heading, rows, notes and menu) and leaves it out of search while it returns false.
+---`info.columns = 2` asks for a choice card (see `lib.ChoiceGrid`).
 ---`info.reveal(section)`, with `show`, keeps a hidden section's rows in search: landing on one calls it first, to
 ---make the section show (selecting what it edits).
----@param info table? { show?, reveal? }
+---@param info table? { show?, reveal?, columns? }
 ---@return table? section
 function lib.PageModel:Section(id, title, info)
 	local section = setmetatable({ id = id, title = title, page = self, lines = {} }, sectionMeta)
@@ -93,6 +105,11 @@ function lib.PageModel:Section(id, title, info)
 				section.reveal = info.reveal
 			elseif info.reveal ~= nil then
 				lib:Report(addonName, ("%s/%s: section reveal must be a function"):format(self.id, tostring(id)))
+			end
+			if info.columns == 1 or info.columns == 2 then
+				section.columns = info.columns
+			elseif info.columns ~= nil then
+				lib:Report(addonName, ("%s/%s: section columns must be 1 or 2"):format(self.id, tostring(id)))
 			end
 		end
 	end
@@ -136,6 +153,11 @@ function lib.PageModel:NewSetting(kind, info)
 		end
 		inherits.from = inherits.from or L.SHARED
 		setting.inherits = inherits
+	end
+	-- A setting inside a details row is there while the row is open: it depends on the row unless it depends on
+	-- another setting inside it.
+	if info.details ~= nil and info.depends == nil then
+		setting.depends = info.details
 	end
 	if type(info.path) == "string" then
 		setting.keys = { strsplit(".", info.path) }
@@ -194,6 +216,75 @@ function lib.Section:Menu(info)
 	return setting
 end
 
+-- Whether `ancestor` is up `setting`'s `depends` chain.
+local function DependsOn(setting, ancestor)
+	local parent, depth = setting:Parent(), 0
+	while parent and depth < 16 do
+		if parent == ancestor then
+			return true
+		end
+		parent, depth = parent:Parent(), depth + 1
+	end
+
+	return false
+end
+
+-- Why a choice card's order would let a row leaving move another: a row must follow any row of the card it depends on,
+-- and everything after a row's first dependent must depend on that row too, so only the card's end ever changes.
+local function OrderProblem(section, rows)
+	for index, setting in ipairs(rows) do
+		local parent, depth = setting:Parent(), 0
+		while parent and depth < 16 do
+			if parent.section == section then
+				for other = index + 1, #rows do
+					if rows[other] == parent then
+						return ("%s comes before %s, which it depends on"):format(tostring(setting.id), tostring(parent.id))
+					elseif not DependsOn(rows[other], parent) then
+						return ("%s follows %s, a dependent of %s, but does not depend on it"):format(
+							tostring(rows[other].id), tostring(setting.id), tostring(parent.id))
+					end
+				end
+			end
+			parent, depth = parent:Parent(), depth + 1
+		end
+	end
+end
+
+---Whether a section draws as a choice card, two rows to a line: it asks for `columns = 2`, and every setting in it is a
+---checkbox or color swatch with no description, two or more of them, in an order that keeps a row's leaving from
+---moving another. A section that asks but breaks a rule is reported once and drawn one to a line.
+---@return boolean
+function lib.ChoiceGrid(window, section)
+	if section.columns ~= 2 then
+		return false
+	end
+	local rows, problem = {}, nil
+	for _, line in ipairs(section.lines) do
+		for index = 1, 2 do
+			local setting = not line.note and line[index]
+			if setting and setting ~= lib.EMPTY then
+				rows[#rows + 1] = setting
+				if setting.kind ~= "Checkbox" and setting.kind ~= "Color" then
+					problem = problem or ("%s is a %s, not a checkbox or color"):format(tostring(setting.id), setting.kind)
+				elseif setting.description then
+					problem = problem or ("%s has a description"):format(tostring(setting.id))
+				end
+			end
+		end
+	end
+	if #rows < 2 then
+		problem = problem or "fewer than two settings"
+	end
+	problem = problem or OrderProblem(section, rows)
+	if problem then
+		lib:Report(window.addonName, ("%s/%s: columns = 2, but %s; drawn one to a line"):format(section.page.id,
+			tostring(section.id), problem))
+		return false
+	end
+
+	return true
+end
+
 ---@return boolean shown false while the section's `show()` hides it
 function lib.Section:IsShown()
 	if not self.show then
@@ -206,6 +297,22 @@ end
 ---Adds a line of text across the section, with an optional smaller second part.
 function lib.Section:Note(text, small)
 	table.insert(self.lines, { note = { text = text, small = small } })
+end
+
+---Adds the library's own section at the end of the addon's first page, once per page: Reduce Motion, which is
+---account-wide and the same in every addon on the library.
+function lib.Window:AddWindowSection()
+	local first = self.pageOrder[1]
+	if not first or not first.Section or first.windowSection then
+		return
+	end
+	local section = first:Section("libAeonSettings", L.SETTINGS_WINDOW)
+	section:Checkbox({
+		id = "reduceMotion", label = L.REDUCE_MOTION, description = L.REDUCE_MOTION_DESCRIPTION, default = false,
+		get = function() return lib:ReduceMotion() end,
+		set = function(value) lib:SetReduceMotion(value) end,
+	})
+	first.windowSection = section
 end
 
 -- Settings ----------------------------------------------------------------------------------------------------
@@ -445,6 +552,40 @@ function lib.Setting:Refuse(reason)
 	self.window:SettingChanged(self, true, true)
 end
 
+-- Items: a setting whose `enabled = { path, default }` keeps one item on or off at `path .. "." .. value` each (the
+-- ordered list's checkboxes, a dropdown with several choices); `default` is a table of each item's state.
+local function ItemPath(setting, value)
+	return setting.enabled.path .. "." .. tostring(value)
+end
+
+---@return boolean on whether the item is on; true for a setting without items to turn on and off
+function lib.Setting:ItemEnabled(value)
+	local enabled = self.enabled
+	if not enabled then
+		return true
+	end
+	local stored = lib.ReadStorePath(self.window, ItemPath(self, value))
+	if stored == nil and type(enabled.default) == "table" then
+		stored = enabled.default[value]
+	end
+
+	return stored and true or false
+end
+
+---Turns an item on or off, recorded for Undo.
+function lib.Setting:SetItemEnabled(item, on)
+	local path = ItemPath(self, item.value)
+	local before = lib.ReadStorePath(self.window, path)
+	local ok, reason = Write({ window = self.window, path = path, keys = { strsplit(".", path) } }, on)
+	if not ok then
+		self:ShowRefusal(reason)
+	else
+		self.window:RecordChange({ path = path, before = before, page = self.page.id,
+			text = L.UNDO_TO:format(item.text, before and L.ON or L.OFF) })
+	end
+	self.window:SettingChanged(self, true, not ok)
+end
+
 -- The setting this one depends on, found by id on its page, or "page/id" on another page of the window.
 function lib.Setting:Parent()
 	local depends = self.depends
@@ -497,6 +638,57 @@ function lib.Setting:Activity()
 	end
 
 	return true
+end
+
+---@return boolean off a setting up this one's `depends` chain, in its own section, is off
+function lib.ParentOffInSection(setting)
+	local parent, depth = setting:Parent(), 0
+	while parent and depth < 16 do
+		if parent.section == setting.section and not parent:GetValue() then
+			return true
+		end
+		parent, depth = parent:Parent(), depth + 1
+	end
+
+	return false
+end
+
+---Puts each row (anything with a `setting`) that depends on another row of its section directly under it, after any
+---earlier ones, keeping the declared order otherwise. Rows in a dependency loop keep their place.
+---@param rows table[] reordered in place
+function lib.OrderUnderParents(rows)
+	local rowOf, children, roots, placed = {}, {}, {}, {}
+	for _, half in ipairs(rows) do
+		rowOf[half.setting] = half
+	end
+	for _, half in ipairs(rows) do
+		local parent = half.setting:Parent()
+		local parentRow = parent and rowOf[parent]
+		if parentRow and parentRow ~= half then
+			children[parentRow] = children[parentRow] or {}
+			table.insert(children[parentRow], half)
+		else
+			table.insert(roots, half)
+		end
+	end
+	local declared = { unpack(rows) }
+	wipe(rows)
+	local function Add(half)
+		if placed[half] then
+			return
+		end
+		placed[half] = true
+		table.insert(rows, half)
+		for _, child in ipairs(children[half] or {}) do
+			Add(child)
+		end
+	end
+	for _, half in ipairs(roots) do
+		Add(half)
+	end
+	for _, half in ipairs(declared) do
+		Add(half)
+	end
 end
 
 ---@return boolean shown false while the setting's `show()` or its section's hides it

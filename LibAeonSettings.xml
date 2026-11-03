@@ -14,6 +14,7 @@
 	<Script file="Source\Fonts.lua" />
 	<Script file="Source\Media.lua" />
 	<Script file="Source\Geometry.lua" />
+	<Script file="Source\Motion.lua" />
 	<Script file="Source\Placement.lua" />
 	<Script file="Source\EditMode.lua" />
 	<Script file="Source\EditUI.lua" />
@@ -37,6 +38,7 @@
 	<Script file="Source\Button.lua" />
 	<Script file="Source\Color.lua" />
 	<Script file="Source\Custom.lua" />
+	<Script file="Source\Details.lua" />
 	<Script file="Source\OrderedList.lua" />
 	<Script file="Source\Page.lua" />
 	<Script file="Source\Preview.lua" />

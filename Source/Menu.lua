@@ -14,7 +14,7 @@ local SUBMENU_ARROW = "Interface\\ChatFrame\\ChatFrameExpandArrow"
 local CLICK_SOUND = SOUNDKIT and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON -- Q151
 local BORDER_OUTSET = 3     -- the frame art reaches this far outside the panel
 local PANEL_FILL = { 0.122, 0.118, 0.129, 0.92 }
-local PANEL_BORDER = { 0.52, 0.41, 0.32 }
+local PANEL_BORDER = lib.COLOR.bronze
 local SLICE, SLICE_SCALE = 18, 0.5 -- texels per corner on the 110-texel frame textures, drawn at 2x
 
 lib.MenuHandlers = lib.MenuHandlers or {}
@@ -115,7 +115,8 @@ local builderMeta = { __index = Builder }
 
 function Builder:Hint(text)
 	local row = NewRow(self.panel, "hint", 10, function(row)
-		row.label = row:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+		row.label = row:CreateFontString(nil, "OVERLAY")
+		lib:SetType(row.label, "caption", "tertiary")
 		row.label:SetPoint("TOPLEFT", 10, 0)
 		row.label:SetPoint("RIGHT", -10, 0)
 		row.label:SetJustifyH("LEFT")
@@ -136,7 +137,8 @@ function Builder:Separator()
 end
 
 local function CreateActionRow(row)
-	row.label = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+	row.label = row:CreateFontString(nil, "OVERLAY")
+	lib:SetType(row.label, "secondary")
 	row.label:SetPoint("LEFT", 10, 0)
 	row.arrow = row:CreateTexture(nil, "ARTWORK")
 	row.arrow:SetSize(16, 16)
@@ -153,10 +155,8 @@ end
 local function FillAction(row, text, onClick, options)
 	options = options or {}
 	ResetScripts(row)
-	-- The font object's own color too: a caller may have recolored this label the last time it was used.
-	local font = onClick and GameFontHighlight or GameFontDisable
-	row.label:SetFontObject(font)
-	row.label:SetTextColor(font:GetTextColor())
+	-- The color too: a caller may have recolored this label the last time it was used.
+	lib:SetType(row.label, "secondary", onClick and "text" or "tertiary")
 	row.label:SetText(text)
 	if options.color then
 		row.label:SetTextColor(unpack(options.color))
@@ -207,9 +207,7 @@ end
 function Builder:Number(text, value, onSet, disabledReason)
 	local row = NewRow(self.panel, "number", ROW_HEIGHT, CreateNumberRow)
 	FillAction(row, text)
-	local font = disabledReason and GameFontDisable or GameFontHighlight
-	row.label:SetFontObject(font)
-	row.label:SetTextColor(font:GetTextColor())
+	lib:SetType(row.label, "secondary", disabledReason and "tertiary" or "text")
 	local box = row.box
 	box:ClearFocus()
 	box:SetText(tostring(value))

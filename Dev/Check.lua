@@ -1,6 +1,7 @@
 -- Offline checks of the library's rules that need no client: positions, target lists and size matching, the
--- media pickers' choices, targets that place themselves, the settings model, hidden sections, Undo, search, text
--- insertion and section menus. Loads the real source files under small stand-ins for the WoW API.
+-- media pickers' choices, the type and color tokens, springs and Reduce Motion, targets that place themselves, the
+-- settings model, hidden sections, Undo, search, text insertion and section menus. Loads the real source files under
+-- small stand-ins for the WoW API.
 -- Run from anywhere with Lua 5.1: ~/.local/lua51/bin/lua Dev/Check.lua
 
 local root = (arg and arg[0] or ""):match("^(.*)[/\\]Dev[/\\]Check%.lua$") or "."
@@ -82,7 +83,7 @@ function strsplit(separator, text)
 	return unpack(parts)
 end
 
-for _, file in ipairs({ "Core", "Locale", "Media", "Geometry", "Placement", "Anchor" }) do
+for _, file in ipairs({ "Core", "Locale", "Fonts", "Media", "Geometry", "Motion", "Placement", "Anchor" }) do
 	dofile(root .. "/Source/" .. file .. ".lua")
 end
 local lib = LibStub("LibAeonSettings-1.0")
@@ -101,7 +102,7 @@ function strlenutf8(text)
 
 	return count
 end
-for _, file in ipairs({ "Model", "Search", "Undo", "TextInput", "Dropdown" }) do
+for _, file in ipairs({ "Model", "Details", "Search", "Undo", "TextInput", "Dropdown" }) do
 	dofile(root .. "/Source/" .. file .. ".lua")
 end
 
@@ -259,6 +260,7 @@ end
 Register("Toggle")
 Register("Slider", { min = true, max = true, step = true })
 Register("Color", { hasOpacity = true })
+Register("Checkbox")
 
 local function NewWindow(store)
 	local window = setmetatable({ addonName = "Check", declaration = { store = store }, pages = {}, pageOrder = {} },
@@ -325,6 +327,284 @@ do
 		section:Toggle({ id = "odd", label = "Odd", path = "odd", colour = true })
 		return #errors == before + 1
 	end)())
+end
+
+-- Type and color tokens
+
+do
+	local roles = 0
+	for _, entry in pairs(lib.TYPE) do
+		roles = roles + 1
+		Check("type: each role names a library font and a size", (entry[1] == "body" or entry[1] == "header")
+			and type(entry[2]) == "number" and entry[2] > 0)
+	end
+	Check("type: the scale has its six roles", roles == 6)
+	local r, g, b, a = lib:GetColor("accent")
+	Check("color: accent is Blizzard's gold", r == 1 and Near(g, 0.82) and b == 0 and a == 1)
+	Check("color: an alpha given replaces the color's own", select(4, lib:GetColor("bronze", 0.2)) == 0.2)
+	Check("color: an unknown name falls back to white",
+		lib:GetColor("missing") == 1 and select(4, lib:GetColor("missing")) == 1)
+	Check("color: destructive without the client's red keeps its own value",
+		Near(select(2, lib:GetColor("destructive")), 0.125))
+	RED_FONT_COLOR = { GetRGB = function() return 0.9, 0.1, 0.2 end }
+	r, g, b, a = lib:GetColor("destructive")
+	Check("color: destructive reads the client's red at each call", r == 0.9 and g == 0.1 and b == 0.2 and a == 1)
+	RED_FONT_COLOR = nil
+end
+
+-- Names on the library: a method defined as `function lib:X` and a table assigned as `lib.X =` in another file
+-- would replace each other by load order.
+
+do
+	local methods, tables, clashes = {}, {}, {}
+	for line in io.lines(root .. "/LibAeonSettings.xml") do
+		local file = line:match('Script file="([^"]+)"')
+		if file then
+			for code in io.lines(root .. "/" .. file:gsub("\\", "/")) do
+				local method = code:match("^function lib:([%w_]+)%(")
+				local field = code:match("^lib%.([%w_]+) = ")
+				if method then
+					methods[method] = file
+				end
+				if field then
+					tables[field] = file
+				end
+			end
+		end
+	end
+	for name, file in pairs(methods) do
+		if tables[name] then
+			clashes[#clashes + 1] = ("%s (%s, %s)"):format(name, file, tables[name])
+		end
+	end
+	table.sort(clashes)
+	Check("library names: no method shares its name with a table (" .. table.concat(clashes, ", ") .. ")", #clashes == 0)
+end
+
+-- Springs and Reduce Motion
+
+do
+	local Motion = lib.Motion
+	local function Run(response, damping, seconds)
+		local value, velocity, peak = 0, 0, 0
+		for _ = 1, math.floor(seconds * 60) do
+			value, velocity = Motion.Step(value, velocity, 1, response, damping, 1 / 60)
+			peak = math.max(peak, value)
+		end
+		return value, peak
+	end
+	local value, peak = Run(0.3, 1, 2)
+	Check("spring: critically damped, it settles on the target", math.abs(value - 1) < 0.001)
+	Check("spring: critically damped, it never passes the target", peak <= 1 + 1e-6)
+	Check("spring: by its response time it is most of the way there", (Run(0.3, 1, 0.3)) > 0.95)
+	Check("spring: under-damped, it overshoots", select(2, Run(0.3, 0.8, 2)) > 1.01)
+	Check("spring: under-damped, it overshoots as its damping says", math.abs(select(2, Run(0.3, 0.8, 2)) - 1
+		- math.exp(-math.pi * 0.8 / math.sqrt(1 - 0.64))) < 0.002)
+	for _, damping in ipairs({ 0.8, 1, 1.4 }) do
+		local big = { Motion.Step(0, 2, 1, 0.3, damping, 0.25) }
+		local small = { 0, 2 }
+		for _ = 1, 25 do
+			small = { Motion.Step(small[1], small[2], 1, 0.3, damping, 0.01) }
+		end
+		Check(("spring: one long frame lands where many short ones do (damping %.1f)"):format(damping),
+			math.abs(big[1] - small[1]) < 1e-9 and math.abs(big[2] - small[2]) < 1e-7)
+	end
+
+	local savedWindows = lib.windows
+	local first, second = {}, {}
+	lib.windows = {
+		A = { declaration = { account = first } },
+		B = { declaration = { account = function() return second end } },
+		C = { declaration = { account = first } },
+	}
+	local reports, rests = {}, 0
+	local spring = lib:CreateSpring(0, function(v) reports[#reports + 1] = v end,
+		{ onRest = function() rests = rests + 1 end })
+	spring:To(1)
+	Check("spring: a new target starts it moving", spring:IsMoving())
+	for _ = 1, 10 do
+		lib.MotionHandlers.Update(1 / 60)
+	end
+	local speed = spring.velocity
+	spring:To(0)
+	Check("spring: turning back keeps its speed", speed > 0 and spring.velocity == speed and spring:IsMoving())
+	for _ = 1, 120 do
+		lib.MotionHandlers.Update(1 / 60)
+	end
+	Check("spring: it comes to rest on the new target and reports it once", spring.value == 0 and not spring:IsMoving()
+		and rests == 1 and reports[#reports] == 0)
+
+	Check("reduce motion: off by default", lib:ReduceMotion() == false)
+	spring:To(1)
+	lib:SetReduceMotion(true)
+	Check("reduce motion: turning it on ends a moving spring at its target",
+		spring.value == 1 and not spring:IsMoving())
+	Check("reduce motion: stored in every account table, each once", #lib:AccountTables() >= 2
+		and first.settingsWindow.reduceMotion == true and second.settingsWindow.reduceMotion == true)
+	spring:To(0)
+	Check("reduce motion: a spring jumps to its target", spring.value == 0 and not spring:IsMoving())
+	lib:SetReduceMotion(false)
+	Check("reduce motion: off again", lib:ReduceMotion() == false)
+	lib.windows = savedWindows
+end
+
+-- The library's Settings Window section
+
+do
+	local account = {}
+	local window = NewWindow({})
+	window.declaration.account = account
+	local first = NewPage(window, "first", "First")
+	first:Section("own", "Own"):Toggle({ id = "on", label = "On", path = "on", default = true })
+	NewPage(window, "second", "Second")
+	local savedWindows = lib.windows
+	lib.windows = { Check = window }
+	window:AddWindowSection()
+	window:AddWindowSection()
+	local last = first.sections[#first.sections]
+	Check("window section: added once, at the end of the first page only", #first.sections == 2
+		and last.title == lib.L.SETTINGS_WINDOW and #window.pages.second.sections == 0)
+	local setting = last.lines[1][1]
+	Check("window section: Reduce Motion starts off",
+		setting.label == lib.L.REDUCE_MOTION and setting:GetValue() == false)
+	setting:Request(true)
+	Check("window section: its checkbox turns Reduce Motion on account-wide",
+		lib:ReduceMotion() and account.settingsWindow.reduceMotion == true and setting:GetValue() == true)
+	setting:Request(false)
+	Check("window section: and off", not lib:ReduceMotion() and setting:GetValue() == false)
+	lib.windows = savedWindows
+end
+
+-- Cards: rows under their parents, choice cards
+
+do
+	local window = NewWindow({ show = true, a = false })
+	local page = NewPage(window, "cards", "Cards")
+	local section = page:Section("rows", "Rows")
+	section:Toggle({ id = "first", label = "First", path = "first", default = true })
+	section:Toggle({ id = "child", label = "Child", path = "child", default = true, depends = "show" })
+	section:Toggle({ id = "show", label = "Show", path = "show", default = true })
+	section:Toggle({ id = "grandchild", label = "Grandchild", path = "grandchild", default = true, depends = "child" })
+	section:Toggle({ id = "last", label = "Last", path = "last", default = true })
+	local other = page:Section("other", "Other")
+	local outside = other:Toggle({ id = "outside", label = "Outside", path = "outside", default = true, depends = "a" })
+	section:Toggle({ id = "a", label = "A", path = "a", default = false })
+	local rows = {}
+	for _, id in ipairs({ "first", "child", "show", "grandchild", "last", "a" }) do
+		rows[#rows + 1] = { setting = page.settings[id] }
+	end
+	lib.OrderUnderParents(rows)
+	local order = {}
+	for _, row in ipairs(rows) do
+		order[#order + 1] = row.setting.id
+	end
+	Check("cards: a row moves directly under the row it depends on, its own dependents under it",
+		table.concat(order, ",") == "first,show,child,grandchild,last,a")
+	local loop = { { setting = { Parent = function() return nil end } } }
+	loop[2] = { setting = { Parent = function() return loop[3].setting end } }
+	loop[3] = { setting = { Parent = function() return loop[2].setting end } }
+	lib.OrderUnderParents(loop)
+	Check("cards: rows in a dependency loop keep their place", #loop == 3)
+
+	page.settings.show:SetValue(false)
+	Check("cards: a row whose parent in its section is off leaves", lib.ParentOffInSection(page.settings.child)
+		and lib.ParentOffInSection(page.settings.grandchild))
+	Check("cards: a row whose parent is in another section stays, dimmed", not lib.ParentOffInSection(outside)
+		and select(3, outside:Activity()) == "depends")
+
+	local before = #errors
+	local choices = page:Section("choices", "Choices", { columns = 2 })
+	choices:Checkbox({ id = "c1", label = "One", path = "c1" })
+	choices:Checkbox({ id = "c2", label = "Two", path = "c2" })
+	Check("choice card: two checkboxes draw two to a line", lib.ChoiceGrid(window, choices) and #errors == before)
+	local swatches = page:Section("swatches", "Swatches", { columns = 2 })
+	swatches:Checkbox({ id = "w1", label = "One", path = "w1" })
+	swatches:Color({ id = "w2", label = "Two", path = "w2" })
+	Check("choice card: a color swatch draws two to a line", lib.ChoiceGrid(window, swatches) and #errors == before)
+	local mixed = page:Section("mixed", "Mixed", { columns = 2 })
+	mixed:Checkbox({ id = "m1", label = "One", path = "m1" })
+	mixed:Toggle({ id = "m2", label = "Two", path = "m2" })
+	Check("choice card: a non-checkbox draws one to a line and is reported",
+		not lib.ChoiceGrid(window, mixed) and #errors == before + 1)
+	local described = page:Section("described", "Described", { columns = 2 })
+	described:Checkbox({ id = "d1", label = "One", path = "d1", description = "Words." })
+	described:Checkbox({ id = "d2", label = "Two", path = "d2" })
+	Check("choice card: a description draws one to a line", not lib.ChoiceGrid(window, described))
+	local reported = #errors
+	local tail = page:Section("tail", "Tail", { columns = 2 })
+	tail:Checkbox({ id = "t1", label = "One", path = "t1" })
+	tail:Checkbox({ id = "t2", label = "Two", path = "t2" })
+	tail:Color({ id = "t3", label = "Three", path = "t3", depends = "t1" })
+	tail:Checkbox({ id = "t4", label = "Four", path = "t4", depends = "t1" })
+	tail:Color({ id = "t5", label = "Five", path = "t5", depends = "t4" })
+	Check("choice card: dependents at the card's end draw two to a line",
+		lib.ChoiceGrid(window, tail) and #errors == reported)
+	local early = page:Section("early", "Early", { columns = 2 })
+	early:Color({ id = "e1", label = "One", path = "e1", depends = "e2" })
+	early:Checkbox({ id = "e2", label = "Two", path = "e2" })
+	Check("choice card: a dependent before its parent draws one to a line and is reported",
+		not lib.ChoiceGrid(window, early) and errors[#errors]:find("comes before") ~= nil)
+	local after = page:Section("after", "After", { columns = 2 })
+	after:Checkbox({ id = "a1", label = "One", path = "a1" })
+	after:Color({ id = "a2", label = "Two", path = "a2", depends = "a1" })
+	after:Checkbox({ id = "a3", label = "Three", path = "a3" })
+	Check("choice card: an independent row after a dependent draws one to a line and is reported",
+		not lib.ChoiceGrid(window, after) and errors[#errors]:find("does not depend") ~= nil)
+	local crossed = page:Section("crossed", "Crossed", { columns = 2 })
+	crossed:Checkbox({ id = "x1", label = "One", path = "x1" })
+	crossed:Checkbox({ id = "x2", label = "Two", path = "x2" })
+	crossed:Color({ id = "x3", label = "Three", path = "x3", depends = "x1" })
+	crossed:Color({ id = "x4", label = "Four", path = "x4", depends = "x2" })
+	Check("choice card: another parent's dependent after a dependent draws one to a line and is reported",
+		not lib.ChoiceGrid(window, crossed) and errors[#errors]:find("does not depend") ~= nil)
+	local single = page:Section("single", "Single", { columns = 2 })
+	single:Checkbox({ id = "s1", label = "One", path = "s1" })
+	Check("choice card: one checkbox draws one to a line", not lib.ChoiceGrid(window, single))
+	page:Section("three", "Three", { columns = 3 })
+	Check("choice card: columns other than 1 or 2 are reported", errors[#errors]:find("columns must be 1 or 2") ~= nil)
+
+	local module = NewPage(window, "clock", "Clock", { switch = { path = "clock.on" } })
+	local named = NewPage(window, "broker", "DataBroker", { switch = { path = "broker.on", label = "Broker Hosting" } })
+	Check("page switch: named after its page unless it has a label of its own",
+		module.switch.label == "Clock" and named.switch.label == "Broker Hosting")
+
+	local store = {}
+	local detailsWindow = NewWindow(store)
+	local clock = NewPage(detailsWindow, "clock", "Clock")
+	local more = clock:Section("more", "More")
+	more:Toggle({ id = "rest", label = "Resting Glyph", path = "rest", default = true })
+	local text = more:Details({ id = "text", label = "Text", summary = function() return "Bar Style" end })
+	local font = more:Dropdown({ id = "font", label = "Font", path = "font", default = "A", details = "text",
+		choices = { { value = "A", text = "A" } } })
+	local classColor = more:Checkbox({ id = "class", label = "Class Color", path = "class", details = "text" })
+	local hover = more:Checkbox({ id = "hover", label = "Hover Class Color", path = "hover", depends = "class",
+		details = "text" })
+	Check("details: closed at first, holding its settings away", text:GetValue() == false
+		and lib.ParentOffInSection(font) and lib.ParentOffInSection(hover))
+	local rows = {}
+	for _, setting in ipairs({ font, more.lines[1][1], classColor, text, hover }) do
+		rows[#rows + 1] = { setting = setting }
+	end
+	lib.OrderUnderParents(rows)
+	Check("details: its settings sit under it", rows[2].setting == text and rows[3].setting == font
+		and rows[4].setting == classColor and rows[5].setting == hover)
+	text:SetValue(true)
+	Check("details: opened, its settings are there; one depending on another inside follows that one",
+		not lib.ParentOffInSection(font) and lib.ParentOffInSection(hover))
+	Check("details: open or closed lives in the window for the session, not in the store",
+		detailsWindow.openDetails["clock/text"] == true and store.text == nil and next(store) == nil)
+	Check("details: a row sits in one step for each details row it is inside, whatever it depends on",
+		lib.DetailsIndent(text) == 0 and lib.DetailsIndent(more.lines[1][1]) == 0
+		and lib.DetailsIndent(font) == lib.DETAILS_STEP and lib.DetailsIndent(hover) == lib.DETAILS_STEP)
+	local inner = more:Details({ id = "inner", label = "Inner", details = "text" })
+	local nested = more:Checkbox({ id = "nested", label = "Nested", path = "nested", details = "inner" })
+	Check("details: rows inside nested details sit in further", lib.DetailsIndent(inner) == lib.DETAILS_STEP
+		and lib.DetailsIndent(nested) == 2 * lib.DETAILS_STEP)
+	local loopA = more:Details({ id = "loopA", label = "A", details = "loopB" })
+	more:Details({ id = "loopB", label = "B", details = "loopA" })
+	Check("details: rows naming each other still give an indent", type(lib.DetailsIndent(loopA)) == "number")
+	Check("details: only the details row heads what is under it", lib.controls.Details.heads == true
+		and not lib.controls.Checkbox.heads)
 end
 
 -- Media pickers
@@ -411,6 +691,34 @@ do
 	copy:Request("other")
 	Check("menu: picking an action runs set without recording Undo",
 		picked == "other" and #(window.undoHistory or {}) == 0)
+end
+
+-- Dropdowns with several choices
+
+do
+	local store = {}
+	local window = NewWindow(store)
+	window.RefreshUndo = function() end
+	local recorded = {}
+	window.RecordChange = function(_, change) recorded[#recorded + 1] = change end
+	window.SettingChanged = function() end
+	local page = NewPage(window, "effects", "Effects")
+	local section = page:Section("look", "Look")
+	local effects = section:Dropdown({ id = "effects", label = "Effects", path = "look.effects", multiple = true,
+		default = { grow = true, edge = false },
+		options = { { value = "edge", text = "Highlight Border" }, { value = "grow", text = "Grow" } } })
+	Check("multiple: each choice reads its default until stored",
+		effects:ItemEnabled("grow") and not effects:ItemEnabled("edge"))
+	Check("multiple: the closed text names the choices on", effects:FormatValue({}) == "Grow")
+	effects:SetItemEnabled({ value = "edge", text = "Highlight Border" }, true)
+	Check("multiple: a choice is stored at its own path, one Undo step",
+		store.look.effects.edge == true and #recorded == 1 and recorded[1].path == "look.effects.edge")
+	Check("multiple: in the list's order", effects:FormatValue(store.look.effects) == "Highlight Border, Grow")
+	Check("multiple: none on reads None", effects:FormatValue({ grow = false }) == (NONE or "None"))
+	Check("multiple: its picks are left out of the setting's own Undo", effects.noUndo == true)
+	local before = #errors
+	section:Dropdown({ id = "noPath", multiple = true, options = {} })
+	Check("multiple: a dropdown with several choices without a path is reported", #errors > before)
 end
 
 -- Resettable settings
@@ -593,6 +901,23 @@ do
 	Check("search: letters in order find the label", Finds("shwclk", "Show Clock"))
 	Check("search: a typed British stem finds the word", Finds("centr", "Centered Text"))
 	Check("search: descriptions are searched", Finds("middle", "Centered Text"))
+
+	local unitsShown = false
+	local units = NewPage(window, "units", "Unit Tooltips")
+	units.show = function() return unitsShown end
+	local names = units:Section("names", "Names")
+	names:Toggle({ id = "rank", label = "Guild Rank", path = "rank" })
+	window.searchIndex = nil
+	Check("search: a page its show hides is left out, with its settings",
+		not Finds("unit tooltips", "Unit Tooltips") and not Finds("rank", "Guild Rank"))
+	unitsShown = true
+	Check("search: shown again, it is found", Finds("unit tooltips", "Unit Tooltips") and Finds("rank", "Guild Rank"))
+	units.show = function() error("broken show") end
+	local handler = geterrorhandler
+	geterrorhandler = function() return function() end end
+	Check("page show: an error hides the page instead of breaking search", not lib.PageShown(units)
+		and not Finds("rank", "Guild Rank"))
+	geterrorhandler = handler
 	Check("search: a section is found", Finds("appearance", "Appearance"))
 	Check("search: a hidden setting is not listed", not Finds("hidden", hidden.label))
 	Check("search: nothing matches nonsense", First("zzqx") == nil)

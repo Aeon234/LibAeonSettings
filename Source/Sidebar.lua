@@ -1,27 +1,36 @@
 -- The window's navigation: the model (headers, groups, pages and dividers, declared in order) and the sidebar that
--- draws it, with collapsible headers and groups and a smooth scrolling list.
+-- draws it one level deep in a smooth scrolling list: headers and groups are headings that fold the entries under
+-- them, and every page is an entry at the same indent.
 
 local lib = LibStub("LibAeonSettings-1.0")
 if not lib.loading then
 	return
 end
 
-local ROW_HEIGHT = 32
+local ROW_HEIGHT = 30
 local DIVIDER_HEIGHT = 19       -- a 1-unit rule with 9 above and below
-local ICON_SIZE = 16
-local CHEVRON_SIZE, GROUP_CHEVRON_SIZE = 14, 12
-local GOLD = { 1, 0.82, 0 }
-local WHITE = { 1, 1, 1 }
-local GROUP_WHITE = { 1, 1, 1, 0.9 }
+local ICON_SIZE, ICON_LEFT, ENTRY_TEXT = 18, 13, 40 -- an entry's icon and text
+local HEADING_TEXT, HEADING_BOTTOM = 28, 7 -- a heading's text: in from the left, up from the row's bottom
+local CHEVRON_SIZE, CHEVRON_CENTER = 10, 14
+local HOLDING_WIDTH, HOLDING_GAP = 110, 8 -- the most room for the name of the page a folded heading holds
+local ROW_RIGHT = 12 -- a heading's text ends this far in from the row's right edge
+-- A row's fill by state: one rounded shape for every state, told apart by its tint. Hovered and pressed rows are
+-- lit white; the selected row is gold, a little stronger under the pointer, with a gold inner edge.
+local FILL_HOVER, FILL_PRESSED = 0.06, 0.12
+local FILL_SELECTED, FILL_SELECTED_HOVER, FILL_SELECTED_PRESSED = 0.14, 0.2, 0.26
+local EDGE_SELECTED = 0.5
+local ROW_SLICE = 12 -- texels; the row art is drawn at half scale
+local FOLD_RESPONSE = 0.3
+local OFF_ALPHA = 0.45 -- a page whose switch is off
 local SELECT_SOUND = SOUNDKIT and SOUNDKIT.IG_CHARACTER_INFO_TAB
 
--- Text inset, font and size by kind; `icon` is the icon's inset and `slotted` the text inset with an icon slot.
+-- Headings (headers and groups alike) and entries (pages at any depth), by node kind.
 local KINDS = {
-	top = { inset = 16, font = "body", size = 16 },
-	header = { inset = 34, font = "header", size = 16, chevron = 14 },
-	group = { inset = 34, font = "body", size = 14, chevron = 18 },
-	sub = { inset = 34, font = "body", size = 14, icon = 32, slotted = 54 },
-	item = { inset = 52, font = "body", size = 14, icon = 50, slotted = 72 },
+	top = { role = "body" },
+	sub = { role = "body" },
+	item = { role = "body" },
+	header = { role = "navHeading", heading = true },
+	group = { role = "navHeading", heading = true },
 }
 
 lib.SidebarHandlers = lib.SidebarHandlers or {}
@@ -55,12 +64,13 @@ local function Parent(window, under, kinds)
 	return parent, true
 end
 
----Adds a collapsible, gold header to the sidebar.
+---Adds a heading to the sidebar; clicking it folds the entries under it.
 function lib.Window:Header(id, title)
 	return AddNode(self, { kind = "header", id = id, title = title })
 end
 
----Adds a collapsible group under a header.
+---Adds a group under a header. It draws as a heading of its own, like a header, and its pages sit at the same
+---indent as every other page.
 function lib.Window:Group(id, title, header)
 	local parent, ok = Parent(self, header, { header = true })
 	if ok then
@@ -75,12 +85,16 @@ function lib.Window:Divider()
 	return AddNode(self, { kind = "divider", id = "\0divider" .. self.dividers })
 end
 
-local PAGE_FIELDS = { title = true, description = true, under = true, icon = true, iconCrop = true, slot = true,
-	switch = true }
+local PAGE_FIELDS = { title = true, description = true, under = true, icon = true, iconCrop = true, iconTint = true,
+	slot = true, switch = true, show = true }
 
----Adds a page: at the top level, under a header, or under a group. `info.icon` (a file or atlas) or `info.slot`
----reserves the 16-unit icon slot before its title; `info.iconCrop` cuts that share of a file icon from each edge. `info.switch` (true, or a setting's fields such as `path` and
----`default`) gives the page an Enabled toggle that dims the page body while off.
+---Adds a page: at the top level, under a header, or under a group. `info.icon` (a file or atlas) draws before its
+---title; `info.iconCrop` cuts that share of a file icon from each edge; `info.iconTint` (true for a white glyph)
+---colors the icon as its title, gold while the page is selected, where other icons keep their own colors; `info.slot` is accepted and no longer needed,
+---as every entry keeps the icon's room. `info.switch` (true, or a setting's fields such as `path` and `default`)
+---gives the page a switch on a card of its own, the rest of the page there only while it is on. `info.show(page)`,
+---when given, leaves the page out of the sidebar and search while it returns false; a window showing it moves to the
+---nearest page above it.
 ---@return table? page
 function lib.Window:Page(id, info)
 	info = info or {}
@@ -94,8 +108,12 @@ function lib.Window:Page(id, info)
 		return
 	end
 	local kind = not parent and "top" or parent.kind == "header" and "sub" or "item"
+	if info.show ~= nil and type(info.show) ~= "function" then
+		lib:Report(self.addonName, ("page %s: show must be a function"):format(tostring(id)))
+	end
 	local page = AddNode(self, { kind = kind, id = id, title = info.title or id, description = info.description,
-		parent = parent, icon = info.icon, iconCrop = info.iconCrop, slot = info.slot or info.icon ~= nil, isPage = true })
+		parent = parent, icon = info.icon, iconCrop = info.iconCrop, iconTint = info.iconTint, isPage = true,
+		show = type(info.show) == "function" and info.show or nil })
 	if page then
 		self.pages[id] = page
 		table.insert(self.pageOrder, page)
@@ -105,18 +123,49 @@ function lib.Window:Page(id, info)
 	return page
 end
 
----Shows a page, opening any collapsed header or group above it.
+-- The nearest shown page above `page` in the declared order, else the nearest below it.
+local function NearestShown(window, page)
+	local at
+	for index, other in ipairs(window.pageOrder) do
+		if other == page then
+			at = index
+			break
+		end
+	end
+	for index = (at or 1) - 1, 1, -1 do
+		if lib.PageShown(window.pageOrder[index]) then
+			return window.pageOrder[index]
+		end
+	end
+	for index = (at or 0) + 1, #window.pageOrder do
+		if lib.PageShown(window.pageOrder[index]) then
+			return window.pageOrder[index]
+		end
+	end
+end
+
+---Shows a page, opening any collapsed header or group above it. A page its `show` hides gives way to the nearest
+---shown one.
 function lib.Window:SelectPage(id)
 	local page = self.pages[id]
 	if not page then
 		lib:Report(self.addonName, ("SelectPage: no page %q"):format(tostring(id)))
 		return
 	end
+	if not lib.PageShown(page) then
+		page = NearestShown(self, page)
+		if not page then
+			return
+		end
+		id = page.id
+	end
 	local changed = self.page ~= id
 	self.page = id
 	local parent = page.parent
 	while parent do
-		self.collapsed[parent.id] = nil
+		if self.collapsed[parent.id] then
+			Handlers.Fold(self, parent, false)
+		end
 		parent = parent.parent
 	end
 	if self.frame then
@@ -137,26 +186,34 @@ local function CreateRow(window)
 	row:SetHeight(ROW_HEIGHT)
 	row:RegisterForClicks("LeftButtonUp")
 
-	row.selected = row:CreateTexture(nil, "BACKGROUND")
-	row.selected:SetAtlas("common-button-list-small-selected")
-	row.selected:SetAllPoints()
-	row.hover = row:CreateTexture(nil, "BACKGROUND", nil, 1)
-	row.hover:SetTexture(lib.mediaPath .. "Textures\\nav-hover")
-	row.hover:SetTextureSliceMargins(16, 16, 16, 16)
-	if Enum.UITextureSliceMode then
-		row.hover:SetTextureSliceMode(Enum.UITextureSliceMode.Stretched)
+	-- The row's fill and its edge, nine-sliced at half scale so the corners keep their size.
+	for _, piece in ipairs({ { "fill", "nav-row", 0 }, { "edge", "nav-row-edge", 1 } }) do
+		local texture = row:CreateTexture(nil, "BACKGROUND", nil, piece[3])
+		texture:SetTexture(lib.mediaPath .. "Textures\\" .. piece[2])
+		texture:SetTextureSliceMargins(ROW_SLICE, ROW_SLICE, ROW_SLICE, ROW_SLICE)
+		if Enum.UITextureSliceMode then
+			texture:SetTextureSliceMode(Enum.UITextureSliceMode.Stretched)
+		end
+		texture:SetScale(0.5)
+		texture:SetAllPoints()
+		texture:Hide()
+		row[piece[1]] = texture
 	end
-	row.hover:SetScale(0.5)
-	row.hover:SetAllPoints()
-	row.hover:Hide()
 
 	row.icon = row:CreateTexture(nil, "ARTWORK")
 	row.icon:SetSize(ICON_SIZE, ICON_SIZE)
 	row.chevron = row:CreateTexture(nil, "ARTWORK")
 	row.chevron:SetTexture(lib.mediaPath .. "Textures\\chevron")
+	row.chevron:SetSize(CHEVRON_SIZE, CHEVRON_SIZE)
 	row.label = row:CreateFontString(nil, "OVERLAY")
 	row.label:SetJustifyH("LEFT")
 	row.label:SetWordWrap(false)
+	-- On a folded heading that holds the shown page: that page's name, at the right.
+	row.holding = row:CreateFontString(nil, "OVERLAY")
+	lib:SetType(row.holding, "body", "accent")
+	row.holding:SetJustifyH("RIGHT")
+	row.holding:SetWordWrap(false)
+	row.holding:SetWidth(HOLDING_WIDTH)
 
 	row.rule = row:CreateTexture(nil, "ARTWORK")
 	row.rule:SetAtlas("Options_HorizontalDivider")
@@ -166,50 +223,130 @@ local function CreateRow(window)
 
 	row:SetScript("OnClick", function(self) Handlers.Click(window, self) end)
 	row:SetScript("OnEnter", function(self) Handlers.Hover(window, self, true) end)
-	row:SetScript("OnLeave", function(self) Handlers.Hover(window, self, false) end)
+	row:SetScript("OnLeave", function(self)
+		Handlers.Press(window, self, false)
+		Handlers.Hover(window, self, false)
+	end)
+	row:SetScript("OnMouseDown", function(self, button) Handlers.Press(window, self, button == "LeftButton") end)
+	row:SetScript("OnMouseUp", function(self) Handlers.Press(window, self, false) end)
 
 	return row
+end
+
+---@return boolean holds the shown page sits somewhere under this header or group
+local function Holds(window, node)
+	local page = window.page and window.pages[window.page]
+	local parent = page and page.parent
+	while parent do
+		if parent == node then
+			return true
+		end
+		parent = parent.parent
+	end
+
+	return false
 end
 
 local function PaintRow(window, row)
 	local node = row.node
 	local selected = node.isPage and window.page == node.id
-	row.selected:SetShown(selected)
-	row.hover:SetShown(row.hovered and not selected and node.kind ~= "divider")
-	if node.isPage then
-		row.label:SetTextColor(unpack(selected and GOLD or WHITE))
-	elseif node.kind == "header" then
-		row.label:SetTextColor(unpack(GOLD))
-	elseif node.kind == "group" then
-		row.label:SetTextColor(unpack(GROUP_WHITE))
+	-- Pressing lights the row at once; hovering lights it softer; the selected row stays gold.
+	local alpha
+	if selected then
+		alpha = row.pressed and FILL_SELECTED_PRESSED or row.hovered and FILL_SELECTED_HOVER or FILL_SELECTED
+	elseif node.kind ~= "divider" and (row.hovered or row.pressed) then
+		alpha = row.pressed and FILL_PRESSED or FILL_HOVER
 	end
+	row.fill:SetShown(alpha ~= nil)
+	if alpha then
+		row.fill:SetVertexColor(lib:GetColor(selected and "accent" or "text", alpha))
+	end
+	row.edge:SetShown(selected)
+	if selected then
+		row.edge:SetVertexColor(lib:GetColor("accent", EDGE_SELECTED))
+	end
+	local page = node.isPage and window.pages[node.id]
+	local off = page and page.switch and not page.switch:GetValue()
+	row.label:SetAlpha(off and OFF_ALPHA or 1)
+	row.icon:SetAlpha(off and OFF_ALPHA or 1)
+	local holding = false
+	if node.isPage then
+		row.label:SetTextColor(lib:GetColor(selected and "accent" or "text"))
+		if node.iconTint then
+			row.icon:SetVertexColor(lib:GetColor(selected and "accent" or "text"))
+		else
+			row.icon:SetVertexColor(1, 1, 1)
+		end
+	elseif KINDS[node.kind] and KINDS[node.kind].heading then
+		-- A folded heading over the shown page turns gold and names it.
+		holding = window.collapsed[node.id] and Holds(window, node)
+		row.label:SetTextColor(lib:GetColor(holding and "accent" or "navHeading"))
+		row.chevron:SetVertexColor(lib:GetColor(holding and "accent" or "navHeading"))
+		-- The heading's name runs to the row's right edge and makes way only for the name of a page it holds.
+		if holding then
+			row.holding:SetText(window.pages[window.page].title)
+			row.holding:SetWidth(math.min(HOLDING_WIDTH, math.ceil(row.holding:GetUnboundedStringWidth())))
+			row.label:SetPoint("RIGHT", row.holding, "LEFT", -HOLDING_GAP, 0)
+		else
+			row.label:SetPoint("RIGHT", -ROW_RIGHT, 0)
+		end
+	end
+	row.holding:SetShown(holding and true or false)
+end
+
+---@return number share how much of a header's or group's entries shows: 1 open, 0 folded, between while folding
+local function FoldShare(window, node)
+	local fold = window.folds and window.folds[node.id]
+
+	return fold and fold.value or (window.collapsed[node.id] and 0 or 1)
+end
+
+-- Folds or opens a header or group on a spring that lays the sidebar out again on every step.
+function Handlers.Fold(window, node, folded)
+	window.collapsed[node.id] = folded or nil
+	window.folds = window.folds or {}
+	local fold = window.folds[node.id]
+	if not fold then
+		fold = lib:CreateSpring(folded and 1 or 0, function() window:RefreshSidebar() end,
+			{ response = FOLD_RESPONSE, epsilon = 0.002 })
+		window.folds[node.id] = fold
+	end
+	fold:To(folded and 0 or 1)
 end
 
 local function SetUpRow(window, row, node)
 	row.node = node
 	local isDivider = node.kind == "divider"
-	row:SetHeight(isDivider and DIVIDER_HEIGHT or ROW_HEIGHT)
 	row:EnableMouse(not isDivider)
 	row.rule:SetShown(isDivider)
 	row.label:SetShown(not isDivider)
 	row.icon:Hide()
 	row.chevron:Hide()
 	if isDivider then
-		row.selected:Hide()
-		row.hover:Hide()
+		row.fill:Hide()
+		row.edge:Hide()
+		row.holding:Hide()
 		return
 	end
 
 	local kind = KINDS[node.kind]
-	lib:SetFont(row.label, kind.font, kind.size)
+	local role = lib.TYPE[kind.role]
+	lib:SetFont(row.label, role[1], role[2])
 	row.label:SetText(node.title)
 	row.label:ClearAllPoints()
-	local inset = kind.inset
-	if node.slot and kind.slotted then
-		inset = kind.slotted
+	row.holding:ClearAllPoints()
+	if kind.heading then
+		-- Headings sit low in their row, over the entries they hold; the chevron turns as they fold.
+		row.label:SetPoint("BOTTOMLEFT", HEADING_TEXT, HEADING_BOTTOM)
+		row.chevron:ClearAllPoints()
+		row.chevron:SetPoint("CENTER", row.label, "LEFT", -(HEADING_TEXT - CHEVRON_CENTER), 0)
+		row.chevron:SetRotation((1 - FoldShare(window, node)) * math.pi / 2)
+		row.chevron:Show()
+		row.holding:SetPoint("BOTTOMRIGHT", -ROW_RIGHT, HEADING_BOTTOM)
+	else
 		if node.icon then
 			row.icon:ClearAllPoints()
-			row.icon:SetPoint("LEFT", kind.icon, 0)
+			row.icon:SetPoint("LEFT", ICON_LEFT, 0)
 			if C_Texture.GetAtlasInfo(node.icon) then
 				row.icon:SetAtlas(node.icon)
 			else
@@ -219,35 +356,48 @@ local function SetUpRow(window, row, node)
 			end
 			row.icon:Show()
 		end
-	end
-	row.label:SetPoint("LEFT", inset, 0)
-	row.label:SetPoint("RIGHT", -6, 0)
-	if kind.chevron then
-		local size = node.kind == "group" and GROUP_CHEVRON_SIZE or CHEVRON_SIZE
-		row.chevron:SetSize(size, size)
-		row.chevron:ClearAllPoints()
-		row.chevron:SetPoint("CENTER", row, "LEFT", kind.chevron, 0)
-		row.chevron:SetRotation(window.collapsed[node.id] and math.pi / 2 or 0)
-		row.chevron:SetAlpha(node.kind == "group" and 0.7 or 1)
-		row.chevron:SetVertexColor(unpack(node.kind == "header" and GOLD or WHITE))
-		row.chevron:Show()
+		row.label:SetPoint("LEFT", ENTRY_TEXT, 0)
+		row.label:SetPoint("RIGHT", -6, 0)
 	end
 	PaintRow(window, row)
 end
 
-local function Hidden(window, node)
-	local parent = node.parent
-	while parent do
-		if window.collapsed[parent.id] then
-			return true
-		end
+---@return number share how much of an entry shows: the fold share of every header or group above it, multiplied
+local function Share(window, node)
+	local share, parent = 1, node.parent
+	while parent and share > 0 do
+		share = share * FoldShare(window, parent)
 		parent = parent.parent
 	end
 
-	return false
+	return share
 end
 
----Lays out the sidebar's rows for the entries that show (collapsed headers and groups hide what is under them).
+---@return number share how much of a page its `show` lets into the sidebar: 1 shown, 0 hidden, between while it
+---slides in or out
+local function ShowShare(window, page)
+	local slide = window.slides and window.slides[page.id]
+	if slide and slide:IsMoving() then
+		return slide.value
+	end
+
+	return lib.PageShown(page) and 1 or 0
+end
+
+-- Slides a page whose `show` changed its answer into or out of the sidebar on the fold's spring.
+function Handlers.Slide(window, page, shown)
+	window.slides = window.slides or {}
+	local slide = window.slides[page.id]
+	if not slide then
+		slide = lib:CreateSpring(shown and 0 or 1, function() window:RefreshSidebar() end,
+			{ response = FOLD_RESPONSE, epsilon = 0.002 })
+		window.slides[page.id] = slide
+	end
+	slide:To(shown and 1 or 0)
+end
+
+---Lays out the sidebar's rows, one level: headers and groups are headings, every page an entry under them. A row
+---under a folding heading, or of a page sliding in or out, takes its share of its height, faded by as much.
 function lib.Window:RefreshSidebar()
 	local sidebar = self.sidebar
 	if not sidebar then
@@ -256,23 +406,78 @@ function lib.Window:RefreshSidebar()
 	sidebar.rows = sidebar.rows or {}
 	local y, count = 0, 0
 	for _, node in ipairs(self.nav) do
-		if not Hidden(self, node) then
+		local share = Share(self, node)
+		if node.isPage and share > 0 then
+			share = share * ShowShare(self, node)
+		end
+		if share > 0 then
 			count = count + 1
 			local row = sidebar.rows[count] or CreateRow(self)
 			sidebar.rows[count] = row
 			SetUpRow(self, row, node)
+			local height = (node.kind == "divider" and DIVIDER_HEIGHT or ROW_HEIGHT) * share
+			row:SetHeight(height)
+			row:SetAlpha(share)
+			row:SetClipsChildren(share < 1)
 			row:ClearAllPoints()
 			row:SetPoint("TOPLEFT", sidebar.child, "TOPLEFT", 0, -y)
 			row:SetPoint("RIGHT", sidebar.child, "RIGHT", 0, 0)
 			row:Show()
-			y = y + row:GetHeight()
+			y = y + height
 		end
 	end
 	for index = count + 1, #sidebar.rows do
 		sidebar.rows[index]:Hide()
 	end
-	sidebar:SetContentHeight(y)
+	sidebar:SetContentHeight(math.floor(y + 0.5))
 	self.navChanged = nil
+end
+
+---Lays the sidebar out again when a page's `show` changed its answer, and moves off the shown page when it is hidden.
+---A change while the window is open slides the page's row in or out; any other change lands at once.
+---@return boolean moved another page is shown now
+function lib.Window:RefreshPageShows()
+	local changed = false
+	local open = self.frame and self.frame:IsShown() and not self.closing
+	for _, page in ipairs(self.pageOrder) do
+		if page.show then
+			local shown = lib.PageShown(page)
+			if shown ~= page.wasShown then
+				local slide = self.slides and self.slides[page.id]
+				if open and page.wasShown ~= nil then
+					Handlers.Slide(self, page, shown)
+				elseif slide then
+					slide:Stop()
+					self.slides[page.id] = nil
+				end
+				page.wasShown = shown
+				changed = true
+			end
+		end
+	end
+	if not changed then
+		return false
+	end
+	self.searchIndex = nil
+	self:RefreshSidebar()
+	local page = self.page and self.pages[self.page]
+	if page and not lib.PageShown(page) and self.frame then
+		self:SelectPage(page.id)
+
+		return true
+	end
+
+	return false
+end
+
+---Redraws the shown rows' states (selection, hover, a page switched off) without laying them out again.
+function lib.Window:PaintSidebar()
+	local sidebar = self.sidebar
+	for _, row in ipairs(sidebar and sidebar.rows or {}) do
+		if row:IsShown() and row.node then
+			PaintRow(self, row)
+		end
+	end
 end
 
 ---Builds the sidebar in its region of the window.
@@ -286,8 +491,8 @@ function Handlers.Click(window, row)
 	local node = row.node
 	if node.isPage then
 		window:SelectPage(node.id)
-	elseif node.kind == "header" or node.kind == "group" then
-		window.collapsed[node.id] = not window.collapsed[node.id] or nil
+	elseif KINDS[node.kind] and KINDS[node.kind].heading then
+		Handlers.Fold(window, node, not window.collapsed[node.id])
 		window:RefreshSidebar()
 	end
 end
@@ -295,5 +500,12 @@ end
 function Handlers.Hover(window, row, hovered)
 	row.hovered = hovered
 	PaintRow(window, row)
-	window.sidebar:UpdateLit()
 end
+
+function Handlers.Press(window, row, pressed)
+	row.pressed = pressed or nil
+	if row.node then
+		PaintRow(window, row)
+	end
+end
+
