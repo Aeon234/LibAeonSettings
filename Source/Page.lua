@@ -320,6 +320,10 @@ local function BindHalf(view, setting)
 		control.frame:SetPoint("RIGHT", half, "RIGHT", -CONTROL_RIGHT, 0)
 	end
 	control:Bind(setting)
+	local heads = lib.controls[kind].heads
+	half.indent = lib.DetailsIndent(setting)
+	half.labelLeft = INSET + half.indent + (heads and lib.DETAILS_STEP or 0)
+	lib:SetType(half.label, heads and "heading" or "body")
 	half.label:SetText(setting.label or "")
 	half.blocker:ClearAllPoints()
 	half.blocker:SetAllPoints(control.frame)
@@ -630,15 +634,17 @@ local function PlaceHalf(half, child, left, y, width, height)
 	half.top = y
 	half:SetSize(width, height)
 	half:Show()
-	local labelWidth = math.max(MIN_LABEL, width - INSET - CONTROL_RIGHT - half.view:GetWidth() - LABEL_GAP)
+	-- A choice card's rows stay on its grid, whatever they sit inside.
+	local labelLeft = half.grid and INSET or half.labelLeft
+	local labelWidth = math.max(MIN_LABEL, width - labelLeft - CONTROL_RIGHT - half.view:GetWidth() - LABEL_GAP)
 	half.label:SetWidth(labelWidth)
 	half.small:SetWidth(labelWidth)
 	half.inherited:SetWidth(labelWidth)
 	half.label:ClearAllPoints()
 	if half.tall then
-		half.label:SetPoint("TOPLEFT", half, "LEFT", INSET, (LABEL_HEIGHT + SMALL_HEIGHT * half.lines) / 2)
+		half.label:SetPoint("TOPLEFT", half, "LEFT", labelLeft, (LABEL_HEIGHT + SMALL_HEIGHT * half.lines) / 2)
 	else
-		half.label:SetPoint("LEFT", half, "LEFT", INSET, 0)
+		half.label:SetPoint("LEFT", half, "LEFT", labelLeft, 0)
 	end
 	local last = half.inherited:IsShown() and half.inherited or half.small:IsShown() and half.small or half.label
 	half.hover:ClearAllPoints()
@@ -699,7 +705,8 @@ function lib.Window:LayoutPage()
 					else
 						-- The separator above and the row shrink together, unrounded, so a row ends without a step.
 						if previous then
-							Rule(view, lib.COLOR.separator, INSET, y, width - INSET, 1, share)
+							local ruleLeft = INSET + half.indent
+							Rule(view, lib.COLOR.separator, ruleLeft, y, width - ruleLeft, 1, share)
 							y = y + share
 						end
 						local height = half.tall and TALL_HEIGHT or ROW_HEIGHT

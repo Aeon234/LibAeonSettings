@@ -593,6 +593,18 @@ do
 		not lib.ParentOffInSection(font) and lib.ParentOffInSection(hover))
 	Check("details: open or closed lives in the window for the session, not in the store",
 		detailsWindow.openDetails["clock/text"] == true and store.text == nil and next(store) == nil)
+	Check("details: a row sits in one step for each details row it is inside, whatever it depends on",
+		lib.DetailsIndent(text) == 0 and lib.DetailsIndent(more.lines[1][1]) == 0
+		and lib.DetailsIndent(font) == lib.DETAILS_STEP and lib.DetailsIndent(hover) == lib.DETAILS_STEP)
+	local inner = more:Details({ id = "inner", label = "Inner", details = "text" })
+	local nested = more:Checkbox({ id = "nested", label = "Nested", path = "nested", details = "inner" })
+	Check("details: rows inside nested details sit in further", lib.DetailsIndent(inner) == lib.DETAILS_STEP
+		and lib.DetailsIndent(nested) == 2 * lib.DETAILS_STEP)
+	local loopA = more:Details({ id = "loopA", label = "A", details = "loopB" })
+	more:Details({ id = "loopB", label = "B", details = "loopA" })
+	Check("details: rows naming each other still give an indent", type(lib.DetailsIndent(loopA)) == "number")
+	Check("details: only the details row heads what is under it", lib.controls.Details.heads == true
+		and not lib.controls.Checkbox.heads)
 end
 
 -- Media pickers

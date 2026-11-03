@@ -1,6 +1,7 @@
--- Details: a row that holds optional settings. Closed, it shows its label, a summary of what it holds and a chevron;
--- clicked, its settings grow in under it inside the same card, and clicked again they leave. Its settings name it
--- with `details = "<id>"`. Open or closed lasts for the session and is not saved or undone.
+-- Details: a row that heads optional settings, set apart by a faint band, a heading label and a leading chevron.
+-- Closed, it shows a summary of what it holds; clicked, the summary goes and its settings grow in under it, indented,
+-- inside the same card, and clicked again they leave. Its settings name it with `details = "<id>"`. Open or closed
+-- lasts for the session and is not saved or undone.
 
 local lib = LibStub("LibAeonSettings-1.0")
 if not lib.loading then
@@ -9,7 +10,8 @@ end
 
 local SUMMARY_WIDTH = 160 -- room kept beside the label for the summary
 local CHEVRON_SIZE, CHEVRON_GAP = 12, 8
-local HOVER_ALPHA, PRESSED_ALPHA = 0.025, 0.06
+local REST_ALPHA, HOVER_ALPHA, PRESSED_ALPHA = 0.03, 0.05, 0.08
+local MAX_DEPTH = 16 -- how many details rows up a chain is followed, in case they name each other
 local OPEN_SOUND = SOUNDKIT and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON
 local CLOSE_SOUND = SOUNDKIT and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_OFF
 
@@ -18,7 +20,23 @@ local detailsMeta = { __index = function(_, name) return lib.Details[name] end }
 lib.DetailsHandlers = lib.DetailsHandlers or {}
 local Handlers = lib.DetailsHandlers
 
--- The whole row is the button: a faint fill on hover, a little more while pressed.
+-- A row's label starts one step further in than its chevron, so the rows inside line up under that label.
+lib.DETAILS_STEP = CHEVRON_SIZE + CHEVRON_GAP
+
+---@param setting table
+---@return number indent how far a row sits in, one step for each details row it is inside
+function lib.DetailsIndent(setting)
+	local indent, depth = 0, 0
+	local inside = setting.details and setting.page.settings[setting.details]
+	while inside and depth < MAX_DEPTH do
+		indent, depth = indent + lib.DETAILS_STEP, depth + 1
+		inside = inside.details and inside.page.settings[inside.details]
+	end
+
+	return indent
+end
+
+-- The whole row is the button: a faint band at rest, a little more on hover and while pressed.
 function lib:CreateDetails(parent)
 	local view = setmetatable({}, detailsMeta)
 	local button = CreateFrame("Button", nil, parent)
@@ -26,7 +44,7 @@ function lib:CreateDetails(parent)
 	view.fill = button:CreateTexture(nil, "BACKGROUND")
 	view.fill:SetAllPoints()
 	view.fill:SetColorTexture(1, 1, 1, 1)
-	view.fill:SetAlpha(0)
+	view.fill:SetAlpha(REST_ALPHA)
 	view.chevron = button:CreateTexture(nil, "ARTWORK")
 	view.chevron:SetTexture(lib.mediaPath .. "Textures\\chevron")
 	view.chevron:SetSize(CHEVRON_SIZE, CHEVRON_SIZE)
@@ -36,7 +54,7 @@ function lib:CreateDetails(parent)
 	view.summary:SetJustifyH("RIGHT")
 	view.summary:SetWordWrap(false)
 	view.summary:SetWidth(SUMMARY_WIDTH)
-	view.summary:SetPoint("RIGHT", view.chevron, "LEFT", -CHEVRON_GAP, 0)
+	view.summary:SetPoint("RIGHT", button, "RIGHT", -lib.ROW_INSET, 0)
 	button:SetScript("OnClick", function() Handlers.Click(view) end)
 	button:SetScript("OnEnter", function() Handlers.Paint(view, true, false) end)
 	button:SetScript("OnLeave", function() Handlers.Paint(view, false, false) end)
@@ -47,26 +65,30 @@ function lib:CreateDetails(parent)
 	return view
 end
 
--- Covers the whole row, above the label's tooltip area; the chevron sits at the row's right inset.
+-- Covers the whole row, above the label's tooltip area.
 function lib.Details:Place(half)
 	self.frame:SetAllPoints(half)
 	self.frame:SetFrameLevel(half:GetFrameLevel() + 5)
-	self.chevron:ClearAllPoints()
-	self.chevron:SetPoint("RIGHT", half, "RIGHT", -lib.ROW_INSET, 0)
 end
 
+-- The chevron starts where the row's own inset does, before its label.
 function lib.Details:Bind(setting)
 	self.setting = setting
+	self.chevron:ClearAllPoints()
+	self.chevron:SetPoint("LEFT", self.frame, "LEFT", lib.ROW_INSET + lib.DetailsIndent(setting), 0)
 	self:Update()
 end
 
--- Open points the chevron down; closed, to the right. The summary is the adopter's, read on every redraw.
+-- Open points the chevron down and hides the summary; closed, to the right. The summary is the adopter's, read on
+-- every redraw.
 function lib.Details:Update()
 	local setting = self.setting
 	if not setting then
 		return
 	end
-	self.chevron:SetRotation(setting:GetValue() and 0 or math.pi / 2)
+	local open = setting:GetValue()
+	self.chevron:SetRotation(open and 0 or math.pi / 2)
+	self.summary:SetShown(not open)
 	local summary = setting.summary and lib.CallAdopter(setting.summary, setting)
 	self.summary:SetText(type(summary) == "string" and summary or "")
 end
@@ -84,11 +106,11 @@ end
 
 -- What the row keeps clear of its label, counted from where other controls end.
 function lib.Details:GetWidth()
-	return SUMMARY_WIDTH + CHEVRON_GAP + CHEVRON_SIZE + lib.ROW_INSET - lib.CONTROL_RIGHT
+	return SUMMARY_WIDTH + lib.ROW_INSET - lib.CONTROL_RIGHT
 end
 
 function Handlers.Paint(view, hovered, pressed)
-	view.fill:SetAlpha(pressed and PRESSED_ALPHA or hovered and HOVER_ALPHA or 0)
+	view.fill:SetAlpha(pressed and PRESSED_ALPHA or hovered and HOVER_ALPHA or REST_ALPHA)
 end
 
 function Handlers.Click(view)
@@ -103,6 +125,7 @@ end
 
 lib:RegisterControl("Details", {
 	fields = { summary = true },
+	heads = true,
 	-- Open or closed is the window's for the session, by page and id.
 	Init = function(setting)
 		local key = setting.page.id .. "/" .. tostring(setting.id)
