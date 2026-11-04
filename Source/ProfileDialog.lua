@@ -1,5 +1,5 @@
 -- C-18, the profile dialogs: naming a profile (new, copy, rename), exporting, importing (with the adapter's report
--- lines, Hearthline Q85), and choosing the profile that replaces a deleted one. One dialog per window, built the
+-- lines), and choosing the profile that replaces a deleted one. One dialog per window, built the
 -- first time, in the window's own frame (SettingsFrameTemplate) over it; it closes when the window hides.
 
 local lib = LibStub("LibAeonSettings-1.0")

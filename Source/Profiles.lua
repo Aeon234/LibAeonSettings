@@ -1,6 +1,6 @@
 -- C-17, the Profiles page: which profile is active, managing profiles and sharing them, drawn by the library from
 -- an adapter the addon passes; the profiles and their data stay the addon's. Profile actions are not undoable and
--- empty the window's Undo history (Q86). The dialogs are C-18 (ProfileDialog.lua).
+-- empty the window's Undo history. The dialogs are C-18 (ProfileDialog.lua).
 
 local lib = LibStub("LibAeonSettings-1.0")
 if not lib.loading then

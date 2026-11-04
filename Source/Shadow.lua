@@ -1,8 +1,8 @@
--- Shadows: a soft glow outside a frame, for an addon's own frames and Blizzard's (decided 2026-10-13, from ElvUI
--- WindTools' shadows), drawn as eight edge textures made directly. WindTools' way, a BackdropTemplate frame whose edge
--- file is the glow, was built beside it for comparison and removed (Alex, 2026-10-13): the backdrop runs Lua on every
--- resize, Retail's needs a patch ElvUI applies, and it cannot leave out a side. A round frame takes the round glow. The module keeps its own weak-keyed table of shadows: it writes nothing into
--- the frames it shadows and hooks none of them, so it does not follow their border colors or frame levels.
+-- Shadows: a soft glow outside a frame, for an addon's own frames and Blizzard's, drawn as eight edge textures made
+-- directly. A BackdropTemplate frame whose edge file is the glow would run Lua on every resize, needs a patch on Retail
+-- and cannot leave out a side. A round frame takes the round glow. The module keeps its own weak-keyed table of shadows:
+-- it writes nothing into the frames it shadows and hooks none of them, so it does not follow their border colors or
+-- frame levels.
 -- `below` puts a shadow one level under its frame, as WindTools' lower shadow does for rows of closely spaced
 -- buttons and bars (action buttons, the micro menu, cooldown and timer bars): no glow draws over a neighbor, and the
 -- frame's fill covers the glow's inner unit, so there is no dark line along its edge. WindTools keeps it there with
@@ -15,7 +15,7 @@ if not lib.loading then
 	return
 end
 
-local GLOW = lib.mediaPath .. "Textures\\shadow-glow"   -- Alex's GlowTex.tga: 128 × 16, eight 16-texel segments
+local GLOW = lib.mediaPath .. "Textures\\shadow-glow"   -- 128 × 16, eight 16-texel segments
 local ROUND = lib.mediaPath .. "Textures\\shadow-round" -- the same glow as a ring, matched at the 198-unit minimap
 local DEFAULT_SIZE = 4
 lib.SHADOW_COLOR = { 0, 0, 0, 0.618 } -- WindTools' black at its border alpha

@@ -22,7 +22,7 @@ local FALLBACK_FONTS = {
 }
 local LIBRARY_FONTS = { { "Expressway", FILES.body }, { "Gilroy Bold", FILES.header } }
 
--- The suite's six outline choices (Alex, 2026-10-07), always with the Slug variants. `SLUG` is a `SetFont` flag,
+-- The suite's six outline choices, always with the Slug variants. `SLUG` is a `SetFont` flag,
 -- comma-joined with the outline.
 lib.OUTLINES = {
 	{ value = "NONE", text = L.OUTLINE_NONE },

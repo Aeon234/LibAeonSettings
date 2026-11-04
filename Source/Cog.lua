@@ -45,7 +45,7 @@ function lib:RestoreSizes(save)
 	end
 end
 
--- Element Options (Q136): saves, leaves edit mode and opens the settings: the addon's window on the target's page
+-- Element Options: saves, leaves edit mode and opens the settings: the addon's window on the target's page
 -- and section with it pulsing, or the addon's own function.
 local function ElementOptions(mover)
 	local settings = mover.target.settings
@@ -215,7 +215,7 @@ end
 -- Pick mode -----------------------------------------------------------------------------------------------------
 
 ---Starts choosing another mover for `source`: the screen dims, and the next click on a mover completes the pick.
----@param kind string "snap" (later "anchor", "matchWidth", "matchHeight")
+---@param kind string "snap", "anchor", "matchWidth" or "matchHeight"
 function lib:StartPick(kind, source)
 	self:CloseMenus()
 	self.session.pick = { kind = kind, source = source }

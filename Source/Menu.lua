@@ -11,7 +11,7 @@ local PADDING = 8
 -- Blizzard's own menu art: the row highlight and the submenu arrow of its dropdown menus.
 local ROW_HIGHLIGHT = "Interface\\QuestFrame\\UI-QuestTitleHighlight"
 local SUBMENU_ARROW = "Interface\\ChatFrame\\ChatFrameExpandArrow"
-local CLICK_SOUND = SOUNDKIT and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON -- Q151
+local CLICK_SOUND = SOUNDKIT and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON
 local BORDER_OUTSET = 3     -- the frame art reaches this far outside the panel
 local PANEL_FILL = { 0.122, 0.118, 0.129, 0.92 }
 local PANEL_BORDER = lib.COLOR.bronze

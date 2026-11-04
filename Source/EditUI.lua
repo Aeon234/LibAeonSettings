@@ -20,14 +20,14 @@ local TOOLBAR_CLEARANCE = 6  -- space kept between the toolbar's opening spot an
 local TOOLBAR_SPOT_STEP = 16 -- step when looking down the screen for a free spot
 local TOOLBAR_DOCK_GAP = 4 -- docked, the toolbar's distance below the screen's top: its art's 3-unit border and 1
 local ACCENT = { 0.84, 0.67, 0.36 }
-local TINT = { 0.03, 0.023, 0.018, 0.25 } -- 25 % (Alex, 2026-10-13; EllesmereUI's is 20 %)
+local TINT = { 0.03, 0.023, 0.018, 0.25 } -- 25 %
 local GRID_MODES = { DIMMED = "BRIGHT", BRIGHT = "OFF", OFF = "DIMMED" }
 local GRID_LABELS = { DIMMED = L.DIMMED, BRIGHT = L.BRIGHT, OFF = L.OFF }
--- The outlined grid in gold, its inner lines faint when Dimmed and full when Bright (Alex, 2026-10-13).
+-- The outlined grid in gold, its inner lines faint when Dimmed and full when Bright.
 local GRID_ICONS = { DIMMED = "icon-grid-dim", BRIGHT = "icon-grid-bright" }
 local ICON_ON, ICON_OFF = lib.COLOR.accent, { 0.62, 0.62, 0.62 }
 local ICON_ALPHA_ON, ICON_ALPHA_OFF, ICON_ALPHA_HOVER = 0.8, 0.45, 1
--- Q151: clicks in edit mode use the checkbox sounds, off when a toggle turns off.
+-- Clicks in edit mode use the checkbox sounds, off when a toggle turns off.
 local SOUND_ON = SOUNDKIT and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON
 local SOUND_OFF = SOUNDKIT and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_OFF
 
@@ -496,7 +496,6 @@ local function RelayoutEditScreen()
 	end
 end
 
----Shows the edit screen; `opening` plays the opening sequence and offers the first-time tip.
 ---Shows edit mode's screen. `opening`: true plays the opening sequence with the toolbar placed afresh; "return"
 ---fades it all back in where it was (after combat). A closing still running turns around where it is.
 function lib:ShowEditUI(opening)

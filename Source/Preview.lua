@@ -362,7 +362,7 @@ local function States(page)
 	return type(states) == "table" and states or {}
 end
 
----Lays out the fixed part for the shown page: the preview with its pills, then the tabs. Returns its height.
+---Lays out the fixed part for the shown page: the preview with its pills, then the tabs.
 function lib.Window:ShowFixedArea(page)
 	local view = self.pageView
 	local fixed = view.fixed

@@ -1,4 +1,4 @@
--- Search (Q105): the sidebar's search box lists matching pages and settings in a popup, each with where it lives;
+-- Search: the sidebar's search box lists matching pages and settings in a popup, each with where it lives;
 -- arrow keys and Enter, or a click, open the page, bring the row into view and flash it gold. The index comes from
 -- the declarations, so no page is built to search it.
 

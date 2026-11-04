@@ -30,7 +30,7 @@ local NOTE_TOP, NOTE_LINE = 7, 16 -- a note under its card: the gap above it and
 local REVEAL_RESPONSE = 0.32 -- a row growing in under the row it depends on, or shrinking away
 local INACTIVE_ALPHA, INACTIVE_DESATURATION = 0.5, 0.7
 local PAGE_OFF_DESATURATION = 0.6
--- Overrides (Q30, Q70): the ◆/↺ gutter, reserved on every half between the control and the inset.
+-- Overrides: the ◆/↺ gutter, reserved on every half between the control and the inset.
 local GUTTER_RIGHT, GUTTER_WIDTH, GUTTER_HEIGHT = 20, 44, 16
 local DIAMOND_SIZE, UNDO_SIZE, UNDO_ALPHA = 14, 16, 0.85
 local RESET_SOUND = SOUNDKIT and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON
@@ -557,7 +557,7 @@ function Handlers.Reveal(half)
 	end
 end
 
----Redraws which settings on the shown page are active, hidden or explained, and dims the body while the page's
+---Redraws which settings on the shown page are active, hidden or explained.
 ---Returns true when a row's visibility or height changed.
 ---@return boolean layoutChanged
 function lib.Window:RefreshStates()

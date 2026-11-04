@@ -7,8 +7,8 @@ end
 
 local L = lib.L
 
--- Q149, Q150: EllesmereUI's unlock-mode sound on opening; Blizzard Edit Mode's quit sound on Save and Exit and on an
--- Exit with nothing changed. Exit Without Saving plays only its popup's sound.
+-- A sound on opening, and Blizzard Edit Mode's quit sound on Save and Exit and on an Exit with nothing changed. Exit
+-- Without Saving plays only its popup's sound.
 local OPEN_SOUND = SOUNDKIT and SOUNDKIT.UI_DRAGONRIDING_FULL_NODE or 201528
 local CLOSE_SOUND = SOUNDKIT and SOUNDKIT.IG_MAINMENU_QUIT or 854
 

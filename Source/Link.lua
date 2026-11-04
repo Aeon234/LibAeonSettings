@@ -1,4 +1,4 @@
--- The edit mode link (Q136), both ways. A target's `settings = { page, section?, setting?, select? }` lets the cog
+-- The edit mode link, both ways. A target's `settings = { page, section?, setting?, select? }` lets the cog
 -- menu's Element Options save, leave edit mode and open the window on that section (or row), pulsing gold. A section
 -- that a target names shows Edit Position on its title line, which opens edit mode with that mover selected; edit
 -- mode then returns to the window when it closes.

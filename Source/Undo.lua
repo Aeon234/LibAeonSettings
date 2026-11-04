@@ -1,8 +1,8 @@
--- Undo (Q69, Q86): one history for the whole window, kept for the game session, behind the footer's Undo button.
+-- Undo: one history for the whole window, kept for the game session, behind the footer's Undo button.
 -- Every value the user saves is recorded, Clear Overrides as one step; a slider's drag or a color pick in progress
--- (until the picker closes) is one step. Undo puts the earlier value back and lands on its row. Profile actions are not undoable and empty the
--- history (`window:ClearUndo()`); values saved from code (`setting:SetValue`) are not recorded. An adopter records a
--- change it made outside a setting, such as a drag in its own preview, with `window:RecordChange`.
+-- (until the picker closes) is one step. Undo puts the earlier value back and lands on its row. Profile actions are not
+-- undoable and empty the history (`window:ClearUndo()`); values saved from code (`setting:SetValue`) are not recorded.
+-- An adopter records a change it made outside a setting, such as a drag in its own preview, with `window:RecordChange`.
 
 local lib = LibStub("LibAeonSettings-1.0")
 if not lib.loading then

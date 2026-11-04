@@ -1,4 +1,4 @@
--- The custom row (Q147): the library sizes and places an area in a half (or across a line), and the adopter draws
+-- The custom row: the library sizes and places an area in a half (or across a line), and the adopter draws
 -- inside it. `create(area, setting)` runs once, the first time the row is shown; `refresh(area, setting)` runs
 -- each time it is shown and whenever the page redraws its states.
 
