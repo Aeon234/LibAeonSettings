@@ -106,6 +106,7 @@ end
 local function ResetScripts(row)
 	row:SetScript("OnEnter", nil)
 	row:SetScript("OnLeave", nil)
+	row:SetScript("OnHide", nil)
 	row:SetScript("OnClick", nil)
 end
 
@@ -165,8 +166,16 @@ local function FillAction(row, text, onClick, options)
 	row.hover:Hide()
 	if onClick then
 		local hover = row.hover
+		-- Also runs when the menu closes under the pointer, so `onEnter` always gets its `onLeave`.
+		local function Leave(self)
+			if hover:IsShown() then
+				hover:Hide()
+				if options.onLeave then options.onLeave(self) end
+			end
+		end
 		row:SetScript("OnEnter", function(self) hover:Show(); if options.onEnter then options.onEnter(self) end end)
-		row:SetScript("OnLeave", function(self) hover:Hide(); if options.onLeave then options.onLeave(self) end end)
+		row:SetScript("OnLeave", Leave)
+		row:SetScript("OnHide", Leave)
 		row:SetScript("OnClick", function(self) PlaySound(CLICK_SOUND); onClick(self) end)
 	end
 end

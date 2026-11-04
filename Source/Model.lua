@@ -218,8 +218,9 @@ end
 
 ---Puts a link on the section's title line, left of its menu and Edit Position, that opens a menu of actions.
 ---`info.text` is the link's text; `info.build(menu)` adds the rows each time it opens (`menu:Action(text, onClick,
----{ onEnter, onLeave })`, and `lib:CloseMenus()` from a row that should close it); `info.show()`, when given, says
----whether the link draws. It is not searched and takes no row.
+---{ onEnter, onLeave })`, `onLeave` also running when the menu closes under the pointer, and `lib:CloseMenus()` from a
+---row that should close it); `info.show()`, when given, says whether the link draws. It is not searched and takes no
+---row.
 ---@param info { text: string, build: fun(menu: table), show: (fun(): boolean)? }
 ---@return table? link
 function lib.Section:LinkMenu(info)
