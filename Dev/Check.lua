@@ -1016,7 +1016,7 @@ do
 	window.RefreshUndo = function() end
 	copy:Request("other")
 	Check("menu: picking an action runs set without recording Undo",
-		picked == "other" and #(window.undoHistory or {}) == 0)
+		picked == "other" and #(window.undoSteps or {}) == 0)
 end
 
 -- Dropdowns with several choices
@@ -1123,21 +1123,21 @@ do
 	slider:Request(11)
 	now = now + 0.5
 	slider:Request(12)
-	Check("undo: quick slider saves are one step", #window.undoHistory == 1)
+	Check("undo: quick slider saves are one step", #window.undoSteps == 1)
 	now = now + 5
 	slider:Request(13)
-	Check("undo: a later save is a new step", #window.undoHistory == 2)
+	Check("undo: a later save is a new step", #window.undoSteps == 2)
 	now = now + 0.5
 	slider:Request(12)
-	Check("undo: a step that ends where it began is dropped", #window.undoHistory == 1)
+	Check("undo: a step that ends where it began is dropped", #window.undoSteps == 1)
 
 	local pick = {}
 	color:Request({ r = 1, g = 0, b = 0 }, pick)
 	now = now + 10
 	color:Request({ r = 0, g = 1, b = 0 }, pick)
-	Check("undo: saves of one gesture are one step, however far apart", #window.undoHistory == 2)
+	Check("undo: saves of one gesture are one step, however far apart", #window.undoSteps == 2)
 	color:Request({ r = 0, g = 0, b = 1 }, {})
-	Check("undo: another gesture is a new step", #window.undoHistory == 3)
+	Check("undo: another gesture is a new step", #window.undoSteps == 3)
 
 	toggle:Request(true)
 	window:Undo()
@@ -1146,7 +1146,7 @@ do
 	window:Undo()
 	Check("undo: a whole pick is undone at once", store.tint == nil)
 	window:Undo()
-	Check("undo: the merged slider steps go back to the start", store.size == nil and #window.undoHistory == 0)
+	Check("undo: the merged slider steps go back to the start", store.size == nil and #window.undoSteps == 0)
 end
 
 -- Undo of a change made outside a setting
@@ -1161,31 +1161,31 @@ do
 	store.order = { "b", "a" }
 	window:RecordChange({ path = "order", before = before, text = "Order back." })
 	before[1] = "changed"
-	Check("change: the earlier value is copied", window.undoHistory[1].before[1] == "a")
 	window:RecordChange({ path = "gaps", before = {}, merge = "x" })
 	now = now + 0.5
 	window:RecordChange({ path = "gaps", before = { x = 4 }, merge = "x" })
-	Check("change: the same path and merge moments later join one step", #window.undoHistory == 2)
+	Check("change: the same path and merge moments later join one step", #window.undoSteps == 2)
 	window:RecordChange({ path = "gaps", before = {}, merge = "y" })
-	Check("change: another merge value is a new step", #window.undoHistory == 3)
+	Check("change: another merge value is a new step", #window.undoSteps == 3)
 	local page = NewPage(window, "after", "After")
 	local slider = page:Section("one", "One"):Slider({ id = "size", label = "Size", path = "size", default = 1 })
 	slider:Request(2)
-	Check("change: a setting saved after one is its own step", #window.undoHistory == 4)
+	Check("change: a setting saved after one is its own step", #window.undoSteps == 4)
 	window:Undo()
 	window:Undo()
 	window:Undo()
 	Check("change: Undo writes the first earlier value back", next(store.gaps) == nil)
 	window:Undo()
-	Check("change: through the declaration's write", store.order[1] == "a" and store.order[2] == "b"
-		and #window.undoHistory == 0)
+	Check("change: through the declaration's write, as the value was when recorded", store.order[1] == "a"
+		and store.order[2] == "b"
+		and #window.undoSteps == 0)
 	store.order, store.gaps = { "c" }, { x = 1 }
 	window:RecordChange({ paths = { { path = "order", before = { "a", "b" } }, { path = "gaps", before = {} } },
 		text = "Both back." })
-	Check("change: several paths are one step", #window.undoHistory == 1)
+	Check("change: several paths are one step", #window.undoSteps == 1)
 	window:Undo()
 	Check("change: Undo writes each path back", store.order[2] == "b" and next(store.gaps) == nil
-		and #window.undoHistory == 0)
+		and #window.undoSteps == 0)
 
 	local written, refused = {}, {}
 	window.declaration.write = function(path, value)
@@ -1206,7 +1206,7 @@ do
 	Check("change: a refused path shows the reason", #errors == shown + 1 and errors[#errors]:find("Locked") ~= nil)
 	Check("change: without a doubled period", errors[#errors]:find("%.%.") == nil)
 	Check("change: a refused path keeps its value and leaves the history", store.order[1] == "kept"
-		and #window.undoHistory == 0)
+		and #window.undoSteps == 0)
 	refused.order = false
 	window:RecordChange({ path = "order", before = { "a" } })
 	window:Undo()
@@ -1219,7 +1219,156 @@ do
 	window:Undo()
 	Check("change: one refused path of several shows, and the rest are still put back, last first",
 		#errors == shown + 3 and next(store.gaps) == nil and store.order[1] == "kept" and written[1] == "order"
-		and written[2] == "gaps" and #window.undoHistory == 0)
+		and written[2] == "gaps" and #window.undoSteps == 0)
+end
+
+-- Path writes
+
+do
+	local store = {}
+	local window = NewWindow(store)
+	local page = NewPage(window, "paths", "Paths")
+	local section = page:Section("one", "One")
+	local bound = section:Slider({ id = "bound", label = "Bound", path = "deep.bound", default = 1 })
+	local ok, reason = lib.WritePath(window, "a.b.c", 5)
+	Check("path write: with no hook it writes the store, making tables on the way", ok and store.a.b.c == 5)
+	Check("path write: and overwrites what is not a table", lib.WritePath(window, "a.b.c.d", 6) and store.a.b.c.d == 6)
+	local storeless = NewWindow(nil)
+	Check("path write: with no store it says so", lib.WritePath(storeless, "a", 1) == false)
+
+	local calls = {}
+	window.declaration.write = function(path, value, setting)
+		calls[#calls + 1] = { path = path, value = value, setting = setting }
+		if path:find("^locked") then
+			return false, "Locked."
+		end
+	end
+	Check("path write: through a hook, which counts any other answer as written", lib.WritePath(window, "open", 1)
+		and calls[1].path == "open" and calls[1].value == 1)
+	Check("path write: the hook gets no setting", calls[1].setting == nil)
+	ok, reason = lib.WritePath(window, "locked", 1)
+	Check("path write: a refusal comes back with its reason", ok == false and reason == "Locked.")
+	bound:Request(2)
+	Check("path write: a setting bound by a path passes itself", calls[#calls].path == "deep.bound"
+		and calls[#calls].setting == bound)
+
+	wipe(calls)
+	window:ClearUndo()
+	window.SelectPage = function() end
+	local list = section:Toggle({ id = "list", label = "List", path = "list" })
+	list.enabled = { path = "list.on", default = { a = true } }
+	local item = { value = "b", text = "B" }
+	Check("items: one off by default is off", not list:ItemEnabled("b") and list:ItemEnabled("a"))
+	list:SetItemEnabled(item, true)
+	Check("items: turning one on writes its path with no setting", calls[1].path == "list.on.b" and calls[1].value == true
+		and calls[1].setting == nil)
+	Check("items: and is one step", #window.undoSteps == 1)
+	window:Undo()
+	Check("items: Undo puts its path back", calls[2].path == "list.on.b" and calls[2].value == nil
+		and #window.undoSteps == 0)
+	local shown = #errors
+	local locked = section:Toggle({ id = "lockedList", label = "Locked List", path = "lockedList" })
+	locked.enabled = { path = "locked" }
+	locked:SetItemEnabled(item, true)
+	Check("items: a refusal names the setting and records nothing", #errors == shown + 1
+		and errors[#errors]:find("Locked List", 1, true) ~= nil and #window.undoSteps == 0)
+end
+
+-- Undo: merging, landing, the tooltip and what counts as the same value
+
+do
+	local store = {}
+	local window = NewWindow(store)
+	local page = NewPage(window, "main", "Main")
+	local section = page:Section("one", "One")
+	local size = section:Slider({ id = "size", label = "Size", path = "size", default = 1 })
+	local shown = true
+	local hidden = section:Toggle({ id = "hidden", label = "Hidden", path = "hidden", default = false,
+		show = function() return shown end })
+	local landed, selected = {}, {}
+	window.LandOn = function(_, setting) landed[#landed + 1] = setting end
+	window.SelectPage = function(_, id) selected[#selected + 1] = id end
+
+	window:RecordChange({ paths = { { path = "x", before = 1 } }, merge = "m" })
+	now = now + 0.1
+	window:RecordChange({ path = "x", before = 2, merge = "m" })
+	Check("undo merge: a step of several paths never merges", #window.undoSteps == 2)
+	window:ClearUndo()
+	window:RecordUndoGroup({ { setting = size, before = 1 } })
+	now = now + 0.1
+	size:Request(5)
+	Check("undo merge: a group never merges", #window.undoSteps == 2)
+	window:ClearUndo()
+	window:RecordChange({ path = "x", before = 1, merge = "m" })
+	now = now + 0.1
+	size:Request(6)
+	Check("undo merge: a setting does not join a path before it", #window.undoSteps == 2)
+	window:ClearUndo()
+
+	size:Request(7)
+	window:Undo()
+	Check("undo landing: a setting's step lands on it", landed[1] == size and #selected == 0)
+	wipe(landed)
+	window:RecordChange({ path = "x", before = 1, page = "main" })
+	window:Undo()
+	Check("undo landing: a path's step shows its page", selected[1] == "main" and #landed == 0)
+	wipe(selected)
+	window:RecordChange({ path = "x", before = 1 })
+	window:Undo()
+	Check("undo landing: a path's step with no page stays", #selected == 0 and #landed == 0)
+	hidden:Request(true)
+	shown = false
+	window:Undo()
+	Check("undo landing: a setting now hidden is not landed on", #landed == 0)
+	shown = true
+
+	local lines = {}
+	GameTooltip = {
+		SetOwner = function() end, SetText = function() end, Show = function() end, IsOwned = function() return false end,
+		AddLine = function(_, text) lines[#lines + 1] = text end,
+	}
+	local function Line()
+		wipe(lines)
+		window.frame = { footer = { undo = {} } }
+		lib.UndoHandlers.Enter(window)
+		window.frame = nil
+
+		return lines[1]
+	end
+	window:ClearUndo()
+	Check("undo tooltip: with nothing to undo it says so", Line() == lib.L.NOTHING_TO_UNDO)
+	store.size = 6
+	size:Request(8)
+	Check("undo tooltip: a setting's step names it and its earlier value", Line() == lib.L.UNDO_TO:format("Size", "6"))
+	window:ClearUndo()
+	window:RecordUndoGroup({ { setting = size, before = 1 }, { setting = hidden, before = false } })
+	Check("undo tooltip: a group counts its settings", Line() == lib.L.UNDO_SETTINGS:format(2))
+	window:ClearUndo()
+	window:RecordChange({ path = "x", before = 1, text = "Back." })
+	Check("undo tooltip: a path's step says its text", Line() == "Back.")
+	window:ClearUndo()
+	window:RecordChange({ paths = { { path = "x", before = 1 } } })
+	Check("undo tooltip: and without one, the general line", Line() == lib.L.UNDO_CHANGE)
+	GameTooltip = nil
+
+	window:ClearUndo()
+	store.size = 1
+	size:Request(1.0003)
+	Check("undo same: a value this close is no change", #window.undoSteps == 0)
+	store.size = 1
+	size:Request(1.01)
+	Check("undo same: a value further off is", #window.undoSteps == 1)
+	window:ClearUndo()
+	store.size = 1
+	size:Request(2)
+	now = now + 0.1
+	size:Request(1.0003)
+	Check("undo same: a step that ends this close to where it began is dropped", #window.undoSteps == 0)
+	Check("same value: tables compare by their numbers' closeness", lib.SameValue({ r = 0.5 }, { r = 0.5003 })
+		and not lib.SameValue({ r = 0.5 }, { r = 0.51 }) and not lib.SameValue({ r = 0.5 }, { r = 0.5, g = 1 }))
+	local original = { a = { 1 } }
+	local copy = lib.CopyValue(original)
+	Check("copy value: a copy shares nothing", copy ~= original and copy.a ~= original.a and copy.a[1] == 1)
 end
 
 -- Search

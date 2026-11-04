@@ -458,6 +458,7 @@ local function CopyValue(value)
 
 	return copy
 end
+lib.SameValue, lib.CopyValue = SameValue, CopyValue
 
 ---@return boolean changed true while a `resettable` setting that does not inherit holds a value other than its
 ---default (↺ without ◆)
@@ -489,27 +490,21 @@ function lib.Setting:GetValue()
 	return value
 end
 
--- Writes a value through the setting's `set`, the declaration's `write`, or into the store by its path; returns false
--- and a sentence when the adopter refuses it. Every write of a value goes through here.
-local function Write(setting, value)
-	local write = setting.window.declaration.write
-	if setting.set or (write and setting.keys) then
-		local ok, reason
-		if setting.set then
-			ok, reason = Call(setting.set, value, setting)
-		else
-			ok, reason = Call(write, setting.path, value, setting)
-		end
+-- Writes a value at a path through the declaration's `write` or into the store; returns false and a sentence when the
+-- adopter refuses it. `setting` is the setting bound by the path, if one is.
+local function WriteKeys(window, path, keys, value, setting)
+	local write = window.declaration.write
+	if write then
+		local ok, reason = Call(write, path, value, setting)
 		if ok == false then
 			return false, reason
 		end
 		return true
 	end
-	local store = setting.keys and Store(setting.window)
+	local store = Store(window)
 	if not store then
 		return false
 	end
-	local keys = setting.keys
 	for index = 1, #keys - 1 do
 		local nextTable = store[keys[index]]
 		if type(nextTable) ~= "table" then
@@ -521,6 +516,29 @@ local function Write(setting, value)
 	store[keys[#keys]] = value
 
 	return true
+end
+
+---Writes a value at a stored path that no setting is bound by; a declaration's `write` receives no setting.
+---@return boolean ok
+---@return string? reason
+function lib.WritePath(window, path, value)
+	return WriteKeys(window, path, { strsplit(".", path) }, value)
+end
+
+-- Writes a setting's value through its `set`, or at its path. Every write of a setting's value goes through here.
+local function Write(setting, value)
+	if setting.set then
+		local ok, reason = Call(setting.set, value, setting)
+		if ok == false then
+			return false, reason
+		end
+		return true
+	end
+	if not setting.keys then
+		return false
+	end
+
+	return WriteKeys(setting.window, setting.path, setting.keys, value, setting)
 end
 lib.WriteSetting = Write
 
@@ -605,7 +623,7 @@ end
 function lib.Setting:SetItemEnabled(item, on)
 	local path = ItemPath(self, item.value)
 	local before = lib.ReadStorePath(self.window, path)
-	local ok, reason = Write({ window = self.window, path = path, keys = { strsplit(".", path) } }, on)
+	local ok, reason = lib.WritePath(self.window, path, on)
 	if not ok then
 		self:ShowRefusal(reason)
 	else

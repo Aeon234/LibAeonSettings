@@ -19,40 +19,14 @@ local MAX_STEPS = 100
 lib.UndoHandlers = lib.UndoHandlers or {}
 local Handlers = lib.UndoHandlers
 
-local function Copy(value)
-	if type(value) ~= "table" then
-		return value
-	end
-	local copy = {}
-	for key, inner in pairs(value) do
-		copy[key] = Copy(inner)
-	end
+local Copy, Same = lib.CopyValue, lib.SameValue
 
-	return copy
-end
-
-local function Same(a, b)
-	if type(a) ~= "table" or type(b) ~= "table" then
-		return a == b
-	end
-	for key, inner in pairs(a) do
-		if not Same(inner, b[key]) then
-			return false
-		end
-	end
-	for key in pairs(b) do
-		if a[key] == nil then
-			return false
-		end
-	end
-
-	return true
-end
-
+-- Steps are { time, changes, gesture?, merge?, text?, page?, group? }, each change { setting, before } or
+-- { path, before }.
 local function History(window)
-	window.undoHistory = window.undoHistory or {}
+	window.undoSteps = window.undoSteps or {}
 
-	return window.undoHistory
+	return window.undoSteps
 end
 
 local function Push(window, step)
@@ -75,7 +49,7 @@ function lib.Window:RecordUndo(setting, before, after, gesture)
 	local last = history[#history]
 	local now = GetTime()
 	local joins
-	if last and last.changes and not last.group and last.changes[1].setting == setting and MERGES[setting.kind] then
+	if last and not last.group and last.changes[1].setting == setting and MERGES[setting.kind] then
 		if gesture then
 			joins = last.gesture == gesture
 		else
@@ -126,7 +100,7 @@ function lib.Window:RecordChange(info)
 		for index, change in ipairs(paths) do
 			copies[index] = { path = change.path, before = Copy(change.before) }
 		end
-		Push(self, { time = GetTime(), path = copies[1].path, paths = copies, text = info.text, page = info.page })
+		Push(self, { time = GetTime(), changes = copies, text = info.text, page = info.page })
 		return
 	end
 	if type(info) ~= "table" or type(info.path) ~= "string" then
@@ -136,32 +110,33 @@ function lib.Window:RecordChange(info)
 	local history = History(self)
 	local last = history[#history]
 	local now = GetTime()
-	if info.merge ~= nil and last and last.path == info.path and last.merge == info.merge
+	if info.merge ~= nil and last and last.merge == info.merge and last.changes[1].path == info.path
 		and now - last.time < MERGE_SECONDS then
 		last.time, last.text = now, info.text
 		self:RefreshUndo()
 		return
 	end
-	Push(self, { time = now, path = info.path, before = Copy(info.before), text = info.text, page = info.page,
-		merge = info.merge })
+	Push(self, { time = now, changes = { { path = info.path, before = Copy(info.before) } }, text = info.text,
+		page = info.page, merge = info.merge })
 end
 
 ---Empties the history. Profile actions call it: they are not undoable, and a step recorded before one would change a
 ---different profile.
 function lib.Window:ClearUndo()
-	if self.undoHistory then
-		wipe(self.undoHistory)
+	if self.undoSteps then
+		wipe(self.undoSteps)
 	end
 	self:RefreshUndo()
 end
 
 ---@return boolean undoable whether the history holds a step
 function lib.Window:CanUndo()
-	return self.undoHistory ~= nil and #self.undoHistory > 0
+	return self.undoSteps ~= nil and #self.undoSteps > 0
 end
 
 -- Shows "Couldn't undo: <reason>." (or without a reason) at the top of the screen, in Title Case: a change made outside
 -- a setting has no label to name.
+---@param reason string?
 local function ShowPathRefusal(reason)
 	local message = reason and L.COULDNT_UNDO_REASON:format((reason:gsub("%.$", ""))) or L.COULDNT_UNDO
 	UIErrorsFrame:AddExternalErrorMessage(lib.TitleCase(message))
@@ -170,40 +145,35 @@ end
 ---Puts back the values of the latest step and lands on its (first) row. A value the adopter refuses keeps its current
 ---value and shows the refusal.
 function lib.Window:Undo()
-	local history = self.undoHistory
+	local history = self.undoSteps
 	local step = history and table.remove(history)
 	if not step then
 		return
 	end
-	if step.path then
-		local changes = step.paths or { step }
-		for index = #changes, 1, -1 do
-			local change = changes[index]
-			local ok, reason = lib.WriteSetting({ window = self, path = change.path, keys = { strsplit(".", change.path) } },
-				Copy(change.before))
+	for index = #step.changes, 1, -1 do
+		local change = step.changes[index]
+		local setting = change.setting
+		if setting then
+			local ok, reason = lib.WriteSetting(setting, Copy(change.before))
+			if not ok then
+				setting:ShowRefusal(reason)
+			end
+		else
+			local ok, reason = lib.WritePath(self, change.path, Copy(change.before))
 			if not ok then
 				ShowPathRefusal(reason)
 			end
-		end
-		self:RefreshUndo()
-		self:Refresh()
-		if step.page and self:IsShown() then
-			self:SelectPage(step.page)
-		end
-		return
-	end
-	for index = #step.changes, 1, -1 do
-		local change = step.changes[index]
-		local ok, reason = lib.WriteSetting(change.setting, Copy(change.before))
-		if not ok then
-			change.setting:ShowRefusal(reason)
 		end
 	end
 	self:RefreshUndo()
 	self:Refresh()
 	local setting = step.changes[1].setting
-	if self:IsShown() and setting.page and setting:IsShown() then
-		self:LandOn(setting)
+	if setting then
+		if self:IsShown() and setting.page and setting:IsShown() then
+			self:LandOn(setting)
+		end
+	elseif step.page and self:IsShown() then
+		self:SelectPage(step.page)
 	end
 end
 
@@ -258,16 +228,16 @@ end
 -- The tooltip names what Undo puts back: "Font Size back to 12.", or how many settings a group returns.
 function Handlers.Enter(window)
 	local button = window.frame.footer.undo
-	local history = window.undoHistory
+	local history = window.undoSteps
 	local step = history and history[#history]
 	GameTooltip:SetOwner(button, "ANCHOR_TOP")
 	GameTooltip:SetText(L.UNDO, 1, 1, 1)
 	if not step then
 		GameTooltip:AddLine(L.NOTHING_TO_UNDO, 1, 0.82, 0)
-	elseif step.path then
-		GameTooltip:AddLine(step.text or L.UNDO_CHANGE, 1, 0.82, 0, true)
 	elseif step.group then
 		GameTooltip:AddLine(L.UNDO_SETTINGS:format(#step.changes), 1, 0.82, 0)
+	elseif not step.changes[1].setting then
+		GameTooltip:AddLine(step.text or L.UNDO_CHANGE, 1, 0.82, 0, true)
 	else
 		local change = step.changes[1]
 		local setting = change.setting
