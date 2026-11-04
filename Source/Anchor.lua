@@ -168,18 +168,14 @@ function lib:ForgetParents(target)
 	end
 end
 
----@param frame Frame? nil from a hook set by an older copy, which applies every target
+---@param frame Frame
 function lib:OnWatchedResized(frame)
-	if frame then
-		local followers = self.followers[frame]
-		if not followers or not next(followers) then
-			return
-		end
-		self.resized = self.resized or {}
-		self.resized[frame] = true
-	else
-		self.resizedAll = true
+	local followers = self.followers[frame]
+	if not followers or not next(followers) then
+		return
 	end
+	self.resized = self.resized or {}
+	self.resized[frame] = true
 	if self.reapplyQueued then
 		return
 	end
@@ -190,11 +186,9 @@ end
 ---Applies the followers of every frame resized since the last call, each once.
 function lib:ApplyResized()
 	self.reapplyQueued = nil
-	local frames, all = self.resized, self.resizedAll
-	self.resized, self.resizedAll = nil, nil
-	if all then
-		self:ApplyAll()
-	elseif frames then
+	local frames = self.resized
+	self.resized = nil
+	if frames then
 		-- Applying a target records its frames again, so the followers are gathered before any is applied.
 		local due = {}
 		for frame in pairs(frames) do

@@ -20,7 +20,7 @@ local SLICE, SLICE_SCALE = 18, 0.5 -- texels per corner on the 110-texel frame t
 lib.MenuHandlers = lib.MenuHandlers or {}
 local Handlers = lib.MenuHandlers
 
-local function FrameTexture(panel, layer, name, color, topExtra)
+local function FrameTexture(panel, layer, name, color)
 	local texture = panel:CreateTexture(nil, layer)
 	texture:SetTexture(lib.mediaPath .. "Textures\\" .. name)
 	texture:SetTextureSliceMargins(SLICE, SLICE, SLICE, SLICE)
@@ -30,8 +30,7 @@ local function FrameTexture(panel, layer, name, color, topExtra)
 	texture:SetScale(SLICE_SCALE)
 	-- A scaled region's offsets are in its own units.
 	local outset = BORDER_OUTSET / SLICE_SCALE
-	texture:SetPoint("TOPLEFT", panel, "TOPLEFT", -outset, outset + (topExtra or 0) / SLICE_SCALE)
-	texture.outset = outset
+	texture:SetPoint("TOPLEFT", panel, "TOPLEFT", -outset, outset)
 	texture:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", outset, -outset)
 	texture:SetVertexColor(color[1], color[2], color[3])
 	texture:SetAlpha(color[4] or 1)
@@ -40,19 +39,10 @@ local function FrameTexture(panel, layer, name, color, topExtra)
 end
 
 ---Draws the edit mode panel art on a frame: a fill and a bronze border sharing one chamfered outline, so the fill
----meets the border at every corner. `topExtra` raises the top edge by that many units (to hide it off-screen).
-function lib:ApplyPanelArt(frame, topExtra)
-	frame.panelArt = {
-		FrameTexture(frame, "BACKGROUND", "mover-fill", PANEL_FILL, topExtra),
-		FrameTexture(frame, "BORDER", "mover-frame", PANEL_BORDER, topExtra),
-	}
-end
-
----Moves the top edge of a frame's panel art `topExtra` units above the frame.
-function lib:SetPanelTopExtra(frame, topExtra)
-	for _, texture in ipairs(frame.panelArt or {}) do
-		texture:SetPoint("TOPLEFT", frame, "TOPLEFT", -texture.outset, texture.outset + topExtra / SLICE_SCALE)
-	end
+---meets the border at every corner.
+function lib:ApplyPanelArt(frame)
+	FrameTexture(frame, "BACKGROUND", "mover-fill", PANEL_FILL)
+	FrameTexture(frame, "BORDER", "mover-frame", PANEL_BORDER)
 end
 
 local function CreatePanel()
@@ -65,20 +55,17 @@ local function CreatePanel()
 	panel:SetClampRectInsets(-BORDER_OUTSET, BORDER_OUTSET, BORDER_OUTSET, -BORDER_OUTSET)
 	lib:ApplyPanelArt(panel)
 	panel.rows = {}
+	panel.free = { hint = {}, separator = {}, action = {}, number = {} }
 
 	return panel
 end
 
 -- Puts every row back in the panel's pool; the next build takes them again before making new ones.
 local function ClearRows(panel)
-	-- A panel made by an older copy of the library has no pool, and its rows no kind: those rows are left hidden.
-	panel.free = panel.free or { hint = {}, separator = {}, action = {}, number = {} }
 	for _, row in ipairs(panel.rows) do
 		row:Hide()
 		row:ClearAllPoints()
-		if row.kind then
-			table.insert(panel.free[row.kind], row)
-		end
+		table.insert(panel.free[row.kind], row)
 	end
 	wipe(panel.rows)
 	panel.height = PADDING

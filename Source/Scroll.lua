@@ -163,15 +163,6 @@ function lib.Scroll:Reveal(top, height)
 	self.driver:Show()
 end
 
--- The thumb keeps Blizzard's look. Lists made by an older copy of the library still call this from their scripts.
-function lib.Scroll:UpdateLit()
-	self.bar:GetThumb():SetAlpha(1)
-	if not self.options.slim then
-		self.bar.Back:SetAlpha(1)
-		self.bar.Forward:SetAlpha(1)
-	end
-end
-
 function Handlers.Glide(scroll, elapsed)
 	local distance = scroll.target - scroll.offset
 	if math.abs(distance) <= SNAP_DISTANCE then

@@ -208,7 +208,7 @@ local function CreateToolbar()
 	toolbar:SetScript("OnDragStart", function(self) Handlers.ToolbarDragStart(self) end)
 	toolbar:SetScript("OnDragStop", function(self) Handlers.ToolbarDragStop(self) end)
 
-	-- The same art as the menus, its top edge raised above the screen so the bar hangs from the top edge.
+	-- The same art as the menus.
 	lib:ApplyPanelArt(toolbar)
 
 	toolbar.exit = CreateButton(toolbar, L.EXIT, function() lib:RequestClose(false) end, L.TIP_EXIT)
@@ -416,8 +416,6 @@ function lib:PlaceToolbar()
 	local toolbar = ui.toolbar
 	local scale = toolbar:GetScale()
 	toolbar:ClearAllPoints()
-	-- A toolbar an older copy of the library built may still have its border's top raised.
-	self:SetPanelTopExtra(toolbar, 0)
 	if ui.toolbarSpot then
 		toolbar:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", ui.toolbarSpot.left / scale, ui.toolbarSpot.bottom / scale)
 	else

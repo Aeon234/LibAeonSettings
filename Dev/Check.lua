@@ -1003,9 +1003,6 @@ do
 		Near(separators[1][6], 0.5) and Near(separators[2][6], 0.5) and Near(separators[3][6], 0.5)
 		and Near(log.Row[3][3], cardTop + ROW + 0.5))
 
-	log = Layout({ Block({ { revealed = 1, indent = 0, setting = {} } }) })
-	Check("page layout: a row with no look yet counts as having no lines", Near(log.Row[1][5], ROW))
-
 	log = Layout({ Block({ Row(1) }), Block({ Row(1) }) })
 	Check("page layout: a later section starts its gap below the one before", Near(log.Header[2][2], log.Header[1][3] + gap))
 	Check("page layout: each section's calls come in order, its header after its rows",

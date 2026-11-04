@@ -1,7 +1,6 @@
 -- C-01, the toggle: a slim track whose diamond knob slides left (off) to right (on), for turning a module, feature or
--- page on and off. Controlled: a click slides the knob and asks the setting; the setting's answer is drawn back. A
--- settings row draws the slim size; a page's switch draws the large one. Retail draws Plumber's steel art, Forever
--- the same art in the bronze of its settings controls.
+-- page on and off. Controlled: a click slides the knob and asks the setting; the setting's answer is drawn back. Retail
+-- draws Plumber's steel art, Forever the same art in the bronze of its settings controls.
 
 local lib = LibStub("LibAeonSettings-1.0")
 if not lib.loading then
@@ -15,13 +14,8 @@ local SOUND_ON = SOUNDKIT and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON
 local SOUND_OFF = SOUNDKIT and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_OFF
 
 -- Sizes in units; the art is 2 texels per unit. `off` and `on` are the knob's center at each stop, from the frame's
--- left edge. `body`: the track's size when it is narrower than the frame (centered in it), so the knob's tips, which
--- overhang the track's ends, stay inside the frame. The large size's stops, 9 units in from the track's ends, line the
--- diamond's flanks up with the track's chamfered corners.
-local SIZES = {
-	slim = { art = "", width = 40, height = 20, knob = 38, off = 9.5, on = 30.5 },
-	large = { art = "-large", width = 65, height = 30, body = { 56, 30 }, knob = 57, off = 13.5, on = 51.5 },
-}
+-- left edge.
+local SIZE = { width = 40, height = 20, knob = 38, off = 9.5, on = 30.5 }
 
 lib.Toggle = {}
 local toggleMeta = { __index = function(_, name) return lib.Toggle[name] end }
@@ -40,34 +34,27 @@ local function Knob(view)
 	return view.spring
 end
 
-local function Art(size, piece)
+local function Art(piece)
 	local client = WOW_PROJECT_CAMELOT and WOW_PROJECT_ID == WOW_PROJECT_CAMELOT and "forever" or "retail"
 
-	return ("%sTextures\\toggle-%s%s-%s"):format(lib.mediaPath, client, size.art, piece)
+	return ("%sTextures\\toggle-%s-%s"):format(lib.mediaPath, client, piece)
 end
 
----Makes a toggle in `parent`: the slim size for a settings row, or the large size for a page's switch with `large`.
+---Makes a toggle in `parent`.
 ---@param parent Frame
----@param large boolean?
-function lib:CreateToggle(parent, large)
-	local size = large and SIZES.large or SIZES.slim
+function lib:CreateToggle(parent)
+	local size = SIZE
 	local view = setmetatable({ size = size, position = 0, value = false }, toggleMeta)
 	local button = CreateFrame("Button", nil, parent)
 	button:SetSize(size.width, size.height)
 	button:RegisterForClicks("LeftButtonUp")
 
 	view.bodyOff = button:CreateTexture(nil, "BACKGROUND", nil, 0)
-	view.bodyOff:SetTexture(Art(size, "body-off"))
+	view.bodyOff:SetTexture(Art("body-off"))
 	view.bodyOn = button:CreateTexture(nil, "BACKGROUND", nil, 1)
-	view.bodyOn:SetTexture(Art(size, "body-on"))
-	for _, body in ipairs({ view.bodyOff, view.bodyOn }) do
-		if size.body then
-			body:SetSize(size.body[1], size.body[2])
-			body:SetPoint("CENTER")
-		else
-			body:SetAllPoints()
-		end
-	end
+	view.bodyOn:SetTexture(Art("body-on"))
+	view.bodyOff:SetAllPoints()
+	view.bodyOn:SetAllPoints()
 
 	-- The knob is the parent's child, not the button's: the page dims an inactive control through its frame's alpha,
 	-- which would let the track show through the knob. Window fades still reach it through the parent.
@@ -108,13 +95,13 @@ end
 -- Picks the knob art for the hover and active state; an inactive toggle draws the dark knob at either stop.
 function lib.Toggle:Paint()
 	if not self.button:IsEnabled() then
-		local art = Art(self.size, "knob-disabled")
+		local art = Art("knob-disabled")
 		self.knobOff:SetTexture(art)
 		self.knobOn:SetTexture(art)
 		return
 	end
-	self.knobOff:SetTexture(Art(self.size, self.hovered and "knob-hover" or "knob"))
-	self.knobOn:SetTexture(Art(self.size, self.hovered and "knob-on-hover" or "knob-on"))
+	self.knobOff:SetTexture(Art(self.hovered and "knob-hover" or "knob"))
+	self.knobOn:SetTexture(Art(self.hovered and "knob-on-hover" or "knob-on"))
 end
 
 ---Draws a value: at once with `instant` (or when hidden), else sliding from where the knob is, keeping its speed
@@ -140,7 +127,7 @@ end
 
 ---Stops any slide or shake and draws the final state.
 function lib.Toggle:Stop()
-	self.slide, self.shake, self.shakeOffset = nil, nil, nil
+	self.shake, self.shakeOffset = nil, nil
 	self.button:SetScript("OnUpdate", nil)
 	Knob(self):Jump(self.value and 1 or 0)
 end
@@ -217,13 +204,9 @@ function Handlers.Show(view, shown)
 	end
 end
 
--- Steps the shake. A slide an older copy started ends at its stop.
+-- Steps the shake.
 function Handlers.Update(button, elapsed)
 	local view = button.view
-	if view.slide then
-		view.slide = nil
-		Knob(view):Jump(view.value and 1 or 0)
-	end
 	if view.shake then
 		view.shake = view.shake + elapsed
 		local t = math.min(1, view.shake / SHAKE_SECONDS)

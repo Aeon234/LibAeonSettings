@@ -108,6 +108,7 @@ local function CreateHalf(view)
 	half.inherited:SetWordWrap(false)
 	half.inherited:SetHeight(SMALL_HEIGHT)
 	half.controls = {}
+	half.look = {}
 	-- Over the label and the lines under it: hovering shows the setting's tooltip (C-03).
 	half.hover = CreateFrame("Frame", nil, half)
 	half.hover:EnableMouse(true)
@@ -155,9 +156,7 @@ local function ResetHalf(half)
 	if half.reveal then
 		half.reveal:Stop()
 	end
-	if half.look then
-		wipe(half.look)
-	end
+	wipe(half.look)
 	half.setting, half.view, half.revealed, half.grid = nil, nil, nil, nil
 	half:SetAlpha(1)
 	half:SetClipsChildren(false)
@@ -482,8 +481,7 @@ end
 ---Redraws one row's state. Returns true when its visibility or height changed, so the page needs laying out again.
 local function RefreshHalf(half)
 	local setting, control = half.setting, half.view
-	local look = half.look or {}
-	half.look = look
+	local look = half.look
 	local layoutChanged = lib.RowLook(setting, look, half.grid, half.revealed)
 	local active = look.active
 	-- Desaturate before SetActive, which may set its own (Blizzard's slider dims a step arrow at the range's end).
@@ -608,8 +606,7 @@ local function PlaceHalf(half, child, left, y, width, height)
 	half.small:SetWidth(labelWidth)
 	half.inherited:SetWidth(labelWidth)
 	half.label:ClearAllPoints()
-	-- A row an older copy built has no look until it is next refreshed.
-	local lines = half.look and half.look.lines or 0
+	local lines = half.look.lines
 	if lines > 0 then
 		half.label:SetPoint("TOPLEFT", half, "LEFT", labelLeft, (LABEL_HEIGHT + SMALL_HEIGHT * lines) / 2)
 	else
@@ -841,7 +838,7 @@ function Handlers.LabelEnter(half)
 		local red = reason and half.small:GetText() == reason
 		lines[#lines + 1] = { half.small:GetText(), lib:GetColor(red and "destructive" or "text") }
 	end
-	local tooltipReason = half.grid and half.look and half.look.tooltipReason
+	local tooltipReason = half.grid and half.look.tooltipReason
 	if tooltipReason then
 		lines[#lines + 1] = { tooltipReason, lib:GetColor("destructive") }
 	end

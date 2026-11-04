@@ -24,8 +24,7 @@ lib.HEADING_INSET, lib.HEADING_BOTTOM = 14, 6 -- the heading's text: in from the
 ---@field Note fun(self, note: table, top: number, width: number): number places a note and returns its height
 
 local function RowHeight(half)
-	local look = half.look
-	local height = look and (look.lines or 0) > 0 and lib.TALL_ROW_HEIGHT or lib.ROW_HEIGHT
+	local height = half.look.lines > 0 and lib.TALL_ROW_HEIGHT or lib.ROW_HEIGHT
 	if half.setting.height then
 		height = math.max(height, half.setting.height + HEIGHT_MARGIN)
 	end
@@ -112,7 +111,7 @@ end
 ---Lays out a page's sections: each a heading, a card holding its rows one to a line (two in a choice card), then its
 ---notes under the card. A hidden section is left out with its rows and notes; a row growing in or leaving takes its
 ---share of its height, faded by as much.
----@param blocks table[] { header = { shown? }, rows = { { revealed?, look?, indent, setting } }, notes, grid? }
+---@param blocks table[] { header = { shown? }, rows = { { revealed?, look, indent, setting } }, notes, grid? }
 ---@param width number
 ---@param sink LibAeonSettingsPageSink
 ---@return number contentHeight
