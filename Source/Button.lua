@@ -1,4 +1,4 @@
--- C-14, the action button: Blizzard's SharedButtonTemplate in a row, 26 tall, fitted to its text. It runs an action
+-- The action button: Blizzard's SharedButtonTemplate in a row, 26 tall, fitted to its text. It runs an action
 -- instead of holding a value; destructive actions ask first. `run(setting)` returns false and a reason to fail;
 -- success is the adopter's to report, usually with `window:ShowStatus`.
 

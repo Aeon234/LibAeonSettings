@@ -10,7 +10,7 @@ end
 
 local L = lib.L
 
-local LINK_HEIGHT, LINK_PADDING, LINK_MIN = 26, 40, 120 -- C-14's button, fitted to its text
+local LINK_HEIGHT, LINK_PADDING, LINK_MIN = 26, 40, 120 -- the action button's size, fitted to its text
 local LINK_TEXT_SIZE = 14
 local TITLE_CENTER = 15 -- the section title's center line, from the header's top
 local LINK_GAP = 8

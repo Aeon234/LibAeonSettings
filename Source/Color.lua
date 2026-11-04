@@ -1,4 +1,4 @@
--- C-12, the color swatch: the checkbox's frame (Blizzard's `checkbox-minimal`) with the color filling the box inside
+-- The color swatch: the checkbox's frame (Blizzard's `checkbox-minimal`) with the color filling the box inside
 -- its border, cut to the box's chamfered shape, and a centered 3 × 3 checkerboard behind a color that is not fully
 -- opaque. It opens Blizzard's color picker; the pick saves live, at
 -- most once a frame, and Cancel puts the earlier color back. `classColor` pairs it with a Use Class Color checkbox.

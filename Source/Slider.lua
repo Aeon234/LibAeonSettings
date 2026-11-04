@@ -1,4 +1,4 @@
--- C-10, the slider: Blizzard's MinimalSliderWithSteppersTemplate (168 with its step arrows) and a 44-wide number
+-- The slider: Blizzard's MinimalSliderWithSteppersTemplate (168 with its step arrows) and a 44-wide number
 -- box beside it, 220 in all. A drag saves at every step it passes; the step arrows and Enter in the box save at once.
 -- `min`, `max` and `step` may be functions of the setting, worked out whenever the slider draws (a screen-wide range).
 

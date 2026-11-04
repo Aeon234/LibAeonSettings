@@ -1,4 +1,4 @@
--- C-18, the profile dialogs: naming a profile (new, copy, rename), exporting, importing (with the adapter's report
+-- The profile dialogs: naming a profile (new, copy, rename), exporting, importing (with the adapter's report
 -- lines), and choosing the profile that replaces a deleted one. One dialog per window, built the
 -- first time, in the window's own frame (SettingsFrameTemplate) over it; it closes when the window hides.
 
@@ -10,7 +10,7 @@ end
 local L = lib.L
 local Profiles = lib.Profiles
 
--- C-18 values.
+-- The dialogs' sizes.
 local NARROW, WIDE = 356, 520
 local INSET_X, INSET_TOP, INSET_BOTTOM = 18, 34, 16
 local MESSAGE_SIZE, SMALL_SIZE = 14, 12

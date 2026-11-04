@@ -60,7 +60,7 @@ function Handlers.StopShake(shaker)
 	shaker:Hide()
 end
 
--- Confirmation (C-14): Blizzard's static popup with the alert icon, the action's own verb on the accept button.
+-- Confirmation: Blizzard's static popup with the alert icon, the action's own verb on the accept button.
 StaticPopupDialogs.LIBAEONSETTINGS_CONFIRM = StaticPopupDialogs.LIBAEONSETTINGS_CONFIRM or {}
 local confirm = StaticPopupDialogs.LIBAEONSETTINGS_CONFIRM
 confirm.text = "%s"

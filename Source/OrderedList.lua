@@ -1,4 +1,4 @@
--- C-20, the ordered list: a numbered row per item, top to bottom, with up and down arrows (MinimalScrollBar's step
+-- The ordered list: a numbered row per item, top to bottom, with up and down arrows (MinimalScrollBar's step
 -- arrows) and, when the list has them, an on/off checkbox per item. The setting's value is the order, a list of item
 -- values; the checkboxes are stored beside it, one path per value. A wide row with no label: `title` names it in
 -- Undo and search, and each item's text is searchable on its own.

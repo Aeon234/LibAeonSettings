@@ -1,4 +1,4 @@
--- C-13, the text input: Blizzard's InputBoxInstructionsTemplate, one line, 220 in all; the default shows gray as
+-- The text input: Blizzard's InputBoxInstructionsTemplate, one line, 220 in all; the default shows gray as
 -- the placeholder while the box is empty. Enter or clicking away saves; Escape puts the saved text back. The setting
 -- remembers where the cursor was when the box last lost focus, so a control beside it can insert text there.
 

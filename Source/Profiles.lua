@@ -1,6 +1,6 @@
--- C-17, the Profiles page: which profile is active, managing profiles and sharing them, drawn by the library from
+-- The Profiles page: which profile is active, managing profiles and sharing them, drawn by the library from
 -- an adapter the addon passes; the profiles and their data stay the addon's. Profile actions are not undoable and
--- empty the window's Undo history. The dialogs are C-18 (ProfileDialog.lua).
+-- empty the window's Undo history. The dialogs are in ProfileDialog.lua.
 
 local lib = LibStub("LibAeonSettings-1.0")
 if not lib.loading then
@@ -169,7 +169,7 @@ local function Reset(window, adapter)
 	end)
 end
 
----Adds the Profiles page (C-17): Active Profile, the addon's own sections (`sections(page)`), Manage and Share. Takes
+---Adds the Profiles page: Active Profile, the addon's own sections (`sections(page)`), Manage and Share. Takes
 ---a page's fields plus `adapter`; sections the addon adds to the returned page afterwards follow Share.
 ---@param info table { title?, description?, under?, icon?, adapter, sections? }
 ---@return table? page

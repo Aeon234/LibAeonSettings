@@ -1,4 +1,4 @@
--- C-11, the dropdown: Blizzard's WowStyle1DropdownTemplate (no step arrows) with Blizzard's menu as a single-choice
+-- The dropdown: Blizzard's WowStyle1DropdownTemplate (no step arrows) with Blizzard's menu as a single-choice
 -- list, 220 wide. Choices are in Title Case. Pickers: a font picker draws each choice in its own font (Fonts.lua), a
 -- texture picker over a sample of its texture, and a sound picker has a speaker left of the button that plays the
 -- saved choice (Media.lua). A choice may ask before it saves; a dropdown may be narrower than 220, or fit its choices.

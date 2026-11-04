@@ -109,7 +109,7 @@ local function CreateHalf(view)
 	half.inherited:SetHeight(SMALL_HEIGHT)
 	half.controls = {}
 	half.look = {}
-	-- Over the label and the lines under it: hovering shows the setting's tooltip (C-03).
+	-- Over the label and the lines under it: hovering shows the setting's tooltip.
 	half.hover = CreateFrame("Frame", nil, half)
 	half.hover:EnableMouse(true)
 	half.hover:SetScript("OnEnter", function() Handlers.LabelEnter(half) end)
@@ -814,7 +814,7 @@ end
 -- Overrides ---------------------------------------------------------------------------------------------------
 
 -- ◆ names the shared value the row overrides.
--- The label's tooltip (C-03): no title; the full label when it is cut off, the setting's `tooltip`, then the line
+-- The label's tooltip: no title; the full label when it is cut off, the setting's `tooltip`, then the line
 -- under the label (description or inactive reason) and the inherited line when they are cut off. Nothing to show,
 -- no tooltip.
 function Handlers.LabelEnter(half)

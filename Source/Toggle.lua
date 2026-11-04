@@ -1,4 +1,4 @@
--- C-01, the toggle: a slim track whose diamond knob slides left (off) to right (on), for turning a module, feature or
+-- The toggle: a slim track whose diamond knob slides left (off) to right (on), for turning a module, feature or
 -- page on and off. Controlled: a click slides the knob and asks the setting; the setting's answer is drawn back. Retail
 -- draws Plumber's steel art, Forever the same art in the bronze of its settings controls.
 

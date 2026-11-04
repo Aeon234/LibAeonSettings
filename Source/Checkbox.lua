@@ -1,4 +1,4 @@
--- C-09, the checkbox: Blizzard's minimal checkbox as it is, for every on/off option that is not a whole module or
+-- The checkbox: Blizzard's minimal checkbox as it is, for every on/off option that is not a whole module or
 -- page (those take the toggle). Controlled like the toggle; no animation but the refused-save shake.
 
 local lib = LibStub("LibAeonSettings-1.0")
