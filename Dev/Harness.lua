@@ -571,6 +571,25 @@ function Harness:DeclareParty(page)
 	bars:Menu({ id = "barsCopy", placeholder = "Copy From", width = 170, action = true, options = {
 		{ value = "player", text = "My Bar" } },
 		set = function() Print("Party Bars: Copy From ran.") end })
+	bars:LinkMenu({ text = "Copy From", build = function(menu)
+		menu:Action("My Bar (2 differ)", function()
+			lib:CloseMenus()
+			local window = page.window
+			local profile = Harness:Profile()
+			profile.party = profile.party or {}
+			local party = profile.party
+			window:RecordChange({ paths = { { path = "party.barHeight", before = party.barHeight },
+				{ path = "party.barSpacing", before = party.barSpacing } }, text = "Party Bars back as they were.",
+				page = page.id })
+			party.barHeight, party.barSpacing = 20, 6
+			window:RefreshUndo()
+			window:Refresh()
+			window:FlashSettings({ page.settings.barHeight, page.settings.barSpacing })
+		end, {
+			onEnter = function() Print("Party Bars: hovering My Bar.") end,
+			onLeave = function() Print("Party Bars: left My Bar.") end,
+		})
+	end })
 	bars:Slider({ id = "barHeight", label = "Bar Height", path = "party.barHeight", default = 14, min = 6, max = 40 })
 	bars:Slider({ id = "barSpacing", label = "Spacing", path = "party.barSpacing", default = 2, min = 0, max = 20 })
 	local barText = page:Section("barText", "Party Bar Text", { show = Bars })

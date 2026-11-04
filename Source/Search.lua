@@ -803,11 +803,13 @@ local function FlashEdge(flash, first, second, horizontal)
 	end
 end
 
----Flashes a row half (or, with `top` and `height`, a band of the page from `top`, such as a section): a gold outline,
----held, then fading out. The flash stops if `region` leaves the page.
-function lib.Window:Flash(half, top, height)
-	local view = self.pageView
-	local flash = view.flash
+-- The view's flash at a place in its pool, made the first time it is needed.
+local function FlashAt(view, index)
+	view.flashes = view.flashes or {}
+	if index == 1 and view.flash then
+		view.flashes[1] = view.flash
+	end
+	local flash = view.flashes[index]
 	if not flash then
 		flash = CreateFrame("Frame", nil, view.scroll.child)
 		FlashEdge(flash, "TOPLEFT", "TOPRIGHT", true)
@@ -815,7 +817,20 @@ function lib.Window:Flash(half, top, height)
 		FlashEdge(flash, "TOPLEFT", "BOTTOMLEFT", false)
 		FlashEdge(flash, "TOPRIGHT", "BOTTOMRIGHT", false)
 		flash:SetScript("OnUpdate", Handlers.FlashUpdate)
-		view.flash = flash
+		view.flashes[index] = flash
+	end
+	view.flash = view.flashes[1]
+
+	return flash
+end
+
+---Flashes a row half (or, with `top` and `height`, a band of the page from `top`, such as a section): a gold outline,
+---held, then fading out. The flash stops if `region` leaves the page.
+function lib.Window:Flash(half, top, height)
+	local view = self.pageView
+	local flash = FlashAt(view, 1)
+	for index = 2, #view.flashes do
+		view.flashes[index]:Hide()
 	end
 	flash:ClearAllPoints()
 	if top then
@@ -828,6 +843,35 @@ function lib.Window:Flash(half, top, height)
 	flash.half, flash.elapsed = half, 0
 	flash:SetAlpha(1)
 	flash:Show()
+end
+
+---Flashes the rows of several settings together, without moving the page. A setting with no row showing is skipped.
+---@param settings table[]
+---@return integer flashed how many rows flashed
+function lib.Window:FlashSettings(settings)
+	local view = self.pageView
+	local count = 0
+	if not view then
+		return count
+	end
+	for _, setting in ipairs(settings) do
+		local half = self:RowOf(setting)
+		if half and half:IsShown() then
+			count = count + 1
+			local flash = FlashAt(view, count)
+			flash:ClearAllPoints()
+			flash:SetAllPoints(half)
+			flash:SetFrameLevel(half:GetFrameLevel() + 20)
+			flash.half, flash.elapsed = half, 0
+			flash:SetAlpha(1)
+			flash:Show()
+		end
+	end
+	for index = count + 1, view.flashes and #view.flashes or 0 do
+		view.flashes[index]:Hide()
+	end
+
+	return count
 end
 
 function Handlers.FlashUpdate(flash, elapsed)

@@ -346,7 +346,7 @@ function Handlers.KeyDown(frame, key)
 		StaticPopup_Hide("LIBAEONSETTINGS_EDIT_EXIT")
 		return
 	end
-	if lib.ui.flyout and lib.ui.flyout:IsShown() then
+	if lib.menuPanels and lib.menuPanels.flyout and lib.menuPanels.flyout:IsShown() then
 		lib:CloseFlyout()
 		lib:ShowGuides(nil, nil)
 		return

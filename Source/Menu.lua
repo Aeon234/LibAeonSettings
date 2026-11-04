@@ -239,7 +239,8 @@ end
 ---Opens the menu beside `anchor` (owned by `owner`, used to toggle and to keep the owner's state), replacing any
 ---open menu. `build(builder)` adds the rows.
 function lib:OpenMenu(owner, anchor, build)
-	local ui = self.ui
+	self.menuPanels = self.menuPanels or {}
+	local ui = self.menuPanels
 	ui.menu = ui.menu or CreatePanel()
 	self:CloseFlyout()
 	ui.menu.owner = owner
@@ -262,7 +263,7 @@ end
 
 ---Rebuilds the open menu in place, keeping its position.
 function lib:RefreshMenu()
-	local menu = self.ui and self.ui.menu
+	local menu = self.menuPanels and self.menuPanels.menu
 	if menu and menu:IsShown() then
 		self:CloseFlyout()
 		Build(menu, menu.build)
@@ -271,7 +272,7 @@ end
 
 ---Opens a flyout to the right of a menu row.
 function lib:OpenFlyout(row, width, build)
-	local ui = self.ui
+	local ui = self.menuPanels
 	ui.flyout = ui.flyout or CreatePanel()
 	ui.flyout.width = width
 	Build(ui.flyout, build)
@@ -289,21 +290,21 @@ function lib:OpenFlyout(row, width, build)
 end
 
 function lib:CloseFlyout()
-	if self.ui and self.ui.flyout then
-		self.ui.flyout:Hide()
+	if self.menuPanels and self.menuPanels.flyout then
+		self.menuPanels.flyout:Hide()
 	end
 end
 
 ---@return string? owner of the open menu
 function lib:MenuOwner()
-	local menu = self.ui and self.ui.menu
+	local menu = self.menuPanels and self.menuPanels.menu
 
 	return menu and menu:IsShown() and menu.owner or nil
 end
 
 ---Closes the menu and its flyout. Returns true when something was open.
 function lib:CloseMenus()
-	local ui = self.ui
+	local ui = self.menuPanels
 	local wasOpen = ui and ui.menu and ui.menu:IsShown() or false
 	if ui and ui.menu then
 		ui.menu:Hide()
@@ -319,7 +320,7 @@ end
 
 -- A click anywhere outside the menu, its flyout and the owner's cog closes it.
 function Handlers.GlobalMouseDown()
-	local ui = lib.ui
+	local ui = lib.menuPanels
 	if not ui or not ui.menu or not ui.menu:IsShown() then
 		return
 	end

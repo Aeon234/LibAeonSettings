@@ -687,6 +687,17 @@ do
 	before = #errors
 	section:Dropdown({ id = "noSet", action = true, options = {} })
 	Check("menu: an action dropdown without set is reported", #errors == before + 1)
+	local link = section:LinkMenu({ text = "Copy", build = function() end })
+	Check("link menu: belongs to its section and takes no row", section.linkMenu == link and section.lines[#section.lines].setting ~= link)
+	before = #errors
+	section:LinkMenu({ text = "Again", build = function() end })
+	Check("link menu: a second on a section is reported", #errors == before + 1 and section.linkMenu == link)
+	before = #errors
+	page:Section("noBuild", "No Build"):LinkMenu({ text = "Copy" })
+	Check("link menu: one without build is reported", #errors == before + 1)
+	before = #errors
+	page:Section("extra", "Extra"):LinkMenu({ text = "Copy", build = function() end, odd = true })
+	Check("link menu: an unknown field is reported", #errors == before + 1)
 	window.RefreshUndo = function() end
 	copy:Request("other")
 	Check("menu: picking an action runs set without recording Undo",

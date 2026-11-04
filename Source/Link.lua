@@ -89,6 +89,88 @@ function lib.Window:RefreshSectionLink(header, section)
 	elseif header.link then
 		header.link:Hide()
 	end
+	self:RefreshSectionLinkMenu(header, section)
+end
+
+-- Link menu ----------------------------------------------------------------------------------------------------
+
+local function CreateLinkMenu(header)
+	local button = CreateFrame("Button", nil, header)
+	local text = button:CreateFontString(nil, "OVERLAY")
+
+	button:SetHeight(LINK_HEIGHT)
+	lib:SetFont(text, "body", LINK_TEXT_SIZE)
+	text:SetPoint("RIGHT")
+	text:SetTextColor(lib:GetColor("accent"))
+	button.text = text
+	button:SetScript("OnClick", function() Handlers.LinkMenuClick(header) end)
+	button:SetScript("OnEnter", function() Handlers.LinkMenuEnter(header) end)
+	button:SetScript("OnLeave", function() Handlers.LinkMenuLeave(header) end)
+	header.linkMenu = button
+
+	return button
+end
+
+---Shows a section's link menu on its title line, left of whatever else the line holds.
+---@param header table
+---@param section table
+function lib.Window:RefreshSectionLinkMenu(header, section)
+	local info = section.linkMenu
+	local shown = info ~= nil
+
+	if shown and info.show then
+		shown = lib.CallAdopter(info.show) == true
+	end
+
+	if not shown then
+		if header.linkMenu then
+			header.linkMenu:Hide()
+		end
+
+		return
+	end
+
+	local button = header.linkMenu or CreateLinkMenu(header)
+	local neighbor = header.linkTarget and header.link or (header.menuSetting and header.menu.frame)
+
+	button.info = info
+	button.text:SetText(info.text)
+	button:SetWidth(math.ceil(button.text:GetUnboundedStringWidth()))
+	button:ClearAllPoints()
+	if neighbor then
+		button:SetPoint("RIGHT", neighbor, "LEFT", -LINK_GAP, 0)
+	else
+		button:SetPoint("RIGHT", header, "TOPRIGHT", 0, -TITLE_CENTER)
+	end
+	button:Show()
+end
+
+function Handlers.LinkMenuClick(header)
+	local button = header.linkMenu
+	local info = button and button.info
+
+	if not info then
+		return
+	end
+
+	local owner = "linkMenu:" .. tostring(header.section and header.section.id)
+
+	if lib:MenuOwner() == owner then
+		lib:CloseMenus()
+
+		return
+	end
+
+	PlaySound(CLICK_SOUND)
+	lib:OpenMenu(owner, button, info.build)
+end
+
+function Handlers.LinkMenuEnter(header)
+	header.linkMenu.text:SetTextColor(lib:GetColor("cream"))
+end
+
+function Handlers.LinkMenuLeave(header)
+	header.linkMenu.text:SetTextColor(lib:GetColor("accent"))
 end
 
 function Handlers.LinkEnter(button, target)

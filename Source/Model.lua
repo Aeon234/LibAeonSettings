@@ -216,6 +216,34 @@ function lib.Section:Menu(info)
 	return setting
 end
 
+---Puts a link on the section's title line, left of its menu and Edit Position, that opens a menu of actions.
+---`info.text` is the link's text; `info.build(menu)` adds the rows each time it opens (`menu:Action(text, onClick,
+---{ onEnter, onLeave })`, and `lib:CloseMenus()` from a row that should close it); `info.show()`, when given, says
+---whether the link draws. It is not searched and takes no row.
+---@param info { text: string, build: fun(menu: table), show: (fun(): boolean)? }
+---@return table? link
+function lib.Section:LinkMenu(info)
+	local report = self.page.window.addonName
+	local where = ("%s/%s"):format(self.page.id, tostring(self.id))
+
+	if self.linkMenu then
+		lib:Report(report, where .. ": a section has one link menu")
+		return
+	end
+	if type(info) ~= "table" or type(info.text) ~= "string" or type(info.build) ~= "function" then
+		lib:Report(report, where .. ": a link menu needs text and build")
+		return
+	end
+	for field in pairs(info) do
+		if field ~= "text" and field ~= "build" and field ~= "show" then
+			lib:Report(report, ("%s: unknown link menu field %q"):format(where, tostring(field)))
+		end
+	end
+	self.linkMenu = info
+
+	return info
+end
+
 -- Whether `ancestor` is up `setting`'s `depends` chain.
 local function DependsOn(setting, ancestor)
 	local parent, depth = setting:Parent(), 0
