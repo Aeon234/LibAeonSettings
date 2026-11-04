@@ -20,14 +20,13 @@ local TITLE_HEIGHT = 30
 local DESCRIPTION_GAP = 6
 local SWITCH_GAP, SWITCH_ICON, SWITCH_ICON_GAP = 14, 20, 10 -- the switch card: below the title, its icon
 local BODY_RESPONSE = 0.32 -- the page below its switch fading away while the switch is off, and back
-local SECTION_GAP, SECTION_TITLE_HEIGHT = 18, 30 -- the heading's line also holds a section's menu and link
+local SECTION_TITLE_HEIGHT = lib.SECTION_TITLE_HEIGHT
 local HEADING_INSET, HEADING_BOTTOM = 14, 6 -- the heading's text: in from the card's edge, above the card
 local MENU_CENTER = 15 -- the section title's center line, from the header's top
-local ROW_HEIGHT, TALL_HEIGHT = 44, 52
+local ROW_HEIGHT, TALL_HEIGHT = lib.ROW_HEIGHT, lib.TALL_ROW_HEIGHT
 local INSET, CONTROL_RIGHT, LABEL_GAP, MIN_LABEL = lib.ROW_INSET, lib.CONTROL_RIGHT, 12, 80
 local LABEL_HEIGHT, SMALL_HEIGHT = 17, 15
 local NOTE_TOP, NOTE_LINE = 7, 16 -- a note under its card: the gap above it and its line height
-local BOTTOM_PADDING = 14
 local REVEAL_RESPONSE = 0.32 -- a row growing in under the row it depends on, or shrinking away
 local INACTIVE_ALPHA, INACTIVE_DESATURATION = 0.5, 0.7
 local PAGE_OFF_DESATURATION = 0.6
@@ -604,13 +603,6 @@ function lib.Window:RefreshStates()
 	return layoutChanged
 end
 
--- How many lines sit under a row's label. A row an older copy built has no look until it is next refreshed.
-local function LinesOf(half)
-	local look = half.look
-
-	return look and look.lines or 0
-end
-
 local function PlaceHalf(half, child, left, y, width, height)
 	half:ClearAllPoints()
 	half:SetPoint("TOPLEFT", child, "TOPLEFT", left, -y)
@@ -624,7 +616,8 @@ local function PlaceHalf(half, child, left, y, width, height)
 	half.small:SetWidth(labelWidth)
 	half.inherited:SetWidth(labelWidth)
 	half.label:ClearAllPoints()
-	local lines = LinesOf(half)
+	-- A row an older copy built has no look until it is next refreshed.
+	local lines = half.look and half.look.lines or 0
 	if lines > 0 then
 		half.label:SetPoint("TOPLEFT", half, "LEFT", labelLeft, (LABEL_HEIGHT + SMALL_HEIGHT * lines) / 2)
 	else
@@ -636,96 +629,85 @@ local function PlaceHalf(half, child, left, y, width, height)
 	half.hover:SetPoint("BOTTOMRIGHT", last, "BOTTOMRIGHT", HOVER_MARGIN, -HOVER_MARGIN)
 end
 
-local function Rule(view, color, left, top, width, height, alpha)
+-- What PageLayout.lua works out, drawn on the shown page's frames (see LibAeonSettingsPageSink). One sink to a view,
+-- its methods looked up at call time, so a sink an older copy made uses the newest code.
+lib.PageSink = {}
+local sinkMeta = { __index = function(_, name) return lib.PageSink[name] end }
+
+function lib.PageSink:Hidden(block)
+	local header = block.header
+	header:Hide()
+	header.top, header.bottom = nil, nil
+	for _, half in ipairs(block.rows) do
+		half:Hide()
+	end
+	for _, note in ipairs(block.notes) do
+		note:Hide()
+	end
+end
+
+function lib.PageSink:Header(header, top, bottom, width)
+	header:Show()
+	header.top, header.bottom = top, bottom
+	header:SetPoint("TOPLEFT", self.view.scroll.child, "TOPLEFT", 0, -top)
+	header:SetSize(width, SECTION_TITLE_HEIGHT)
+end
+
+function lib.PageSink:Row(half, left, top, width, height, alpha)
+	PlaceHalf(half, self.view.scroll.child, left, top, width, height)
+	half:SetAlpha(alpha)
+end
+
+function lib.PageSink:Gone(half)
+	half:Hide()
+end
+
+function lib.PageSink:Rule(colorName, left, top, width, height, alpha)
+	local view = self.view
+	---@type number[]
+	local color = lib.COLOR[colorName]
 	local texture = Acquire(view.lines)
 	texture:SetColorTexture(color[1], color[2], color[3], (color[4] or 1) * (alpha or 1))
 	texture:SetPoint("TOPLEFT", view.scroll.child, "TOPLEFT", left, -top)
 	texture:SetSize(width, height)
 end
 
----Places the shown page's sections: each a heading, a card holding its rows one to a line (two in a choice card),
----then its notes under the card. A hidden section is left out with its rows and notes; a row growing in or leaving
----takes its share of its height, faded by as much.
+function lib.PageSink:Fill(top, width, height)
+	local view = self.view
+	local fill = Acquire(view.fills)
+	fill:SetColorTexture(lib:GetColor("card"))
+	fill:SetPoint("TOPLEFT", view.scroll.child, "TOPLEFT", 0, -top)
+	fill:SetSize(width, height)
+	fill:Show()
+end
+
+function lib.PageSink:Note(note, top, width)
+	local textWidth = width - 2 * HEADING_INSET
+	note.text:SetWidth(textWidth)
+	note.small:SetWidth(textWidth)
+	local height = NOTE_TOP + note.text:GetStringHeight()
+		+ (note.small:IsShown() and note.small:GetStringHeight() or 0)
+	note:Show()
+	note:SetPoint("TOPLEFT", self.view.scroll.child, "TOPLEFT", 0, -top)
+	note:SetSize(width, height)
+
+	return height
+end
+
+---Places the shown page's sections (lib.PageLayout).
 function lib.Window:LayoutPage()
 	local view = self.pageView
 	if not view or not view.shownPage then
 		return
 	end
-	local child = view.scroll.child
 	local width = view.scroll.frame:GetWidth()
 	if width <= 1 then
 		width = DEFAULT_WIDTH
 	end
 	ReleaseAll(view.lines)
 	ReleaseAll(view.fills)
-	local y = 0
-	for _, block in ipairs(view.items) do
-		local header = block.header
-		if header.shown == false then
-			header:Hide()
-			header.top, header.bottom = nil, nil
-			for _, half in ipairs(block.rows) do
-				half:Hide()
-			end
-			for _, note in ipairs(block.notes) do
-				note:Hide()
-			end
-		else
-			y = y + SECTION_GAP
-			header:Show()
-			header.top = y
-			header:SetPoint("TOPLEFT", child, "TOPLEFT", 0, -y)
-			header:SetSize(width, SECTION_TITLE_HEIGHT)
-			y = y + SECTION_TITLE_HEIGHT
-			local cardTop = y
-			if block.grid then
-				y = Handlers.LayoutGrid(view, block.rows, child, width, y)
-			else
-				local previous = false
-				for _, half in ipairs(block.rows) do
-					local share = half.revealed or 0
-					if share <= 0 then
-						half:Hide()
-					else
-						-- The separator above and the row shrink together, unrounded, so a row ends without a step.
-						if previous then
-							local ruleLeft = INSET + half.indent
-							Rule(view, lib.COLOR.separator, ruleLeft, y, width - ruleLeft, 1, share)
-							y = y + share
-						end
-						local height = LinesOf(half) > 0 and TALL_HEIGHT or ROW_HEIGHT
-						if half.setting.height then
-							height = math.max(height, half.setting.height + 16)
-						end
-						height = height * share
-						PlaceHalf(half, child, 0, y, width, height)
-						-- Not clipped: a row clipping its children while it grows in from nothing draws none of them
-						-- until it is whole. Its content fades with the square of its share instead, so it stays faint
-						-- while the row is too short to hold it.
-						half:SetAlpha(share * share)
-						y = y + height
-						previous = true
-					end
-				end
-			end
-			if y > cardTop then
-				Handlers.Card(view, cardTop, width, y - cardTop)
-			end
-			header.bottom = y
-			for _, note in ipairs(block.notes) do
-				local textWidth = width - 2 * HEADING_INSET
-				note.text:SetWidth(textWidth)
-				note.small:SetWidth(textWidth)
-				local height = NOTE_TOP + note.text:GetStringHeight()
-					+ (note.small:IsShown() and note.small:GetStringHeight() or 0)
-				note:Show()
-				note:SetPoint("TOPLEFT", child, "TOPLEFT", 0, -y)
-				note:SetSize(width, height)
-				y = y + height
-			end
-		end
-	end
-	view.scroll:SetContentHeight(y + BOTTOM_PADDING)
+	view.layoutSink = view.layoutSink or setmetatable({ view = view }, sinkMeta)
+	view.scroll:SetContentHeight(lib.PageLayout(view.items, width, view.layoutSink))
 end
 
 -- What lies below the page's switch (preview, tabs and sections), 0 gone to 1 shown, on a spring: it fades, and
@@ -742,53 +724,6 @@ function Handlers.BodyPresence(view)
 	end
 
 	return view.bodyPresence
-end
-
--- A card behind a section's rows: a faint fill inside a 1-unit edge.
-function Handlers.Card(view, top, width, height)
-	local fill = Acquire(view.fills)
-	fill:SetColorTexture(lib:GetColor("card"))
-	fill:SetPoint("TOPLEFT", view.scroll.child, "TOPLEFT", 0, -top)
-	fill:SetSize(width, height)
-	fill:Show()
-	Rule(view, lib.COLOR.cardEdge, 0, top, width, 1)
-	Rule(view, lib.COLOR.cardEdge, 0, top + height - 1, width, 1)
-	Rule(view, lib.COLOR.cardEdge, 0, top + 1, 1, height - 2)
-	Rule(view, lib.COLOR.cardEdge, width - 1, top + 1, 1, height - 2)
-end
-
--- A choice card's rows, two to a line, left to right then down; a row gone gives up its place, one in motion keeps it.
--- A line takes the larger share of its two rows' heights, and each row fades by its own share. Returns the y below the
--- last line.
-function Handlers.LayoutGrid(view, rows, child, width, y)
-	local columnWidth = math.floor(width / 2)
-	local present = {}
-	for _, half in ipairs(rows) do
-		if (half.revealed or 0) > 0 then
-			present[#present + 1] = half
-		else
-			half:Hide()
-		end
-	end
-	for index = 1, #present, 2 do
-		local left, right = present[index], present[index + 1]
-		local share = math.max(left.revealed, right and right.revealed or 0)
-		if index > 1 then
-			Rule(view, lib.COLOR.separator, INSET, y, width - INSET, 1, share)
-			y = y + share
-		end
-		local height = ROW_HEIGHT * share
-		PlaceHalf(left, child, 0, y, columnWidth, height)
-		left:SetAlpha(left.revealed * left.revealed)
-		if right then
-			Rule(view, lib.COLOR.separator, columnWidth, y, 1, height, right.revealed)
-			PlaceHalf(right, child, columnWidth, y, width - columnWidth, height)
-			right:SetAlpha(right.revealed * right.revealed)
-		end
-		y = y + height
-	end
-
-	return y
 end
 
 ---The row drawing a setting on the shown page, or nil.

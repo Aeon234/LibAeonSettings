@@ -102,7 +102,7 @@ function strlenutf8(text)
 
 	return count
 end
-for _, file in ipairs({ "Model", "RowLook", "Details", "Search", "Undo", "TextInput", "Dropdown" }) do
+for _, file in ipairs({ "Model", "RowLook", "PageLayout", "Details", "Search", "Undo", "TextInput", "Dropdown" }) do
 	dofile(root .. "/Source/" .. file .. ".lua")
 end
 
@@ -761,6 +761,165 @@ do
 	lib.RowLook(changer, look, false, 0.5)
 	Check("row look: a wiped look keeps no old dimming or reason from before", not look.labelDimmed
 		and look.reason == nil and look.secondLine == nil)
+end
+
+-- Page layout
+
+do
+	lib.ROW_INSET = 16
+	local ROW, TALL, TITLE = lib.ROW_HEIGHT, lib.TALL_ROW_HEIGHT, lib.SECTION_TITLE_HEIGHT
+	local WIDTH = 600
+	local function Row(revealed, lines, indent, height)
+		return { revealed = revealed, look = { lines = lines or 0 }, indent = indent or 0, setting = { height = height } }
+	end
+	local function Block(rows, info)
+		info = info or {}
+
+		return { header = { shown = info.shown }, rows = rows, notes = info.notes or {}, grid = info.grid }
+	end
+	-- Runs the layout through a sink that records each call by name, and all of them in order.
+	local function Layout(blocks, width)
+		local log = { order = {} }
+		local sink = {}
+		for _, name in ipairs({ "Hidden", "Header", "Row", "Gone", "Rule", "Fill", "Note" }) do
+			log[name] = {}
+			sink[name] = function(_, ...)
+				table.insert(log[name], { ... })
+				table.insert(log.order, name)
+			end
+		end
+		sink.Note = function(_, note, top, noteWidth)
+			table.insert(log.Note, { note, top, noteWidth })
+			table.insert(log.order, "Note")
+
+			return note.height
+		end
+		local total = lib.PageLayout(blocks, width or WIDTH, sink)
+
+		return log, total
+	end
+	local function Separators(log)
+		local rules = {}
+		for _, rule in ipairs(log.Rule) do
+			if rule[1] == "separator" then
+				rules[#rules + 1] = rule
+			end
+		end
+
+		return rules
+	end
+
+	local log, padding = Layout({})
+	Check("page layout: an empty page is its padding alone", #log.order == 0 and padding > 0)
+
+	local half = Row(1)
+	local total
+	log, total = Layout({ Block({ half }) })
+	local header, row, fill = log.Header[1], log.Row[1], log.Fill[1]
+	local gap = header[2]
+	local cardTop = gap + TITLE
+	Check("page layout: a row sits under its section's gap and title, full width and opaque", gap > 0 and row[1] == half
+		and row[2] == 0 and Near(row[3], cardTop) and row[4] == WIDTH and Near(row[5], ROW) and row[6] == 1)
+	Check("page layout: the header runs to the card's end and the content past it", header[1] ~= nil
+		and Near(header[3], cardTop + ROW) and header[4] == WIDTH and Near(total, cardTop + ROW + padding))
+	Check("page layout: the card's fill covers its rows", Near(fill[1], cardTop) and fill[2] == WIDTH and Near(fill[3], ROW))
+	local top, bottom, leftEdge, rightEdge = log.Rule[1], log.Rule[2], log.Rule[3], log.Rule[4]
+	Check("page layout: the card's top edge", top[1] == "cardEdge" and top[2] == 0 and Near(top[3], cardTop)
+		and top[4] == WIDTH and top[5] == 1)
+	Check("page layout: the card's bottom edge lies inside it", bottom[2] == 0 and Near(bottom[3], cardTop + ROW - 1)
+		and bottom[4] == WIDTH and bottom[5] == 1)
+	Check("page layout: the card's side edges fit between the others", leftEdge[2] == 0 and Near(leftEdge[3], cardTop + 1)
+		and leftEdge[4] == 1 and Near(leftEdge[5], ROW - 2) and rightEdge[2] == WIDTH - 1 and Near(rightEdge[3], cardTop + 1)
+		and rightEdge[4] == 1 and Near(rightEdge[5], ROW - 2))
+
+	log = Layout({ Block({ Row(1, 1) }) })
+	Check("page layout: a row with lines under its label is tall", Near(log.Row[1][5], TALL))
+	log = Layout({ Block({ Row(1, 0, 0, 100) }) })
+	Check("page layout: a setting's larger height wins, with its margin", Near(log.Row[1][5], 116))
+	log = Layout({ Block({ Row(1, 1, 0, 1) }) })
+	Check("page layout: a setting's smaller height does not", Near(log.Row[1][5], TALL))
+
+	log = Layout({ Block({ Row(1), Row(1, 0, 12) }) })
+	local separators = Separators(log)
+	Check("page layout: a separator between two rows starts at the lower row's indent", #separators == 1
+		and separators[1][2] == 28 and Near(separators[1][3], cardTop + ROW) and separators[1][4] == WIDTH - 28
+		and separators[1][5] == 1 and separators[1][6] == 1)
+	Check("page layout: and takes a unit of height", Near(log.Row[2][3], cardTop + ROW + 1))
+
+	log = Layout({ Block({ Row(1), Row(0.5) }) })
+	separators = Separators(log)
+	Check("page layout: a row in motion takes its share of its height, its separator fading and shrinking with it",
+		Near(log.Row[2][5], ROW * 0.5) and Near(log.Row[2][3], cardTop + ROW + 0.5) and separators[1][5] == 1
+		and Near(separators[1][6], 0.5))
+	Check("page layout: and fades by the square of its share", Near(log.Row[2][6], 0.25))
+
+	local gone = Row(0)
+	log = Layout({ Block({ gone, Row(1), { indent = 0, setting = {} }, Row(1) }) })
+	separators = Separators(log)
+	Check("page layout: a row gone takes no height or separator", #log.Gone == 2 and log.Gone[1][1] == gone
+		and #log.Row == 2 and #separators == 1 and Near(log.Row[1][3], cardTop) and Near(log.Row[2][3], cardTop + ROW + 1))
+
+	log, total = Layout({ Block({ Row(0) }) })
+	Check("page layout: a section with every row gone has a heading and no card", #log.Fill == 0 and #log.Rule == 0
+		and Near(log.Header[1][3], log.Header[1][2] + TITLE) and Near(total, gap + TITLE + padding))
+
+	local hidden = Block({ Row(1) }, { shown = false, notes = { { height = 20 } } })
+	log, total = Layout({ hidden })
+	Check("page layout: a hidden section takes no room and draws nothing", #log.order == 1 and log.Hidden[1][1] == hidden
+		and Near(total, padding))
+	log = Layout({ Block({}, { shown = nil }) })
+	Check("page layout: a section not yet told shows", #log.Hidden == 0 and #log.Header == 1)
+
+	local first, second = { height = 20 }, { height = 5 }
+	log, total = Layout({ Block({ Row(1) }, { notes = { first, second } }) })
+	Check("page layout: notes sit under the card, each below the last", log.Note[1][1] == first
+		and Near(log.Note[1][2], cardTop + ROW) and log.Note[1][3] == WIDTH and Near(log.Note[2][2], cardTop + ROW + 20))
+	Check("page layout: a note's height counts in the content but not in its section's bottom",
+		Near(log.Header[1][3], cardTop + ROW) and Near(total, cardTop + ROW + 25 + padding))
+
+	local a, b, c, d = Row(1, 1), Row(1), Row(1), Row(1)
+	log = Layout({ Block({ a, b, c, d }, { grid = true }) }, 601)
+	separators = Separators(log)
+	Check("page layout: a choice card draws two to a line, the left column rounded down", #log.Row == 4
+		and log.Row[1][1] == a and log.Row[1][2] == 0 and log.Row[1][4] == 300 and log.Row[2][1] == b
+		and log.Row[2][2] == 300 and log.Row[2][4] == 301)
+	Check("page layout: a choice card's rows stay short whatever they hold", Near(log.Row[1][5], ROW))
+	Check("page layout: a choice card's lines have a rule between their columns and one between them", #separators == 3
+		and separators[1][2] == 300 and Near(separators[1][3], cardTop) and separators[1][4] == 1
+		and Near(separators[1][5], ROW) and separators[2][2] == 16 and Near(separators[2][3], cardTop + ROW)
+		and separators[2][4] == 601 - 16 and separators[2][5] == 1 and separators[3][2] == 300
+		and Near(separators[3][3], cardTop + ROW + 1))
+	Check("page layout: a choice card's next line sits below its rule", Near(log.Row[3][3], cardTop + ROW + 1)
+		and log.Row[3][1] == c and log.Row[4][1] == d)
+
+	local last = Row(1)
+	log = Layout({ Block({ Row(1), Row(1), last }, { grid = true }) })
+	separators = Separators(log)
+	Check("page layout: an odd row out sits alone at the left, with no rule beside it", #log.Row == 3
+		and log.Row[3][1] == last and log.Row[3][2] == 0 and log.Row[3][4] == WIDTH / 2 and #separators == 2)
+
+	local away, closes = Row(0), Row(1)
+	log = Layout({ Block({ Row(1), away, closes }, { grid = true }) })
+	Check("page layout: a row gone gives up its place in a choice card", #log.Gone == 1 and log.Gone[1][1] == away
+		and log.Row[2][1] == closes and log.Row[2][2] == WIDTH / 2 and Near(log.Row[2][3], cardTop))
+
+	log = Layout({ Block({ Row(1), Row(0.5), Row(0.25), Row(0.5) }, { grid = true }) })
+	separators = Separators(log)
+	Check("page layout: a choice card's line takes its larger share", Near(log.Row[1][5], ROW)
+		and Near(log.Row[3][5], ROW * 0.5))
+	Check("page layout: each row fades by its own", log.Row[1][6] == 1 and Near(log.Row[2][6], 0.25)
+		and Near(log.Row[3][6], 0.0625) and Near(log.Row[4][6], 0.25))
+	Check("page layout: the rule beside a row fades with it, and the rule above a line with the line",
+		Near(separators[1][6], 0.5) and Near(separators[2][6], 0.5) and Near(separators[3][6], 0.5)
+		and Near(log.Row[3][3], cardTop + ROW + 0.5))
+
+	log = Layout({ Block({ { revealed = 1, indent = 0, setting = {} } }) })
+	Check("page layout: a row with no look yet counts as having no lines", Near(log.Row[1][5], ROW))
+
+	log = Layout({ Block({ Row(1) }), Block({ Row(1) }) })
+	Check("page layout: a later section starts its gap below the one before", Near(log.Header[2][2], log.Header[1][3] + gap))
+	Check("page layout: each section's calls come in order, its header after its rows",
+		table.concat(log.order, " ") == "Row Fill Rule Rule Rule Rule Header Row Fill Rule Rule Rule Rule Header")
 end
 
 -- Media pickers
