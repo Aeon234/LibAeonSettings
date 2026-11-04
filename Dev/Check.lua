@@ -104,7 +104,7 @@ function strlenutf8(text)
 	return count
 end
 for _, file in ipairs({ "Model", "RowLook", "PageLayout", "Controls", "Toggle", "Checkbox", "Slider", "Color",
-	"OrderedList", "Details", "Search", "Landing", "Undo", "TextInput", "Dropdown" }) do
+	"OrderedList", "Button", "Details", "Search", "Landing", "Undo", "TextInput", "Dropdown" }) do
 	dofile(root .. "/Source/" .. file .. ".lua")
 end
 
@@ -476,6 +476,59 @@ do
 	setting:Request(false)
 	Check("window section: and off", not lib:ReduceMotion() and setting:GetValue() == false)
 	lib.windows = savedWindows
+
+	local tabbedWindow = NewWindow({})
+	local tabbedPage = NewPage(tabbedWindow, "tabbed", "Tabbed")
+	tabbedPage.tabs = {}
+	local plainPage = NewPage(tabbedWindow, "plain", "Plain")
+	tabbedWindow:AddWindowSection()
+	Check("window section: a first page with tabs is passed over, since it shows only its tabs' sections",
+		#tabbedPage.sections == 0 and #plainPage.sections == 1 and plainPage.windowSection ~= nil)
+	local allTabsWindow = NewWindow({})
+	local onlyPage = NewPage(allTabsWindow, "only", "Only")
+	onlyPage.tabs = {}
+	allTabsWindow:AddWindowSection()
+	Check("window section: with tabs on every page it is not added", #onlyPage.sections == 0)
+end
+
+-- Action buttons and their confirmation
+
+do
+	local window = NewWindow({})
+	local page = NewPage(window, "buttons", "Buttons")
+	local section = page:Section("one", "One")
+	local ran, asked = 0, nil
+	local savedConfirm, savedPlaySound = lib.Confirm, PlaySound
+	PlaySound = function() end
+	lib.Confirm = function(_, question, _, accept)
+		asked = { question = question, accept = accept }
+
+		return asked
+	end
+	local function Click(confirm)
+		ran, asked = 0, nil
+		local setting = section:Button({ id = "button" .. tostring(#section.settings), label = "Do", verb = "Do",
+			confirm = confirm, run = function() ran = ran + 1 end })
+		lib.ActionButtonHandlers.Click({ setting = setting })
+	end
+	Click(nil)
+	Check("button: with no confirm it runs at once", ran == 1 and asked == nil)
+	Click("Sure?")
+	Check("button: a confirm that is text asks first", ran == 0 and asked and asked.question == "Sure?")
+	Click(function() return "Really?" end)
+	Check("button: a confirm function's text asks first", ran == 0 and asked and asked.question == "Really?")
+	Click(function() return nil end)
+	Check("button: a confirm function with nothing to ask runs at once", ran == 1 and asked == nil)
+	lib.Confirm, PlaySound = savedConfirm, savedPlaySound
+end
+
+-- A swatch with no declaration
+
+do
+	local window = NewWindow({})
+	local section = NewPage(window, "colors", "Colors"):Section("one", "One")
+	local before = #errors
+	Check("color: no declaration is reported, not an error", section:Color() == nil and #errors == before + 1)
 end
 
 -- Whether a row not yet drawn belongs on the page.

@@ -86,8 +86,11 @@ function Handlers.Click(view)
 		return
 	end
 	PlaySound(CLICK_SOUND)
-	if setting.confirm then
-		local question = type(setting.confirm) == "function" and lib.CallAdopter(setting.confirm, setting) or setting.confirm
+	local question = setting.confirm
+	if type(question) == "function" then
+		question = lib.CallAdopter(question, setting)
+	end
+	if question then
 		view.confirming = lib:Confirm(question, setting.verb, function() Run(view, setting) end)
 	else
 		Run(view, setting)

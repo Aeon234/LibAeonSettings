@@ -286,8 +286,9 @@ lib:RegisterControl("Color", {
 
 -- Replaces the plain constructor RegisterControl made.
 function lib.Section.Color(section, info)
-	local classColor = type(info) == "table" and info.classColor
-	if classColor ~= nil then
+	local classColor
+	if type(info) == "table" then
+		classColor = info.classColor
 		info.classColor = nil
 	end
 	local swatch = section:Add("Color", info)

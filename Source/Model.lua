@@ -309,10 +309,16 @@ function lib.Section:Note(text, small)
 	table.insert(self.notes, { text = text, small = small })
 end
 
----Adds the library's own section at the end of the addon's first page, once per page: Reduce Motion, which is
----account-wide and the same in every addon on the library.
+---Adds the library's own section at the end of the addon's first page without tabs, whose sections are all shown,
+---once per page: Reduce Motion, which is account-wide and the same in every addon on the library.
 function lib.Window:AddWindowSection()
-	local first = self.pageOrder[1]
+	local first
+	for _, page in ipairs(self.pageOrder) do
+		if not page.tabs then
+			first = page
+			break
+		end
+	end
 	if not first or not first.Section or first.windowSection then
 		return
 	end
