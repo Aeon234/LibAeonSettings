@@ -170,8 +170,18 @@ function Handlers.Moving()
 	return list
 end
 
+-- Steps from a list kept between frames, so callbacks may start or end springs while they are stepped.
 function Handlers.Update(elapsed)
-	for _, spring in ipairs(Handlers.Moving()) do
+	local stepping = lib.motion.stepping or {}
+	lib.motion.stepping = stepping
+	local count = 0
+	for spring in pairs(lib.motion.moving) do
+		count = count + 1
+		stepping[count] = spring
+	end
+	for index = 1, count do
+		local spring = stepping[index]
+		stepping[index] = nil
 		spring.value, spring.velocity = Motion.Step(spring.value, spring.velocity, spring.target, spring.response,
 			spring.damping, elapsed)
 		if Motion.Settled(spring.value, spring.velocity, spring.target, spring.epsilon) then
