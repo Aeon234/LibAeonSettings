@@ -296,8 +296,17 @@ do
 	local guarded = section:Toggle({ id = "guarded", label = "Guarded", path = "bars.guarded",
 		blocked = function() return "Needs a target." end })
 
-	Check("model: two settings share a line", section.lines[1][1] == shown and section.lines[1][2] == scale)
-	Check("model: a wide setting takes its own line", section.lines[3][1] == shared and section.lines[3].wide)
+	Check("model: a section keeps its settings in the order declared, a wide one among them", section.settings[1] == shown
+		and section.settings[2] == scale and section.settings[3] == font and section.settings[4] == shared
+		and section.settings[5] == guarded and shared.wide == true)
+	local counted = #section.settings
+	section:Skip()
+	Check("model: Skip adds nothing", #section.settings == counted)
+	section:Note("Words.", "Small words.")
+	Check("model: a note is kept apart from the settings", #section.settings == counted and #section.notes == 1
+		and section.notes[1].text == "Words." and section.notes[1].small == "Small words.")
+	local after = section:Toggle({ id = "afterNote", label = "After", path = "bars.after" })
+	Check("model: a setting declared after a note follows the settings", section.settings[counted + 1] == after)
 	Check("model: an unset value is its default", scale:GetValue() == 1)
 	scale:Request(1.5)
 	Check("model: a saved value is written at its path", store.bars.scale == 1.5 and scale:GetValue() == 1.5)
@@ -464,7 +473,7 @@ do
 	local last = first.sections[#first.sections]
 	Check("window section: added once, at the end of the first page only", #first.sections == 2
 		and last.title == lib.L.SETTINGS_WINDOW and #window.pages.second.sections == 0)
-	local setting = last.lines[1][1]
+	local setting = last.settings[1]
 	Check("window section: Reduce Motion starts off",
 		setting.label == lib.L.REDUCE_MOTION and setting:GetValue() == false)
 	setting:Request(true)
@@ -525,6 +534,14 @@ do
 	choices:Checkbox({ id = "c1", label = "One", path = "c1" })
 	choices:Checkbox({ id = "c2", label = "Two", path = "c2" })
 	Check("choice card: two checkboxes draw two to a line", lib.ChoiceGrid(window, choices) and #errors == before)
+	local spaced = page:Section("spaced", "Spaced", { columns = 2 })
+	local spacedFirst = spaced:Checkbox({ id = "sp1", label = "One", path = "sp1" })
+	spaced:Skip()
+	spaced:Note("Words.")
+	local spacedSecond = spaced:Checkbox({ id = "sp2", label = "Two", path = "sp2" })
+	Check("choice card: a skip and a note leave its settings in order, two to a line", lib.ChoiceGrid(window, spaced)
+		and #errors == before and spaced.settings[1] == spacedFirst and spaced.settings[2] == spacedSecond
+		and #spaced.settings == 2 and #spaced.notes == 1)
 	local swatches = page:Section("swatches", "Swatches", { columns = 2 })
 	swatches:Checkbox({ id = "w1", label = "One", path = "w1" })
 	swatches:Color({ id = "w2", label = "Two", path = "w2" })
@@ -590,7 +607,7 @@ do
 	Check("details: closed at first, holding its settings away", text:GetValue() == false
 		and not Wanted(font) and not Wanted(hover))
 	local rows = {}
-	for _, setting in ipairs({ font, more.lines[1][1], classColor, text, hover }) do
+	for _, setting in ipairs({ font, more.settings[1], classColor, text, hover }) do
 		rows[#rows + 1] = { setting = setting }
 	end
 	lib.OrderUnderParents(rows)
@@ -602,7 +619,7 @@ do
 	Check("details: open or closed lives in the window for the session, not in the store",
 		detailsWindow.openDetails["clock/text"] == true and store.text == nil and next(store) == nil)
 	Check("details: a row sits in one step for each details row it is inside, whatever it depends on",
-		lib.DetailsIndent(text) == 0 and lib.DetailsIndent(more.lines[1][1]) == 0
+		lib.DetailsIndent(text) == 0 and lib.DetailsIndent(more.settings[1]) == 0
 		and lib.DetailsIndent(font) == lib.DETAILS_STEP and lib.DetailsIndent(hover) == lib.DETAILS_STEP)
 	local inner = more:Details({ id = "inner", label = "Inner", details = "text" })
 	local nested = more:Checkbox({ id = "nested", label = "Nested", path = "nested", details = "inner" })
@@ -993,7 +1010,7 @@ do
 	local copy = section:Menu({ id = "copy", placeholder = "Copy From", action = true,
 		options = { { value = "other", text = "Other" } }, set = function(value) picked = value end })
 	Check("menu: a section menu belongs to its section and takes no row",
-		section.menu == copy and copy.section == section and #section.lines == 0)
+		section.menu == copy and copy.section == section and #section.settings == 0)
 	Check("menu: an action dropdown reads as no choice and is left out of Undo",
 		copy:GetValue() == nil and copy.noUndo == true)
 	local before = #errors
@@ -1003,7 +1020,7 @@ do
 	section:Dropdown({ id = "noSet", action = true, options = {} })
 	Check("menu: an action dropdown without set is reported", #errors == before + 1)
 	local link = section:LinkMenu({ text = "Copy", build = function() end })
-	Check("link menu: belongs to its section and takes no row", section.linkMenu == link and section.lines[#section.lines].setting ~= link)
+	Check("link menu: belongs to its section and takes no row", section.linkMenu == link and section.settings[#section.settings] ~= link)
 	before = #errors
 	section:LinkMenu({ text = "Again", build = function() end })
 	Check("link menu: a second on a section is reported", #errors == before + 1 and section.linkMenu == link)

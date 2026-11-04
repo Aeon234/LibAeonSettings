@@ -1,5 +1,5 @@
--- The settings model: pages hold sections, sections hold settings, notes and empty places, declared two to a line
--- and drawn one to a line, or two to a line in a section declared with `columns = 2` (a choice card).
+-- The settings model: pages hold sections, sections hold settings and notes. Settings draw one to a row, or two to a row
+-- in a section declared with `columns = 2` (a choice card).
 -- Each setting is one object, made once at registration and holding no frames; its value is bound by a path in the
 -- adopter's store and a default, or by `get` and `set`. Pages draw settings with pooled views (Page.lua).
 
@@ -18,9 +18,6 @@ lib.controls = lib.controls or {}
 local pageMeta = { __index = function(_, name) return lib.PageModel[name] end }
 local sectionMeta = { __index = function(_, name) return lib.Section[name] end }
 local settingMeta = { __index = function(_, name) return lib.Setting[name] end }
-
--- An empty place in a line (`section:Skip()`).
-lib.EMPTY = lib.EMPTY or { empty = true }
 
 local SETTING_FIELDS = { id = true, label = true, description = true, path = true, default = true, get = true,
 	set = true, depends = true, blocked = true, show = true, wide = true, inherits = true, keywords = true,
@@ -84,7 +81,7 @@ end
 ---@param info table? { show?, reveal?, columns? }
 ---@return table? section
 function lib.PageModel:Section(id, title, info)
-	local section = setmetatable({ id = id, title = title, page = self, lines = {} }, sectionMeta)
+	local section = setmetatable({ id = id, title = title, page = self, settings = {}, notes = {} }, sectionMeta)
 	if info ~= nil then
 		local addonName = self.window.addonName
 		if type(info) ~= "table" then
@@ -172,31 +169,19 @@ end
 
 -- Sections ----------------------------------------------------------------------------------------------------
 
--- Puts an entry in the section's next free half, or on a line of its own when `wide`.
-local function Place(section, entry, wide)
-	local lines = section.lines
-	local last = lines[#lines]
-	if wide or not last or last.wide or last.note or last[2] ~= nil then
-		table.insert(lines, { entry, wide = wide or nil })
-	else
-		last[2] = entry
-	end
-end
-
 ---Declares a setting of a registered control kind in this section (`section:Toggle(info)` calls this).
 function lib.Section:Add(kind, info)
 	local setting = self.page:NewSetting(kind, info)
 	if setting then
 		setting.section = self
-		Place(self, setting, setting.wide)
+		table.insert(self.settings, setting)
 	end
 
 	return setting
 end
 
----Leaves the next half empty.
+---Does nothing: a section's settings draw in the order they were declared, with no empty places.
 function lib.Section:Skip()
-	Place(self, lib.EMPTY, false)
 end
 
 ---Puts a dropdown on the section's title line, right-aligned, for something done to the whole section (such as
@@ -287,18 +272,12 @@ function lib.ChoiceGrid(window, section)
 	if section.columns ~= 2 then
 		return false
 	end
-	local rows, problem = {}, nil
-	for _, line in ipairs(section.lines) do
-		for index = 1, 2 do
-			local setting = not line.note and line[index]
-			if setting and setting ~= lib.EMPTY then
-				rows[#rows + 1] = setting
-				if setting.kind ~= "Checkbox" and setting.kind ~= "Color" then
-					problem = problem or ("%s is a %s, not a checkbox or color"):format(tostring(setting.id), setting.kind)
-				elseif setting.description then
-					problem = problem or ("%s has a description"):format(tostring(setting.id))
-				end
-			end
+	local rows, problem = section.settings, nil
+	for _, setting in ipairs(rows) do
+		if setting.kind ~= "Checkbox" and setting.kind ~= "Color" then
+			problem = problem or ("%s is a %s, not a checkbox or color"):format(tostring(setting.id), setting.kind)
+		elseif setting.description then
+			problem = problem or ("%s has a description"):format(tostring(setting.id))
 		end
 	end
 	if #rows < 2 then
@@ -325,7 +304,7 @@ end
 
 ---Adds a line of text across the section, with an optional smaller second part.
 function lib.Section:Note(text, small)
-	table.insert(self.lines, { note = { text = text, small = small } })
+	table.insert(self.notes, { text = text, small = small })
 end
 
 ---Adds the library's own section at the end of the addon's first page, once per page: Reduce Motion, which is

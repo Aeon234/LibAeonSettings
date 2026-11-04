@@ -287,11 +287,6 @@ function lib.Section.Color(section, info)
 	local classColor = type(info) == "table" and info.classColor
 	if classColor ~= nil then
 		info.classColor = nil
-		local lines = section.lines
-		local last = lines[#lines]
-		if last and not last.wide and not last.note and last[2] == nil then
-			section:Skip()
-		end
 	end
 	local swatch = section:Add("Color", info)
 	if swatch and classColor ~= nil then

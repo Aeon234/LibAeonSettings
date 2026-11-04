@@ -444,23 +444,17 @@ function lib.Window:ShowPage(growIn)
 		BindSectionMenu(view, header, section)
 		self:RefreshSectionLink(header, section)
 		local block = { header = header, rows = {}, notes = {}, grid = lib.ChoiceGrid(self, section) }
-		for _, line in ipairs(section.lines) do
-			if line.note then
-				local note = Acquire(view.notes)
-				note.text:SetText(line.note.text or "")
-				note.small:SetText(line.note.small or "")
-				note.small:SetShown(line.note.small ~= nil)
-				table.insert(block.notes, note)
-			else
-				for index = 1, 2 do
-					local entry = line[index]
-					if entry and entry ~= lib.EMPTY then
-						local half = BindHalf(view, entry)
-						half.grid = block.grid
-						table.insert(block.rows, half)
-					end
-				end
-			end
+		for _, setting in ipairs(section.settings) do
+			local half = BindHalf(view, setting)
+			half.grid = block.grid
+			table.insert(block.rows, half)
+		end
+		for _, info in ipairs(section.notes) do
+			local note = Acquire(view.notes)
+			note.text:SetText(info.text or "")
+			note.small:SetText(info.small or "")
+			note.small:SetShown(info.small ~= nil)
+			table.insert(block.notes, note)
 		end
 		if not block.grid then
 			lib.OrderUnderParents(block.rows)

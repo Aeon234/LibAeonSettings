@@ -179,43 +179,40 @@ local function BuildIndex(window)
 				index[#index + 1] = sectionEntry
 			end
 			local settingWhere = section.title and (where .. " › " .. section.title) or where
-			for _, line in ipairs(section.lines) do
-				for slot = 1, 2 do
-					local setting = line[slot]
-					if type(setting) == "table" and setting.label then
-						local description = type(setting.description) == "string" and setting.description or nil
-						-- A tooltip given as text is searched with the description, without its color codes.
-						if type(setting.tooltip) == "string" then
-							local tooltip = setting.tooltip:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
-							description = description and (description .. " " .. tooltip) or tooltip
-						end
-						local entry = Entry("setting", page, setting.label, settingWhere, settingWhere, setting.keywords,
-							description)
+			for _, setting in ipairs(section.settings) do
+				if setting.label then
+					local description = type(setting.description) == "string" and setting.description or nil
+					-- A tooltip given as text is searched with the description, without its color codes.
+					if type(setting.tooltip) == "string" then
+						local tooltip = setting.tooltip:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
+						description = description and (description .. " " .. tooltip) or tooltip
+					end
+					local entry = Entry("setting", page, setting.label, settingWhere, settingWhere, setting.keywords,
+						description)
+					entry.setting = setting
+					index[#index + 1] = entry
+					if sectionEntry then
+						table.insert(sectionEntry.settings, setting)
+					end
+				end
+				-- An ordered list is found by its title and by each of its items' text, landing on the list.
+				if setting.kind == "OrderedList" then
+					local listWhere = setting.title and (settingWhere .. " › " .. setting.title) or settingWhere
+					if setting.title and not setting.label then
+						local entry = Entry("setting", page, setting.title, settingWhere, settingWhere, setting.keywords)
 						entry.setting = setting
 						index[#index + 1] = entry
 						if sectionEntry then
 							table.insert(sectionEntry.settings, setting)
 						end
 					end
-					-- An ordered list is found by its title and by each of its items' text, landing on the list.
-					if type(setting) == "table" and setting.kind == "OrderedList" then
-						local listWhere = setting.title and (settingWhere .. " › " .. setting.title) or settingWhere
-						if setting.title and not setting.label then
-							local entry = Entry("setting", page, setting.title, settingWhere, settingWhere, setting.keywords)
-							entry.setting = setting
-							index[#index + 1] = entry
-							if sectionEntry then
-								table.insert(sectionEntry.settings, setting)
-							end
-						end
-						for _, item in ipairs(setting:OrderedItems()) do
-							local entry = Entry("setting", page, item.text, listWhere, listWhere)
-							entry.setting = setting
-							index[#index + 1] = entry
-						end
-						if sectionEntry and not setting.label and not setting.title then
-							table.insert(sectionEntry.settings, setting)
-						end
+					for _, item in ipairs(setting:OrderedItems()) do
+						local entry = Entry("setting", page, item.text, listWhere, listWhere)
+						entry.setting = setting
+						index[#index + 1] = entry
+					end
+					if sectionEntry and not setting.label and not setting.title then
+						table.insert(sectionEntry.settings, setting)
 					end
 				end
 			end

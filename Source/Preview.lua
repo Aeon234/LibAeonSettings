@@ -126,12 +126,9 @@ end
 function lib.Tab:CountOverrides()
 	local count = 0
 	for _, section in ipairs(self.sections) do
-		for _, line in ipairs(section.lines) do
-			for index = 1, 2 do
-				local entry = line[index]
-				if type(entry) == "table" and entry.IsOverridden and entry:IsOverridden() then
-					count = count + 1
-				end
+		for _, setting in ipairs(section.settings) do
+			if setting:IsOverridden() then
+				count = count + 1
 			end
 		end
 	end
