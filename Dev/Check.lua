@@ -46,6 +46,7 @@ LibStub = setmetatable({
 }, { __call = function(_, major) return libraries[major] end })
 
 CreateFrame = function() return NewFrame() end
+StaticPopupDialogs = {}
 debugstack = function() return "" end
 geterrorhandler = function() return function(message) errors[#errors + 1] = message end end
 GetTime = function() return now end
@@ -102,7 +103,8 @@ function strlenutf8(text)
 
 	return count
 end
-for _, file in ipairs({ "Model", "RowLook", "PageLayout", "Details", "Search", "Landing", "Undo", "TextInput", "Dropdown" }) do
+for _, file in ipairs({ "Model", "RowLook", "PageLayout", "Controls", "Toggle", "Checkbox", "Slider", "Color",
+	"OrderedList", "Details", "Search", "Landing", "Undo", "TextInput", "Dropdown" }) do
 	dofile(root .. "/Source/" .. file .. ".lua")
 end
 
@@ -253,14 +255,6 @@ do
 end
 
 -- The settings model
-
-local function Register(kind, fields)
-	lib:RegisterControl(kind, { fields = fields, Create = function() end })
-end
-Register("Toggle")
-Register("Slider", { min = true, max = true, step = true })
-Register("Color", { hasOpacity = true })
-Register("Checkbox")
 
 local function NewWindow(store)
 	local window = setmetatable({ addonName = "Check", declaration = { store = store }, pages = {}, pageOrder = {} },
@@ -783,7 +777,6 @@ end
 -- Page layout
 
 do
-	lib.ROW_INSET = 16
 	local ROW, TALL, TITLE = lib.ROW_HEIGHT, lib.TALL_ROW_HEIGHT, lib.SECTION_TITLE_HEIGHT
 	local WIDTH = 600
 	local function Row(revealed, lines, indent, height)
@@ -1676,6 +1669,97 @@ do
 	Update(flash, 0.01)
 	Check("flash: it stops at once when its row goes", not flash.shown)
 	CreateFrame = savedCreateFrame
+end
+
+-- What a control kind declares
+
+do
+	local controls = lib.controls
+	Check("traits: a choice card holds checkboxes and swatches", controls.Checkbox.choiceCard and controls.Color.choiceCard)
+	Check("traits: and no other kind", not controls.Toggle.choiceCard and not controls.Slider.choiceCard
+		and not controls.Dropdown.choiceCard and not controls.TextInput.choiceCard and not controls.OrderedList.choiceCard)
+	Check("traits: sliders and swatches merge in Undo", controls.Slider.merges and controls.Color.merges)
+	Check("traits: and no other kind", not controls.Toggle.merges and not controls.Checkbox.merges
+		and not controls.Dropdown.merges and not controls.TextInput.merges and not controls.OrderedList.merges)
+	Check("traits: only the ordered list brings its own search text", controls.OrderedList.Search and not controls.Slider.Search
+		and not controls.Checkbox.Search and not controls.Dropdown.Search)
+
+	local function Kind(name, info)
+		info.Create = function() end
+		lib:RegisterControl(name, info)
+	end
+	Kind("CheckPlain", {})
+	Kind("CheckCard", { choiceCard = true })
+	Kind("CheckMerging", { merges = true })
+	Kind("CheckSearched", { Search = function() return "Named Thing", { { text = "Hidden Word" } } end })
+
+	local store = {}
+	local window = NewWindow(store)
+	local page = NewPage(window, "traits", "Traits")
+
+	local card = page:Section("card", "Card", { columns = 2 })
+	card:CheckCard({ id = "c1", label = "One", path = "c1" })
+	card:CheckCard({ id = "c2", label = "Two", path = "c2" })
+	local before = #errors
+	Check("traits: a choice card holds any kind that declares it", lib.ChoiceGrid(window, card) and #errors == before)
+	local plainCard = page:Section("plainCard", "Plain Card", { columns = 2 })
+	plainCard:CheckPlain({ id = "p1", label = "One", path = "p1" })
+	plainCard:CheckPlain({ id = "p2", label = "Two", path = "p2" })
+	Check("traits: and refuses a kind that does not, saying so", not lib.ChoiceGrid(window, plainCard)
+		and errors[#errors]:find("is a CheckPlain, which a choice card cannot hold", 1, true) ~= nil)
+
+	local steps = page:Section("steps", "Steps")
+	local merging = steps:CheckMerging({ id = "merging", label = "Merging", path = "merging" })
+	local plain = steps:CheckPlain({ id = "plain", label = "Plain", path = "plain" })
+	merging:Request(1)
+	now = now + 0.1
+	merging:Request(2)
+	Check("traits: saves of a kind that merges, moments apart, are one step", #window.undoSteps == 1)
+	window:ClearUndo()
+	plain:Request(1)
+	now = now + 0.1
+	plain:Request(2)
+	Check("traits: saves of a kind that does not are two", #window.undoSteps == 2)
+
+	local function Find(text, label)
+		for _, entry in ipairs(window:FindSettings(text)) do
+			if entry.label == label then
+				return entry
+			end
+		end
+	end
+	local lists = page:Section("lists", "Lists")
+	local items = { { value = "a", text = "Alpha Item" }, { value = "b", text = "Beta Item" } }
+	local titled = lists:OrderedList({ id = "titled", title = "Bar Order", path = "titled", default = { "a", "b" },
+		items = items })
+	local entry = Find("bar order", "Bar Order")
+	Check("search: an ordered list is found by its title, landing on it", entry and entry.setting == titled)
+	entry = Find("beta item", "Beta Item")
+	Check("search: and by an item's text, landing on it", entry and entry.setting == titled
+		and entry.where:find("Bar Order", 1, true) ~= nil)
+	entry = Find("lists", "Lists")
+	Check("search: its section is found, landing on it", entry and entry.kind == "section" and entry.setting == titled)
+
+	local bare = page:Section("bare", "Bare Section")
+	local untitled = bare:OrderedList({ id = "untitled", path = "untitled", default = { "c" },
+		items = { { value = "c", text = "Gamma Item" } } })
+	entry = Find("bare section", "Bare Section")
+	Check("search: a section holding only an untitled list still counts it", entry and entry.setting == untitled)
+
+	local named = page:Section("named", "Named"):CheckSearched({ id = "searched", path = "searched" })
+	entry = Find("hidden word", "Hidden Word")
+	Check("search: any kind with its own search text is found by it", entry and entry.setting == named)
+	entry = Find("named thing", "Named Thing")
+	Check("search: and by its title", entry and entry.setting == named)
+
+	local shown = page:Section("shown", "Shown"):Slider({ id = "shownSlider", label = "Only Slider", path = "shownSlider" })
+	local count = 0
+	for _, found in ipairs(window:FindSettings("only slider")) do
+		if found.setting == shown then
+			count = count + 1
+		end
+	end
+	Check("search: a kind without its own search text adds nothing extra", count == 1)
 end
 
 -- Translations: every locale file names only keys Locale.lua has, keeps their format specifiers in order, and

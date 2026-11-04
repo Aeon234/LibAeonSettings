@@ -27,7 +27,9 @@ local MAX_CHAIN = 16
 
 ---Registers a control kind: `section:<Kind>(info)` declares a setting drawn with it. `info.fields` lists the fields
 ---the kind adds; `info.Create(half)` makes its view (see Page.lua for the view contract); `info.Init(setting)`, if
----given, runs on each new setting before its value binding is checked.
+---given, runs on each new setting before its value binding is checked. `info.choiceCard`: a choice card can hold it.
+---`info.merges`: saves moments apart are one Undo step. `info.Search(setting)`, if given, returns a title and a list of
+---items with `text`, which search also finds it by.
 function lib:RegisterControl(kind, info)
 	self.controls[kind] = info
 	self.Section[kind] = function(section, settingInfo)
@@ -265,8 +267,8 @@ local function OrderProblem(section, rows)
 end
 
 ---Whether a section draws as a choice card, two rows to a line: it asks for `columns = 2`, and every setting in it is a
----checkbox or color swatch with no description, two or more of them, in an order that keeps a row's leaving from
----moving another. A section that asks but breaks a rule is reported once and drawn one to a line.
+---kind a choice card can hold (`choiceCard`) with no description, two or more of them, in an order that keeps a row's
+---leaving from moving another. A section that asks but breaks a rule is reported once and drawn one to a line.
 ---@return boolean
 function lib.ChoiceGrid(window, section)
 	if section.columns ~= 2 then
@@ -274,8 +276,8 @@ function lib.ChoiceGrid(window, section)
 	end
 	local rows, problem = section.settings, nil
 	for _, setting in ipairs(rows) do
-		if setting.kind ~= "Checkbox" and setting.kind ~= "Color" then
-			problem = problem or ("%s is a %s, not a checkbox or color"):format(tostring(setting.id), setting.kind)
+		if not lib.controls[setting.kind].choiceCard then
+			problem = problem or ("%s is a %s, which a choice card cannot hold"):format(tostring(setting.id), setting.kind)
 		elseif setting.description then
 			problem = problem or ("%s has a description"):format(tostring(setting.id))
 		end

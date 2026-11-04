@@ -277,6 +277,8 @@ local function FormatColor(setting, color)
 end
 
 lib:RegisterControl("Color", {
+	choiceCard = true,
+	merges = true,
 	fields = { hasOpacity = true, classColor = true },
 	Format = FormatColor,
 	Create = function(half) return lib:CreateColorSwatch(half) end,

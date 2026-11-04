@@ -12,8 +12,7 @@ end
 local L = lib.L
 
 local BUTTON_WIDTH, BUTTON_HEIGHT, BUTTON_GAP, BUTTON_RIGHT = 110, 30, 10, 10 -- kit values
-local MERGE_SECONDS = 1.5 -- a slider or color saved again this soon after is the same step
-local MERGES = { Slider = true, Color = true }
+local MERGE_SECONDS = 1.5 -- a control that merges, saved again this soon after, is the same step
 local MAX_STEPS = 100
 
 lib.UndoHandlers = lib.UndoHandlers or {}
@@ -49,7 +48,7 @@ function lib.Window:RecordUndo(setting, before, after, gesture)
 	local last = history[#history]
 	local now = GetTime()
 	local joins
-	if last and not last.group and last.changes[1].setting == setting and MERGES[setting.kind] then
+	if last and not last.group and last.changes[1].setting == setting and lib.controls[setting.kind].merges then
 		if gesture then
 			joins = last.gesture == gesture
 		else

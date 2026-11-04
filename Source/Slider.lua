@@ -198,6 +198,7 @@ function Handlers.Typed(view)
 end
 
 lib:RegisterControl("Slider", {
+	merges = true,
 	fields = { min = true, max = true, step = true, format = true },
 	Format = Format,
 	Create = function(half) return lib:CreateSlider(half) end,

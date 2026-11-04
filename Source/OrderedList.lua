@@ -256,6 +256,7 @@ end
 lib:RegisterControl("OrderedList", {
 	fields = { title = true, items = true, enabled = true },
 	Format = function() return L.EARLIER_ORDER end,
+	Search = function(setting) return setting.title, setting:OrderedItems() end,
 	Init = function(setting)
 		setting.wide = true
 		setting.height = ROW_HEIGHT

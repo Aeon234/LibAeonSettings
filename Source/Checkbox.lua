@@ -53,6 +53,7 @@ function lib.Checkbox:GetWidth()
 end
 
 lib:RegisterControl("Checkbox", {
+	choiceCard = true,
 	Format = function(_, value) return value and lib.L.ON or lib.L.OFF end,
 	Create = function(half) return lib:CreateCheckbox(half) end,
 })

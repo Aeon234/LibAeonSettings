@@ -193,23 +193,25 @@ local function BuildIndex(window)
 						table.insert(sectionEntry.settings, setting)
 					end
 				end
-				-- An ordered list is found by its title and by each of its items' text, landing on the list.
-				if setting.kind == "OrderedList" then
-					local listWhere = setting.title and (settingWhere .. " › " .. setting.title) or settingWhere
-					if setting.title and not setting.label then
-						local entry = Entry("setting", page, setting.title, settingWhere, settingWhere, setting.keywords)
+				-- A control with its own text is found by its title and by each item's text, landing on the control.
+				local Search = lib.controls[setting.kind].Search
+				if Search then
+					local title, items = Search(setting)
+					local listWhere = title and (settingWhere .. " › " .. title) or settingWhere
+					if title and not setting.label then
+						local entry = Entry("setting", page, title, settingWhere, settingWhere, setting.keywords)
 						entry.setting = setting
 						index[#index + 1] = entry
 						if sectionEntry then
 							table.insert(sectionEntry.settings, setting)
 						end
 					end
-					for _, item in ipairs(setting:OrderedItems()) do
+					for _, item in ipairs(items) do
 						local entry = Entry("setting", page, item.text, listWhere, listWhere)
 						entry.setting = setting
 						index[#index + 1] = entry
 					end
-					if sectionEntry and not setting.label and not setting.title then
+					if sectionEntry and not setting.label and not title then
 						table.insert(sectionEntry.settings, setting)
 					end
 				end
