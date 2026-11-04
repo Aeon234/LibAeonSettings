@@ -514,6 +514,9 @@ function lib:ShowEditUI(opening)
 		self:StopOpening()
 	end
 	ui.screen:Show()
+	self.editLayoutEvents:RegisterEvent("UI_SCALE_CHANGED")
+	self.editLayoutEvents:RegisterEvent("DISPLAY_SIZE_CHANGED")
+	self.editLayoutEvents:RegisterEvent("NOTCHED_DISPLAY_MODE_CHANGED")
 	self:RefreshGrid()
 	self:RefreshToolbar()
 	self:RefreshMovers()
@@ -561,16 +564,14 @@ function lib:FinishHideEditUI()
 	self:StopOpening()
 	self.ui.screen:Hide()
 	self.ui.toolbar:Hide()
+	self.editLayoutEvents:UnregisterAllEvents()
 	self:RefreshEffects()
 	self:RefreshMovers()
 end
 
--- The grid follows UI scale and resolution changes while edit mode is open.
+-- The grid follows UI scale and resolution changes while edit mode's screen shows; its events are registered only then.
 local layoutEvents = lib.editLayoutEvents or CreateFrame("Frame")
 lib.editLayoutEvents = layoutEvents
-layoutEvents:RegisterEvent("UI_SCALE_CHANGED")
-layoutEvents:RegisterEvent("DISPLAY_SIZE_CHANGED")
-layoutEvents:RegisterEvent("NOTCHED_DISPLAY_MODE_CHANGED")
 layoutEvents:SetScript("OnEvent", function()
 	RelayoutEditScreen()
 	C_Timer.After(0, RelayoutEditScreen)

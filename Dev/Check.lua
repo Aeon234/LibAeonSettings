@@ -437,6 +437,33 @@ do
 	Check("spring: it comes to rest on the new target and reports it once", spring.value == 0 and not spring:IsMoving()
 		and rests == 1 and reports[#reports] == 0)
 
+	local late = lib:CreateSpring(0, function() end)
+	local started = false
+	local starter = lib:CreateSpring(0, function()
+		if not started then
+			started = true
+			late:To(1)
+		end
+	end)
+	starter:To(1)
+	lib.MotionHandlers.Update(1 / 60)
+	Check("spring: one started from another's step moves from the next frame", late:IsMoving() and late.value == 0)
+	local stepping = lib.motion.stepping
+	lib.MotionHandlers.Update(1 / 60)
+	Check("spring: frames share one list, left empty", lib.motion.stepping == stepping and next(stepping) == nil
+		and late.value > 0)
+	late:Stop()
+	starter:Stop()
+	local stopper, stopped
+	stopped = lib:CreateSpring(0, function() end)
+	stopper = lib:CreateSpring(0, function() stopped:Stop() end)
+	stopped:To(1)
+	stopper:To(1)
+	lib.MotionHandlers.Update(1 / 60)
+	Check("spring: one stopped from another's step stays stopped", not stopped:IsMoving())
+	stopper:Stop()
+	lib.MotionHandlers.Update(1 / 60)
+
 	Check("reduce motion: off by default", lib:ReduceMotion() == false)
 	spring:To(1)
 	lib:SetReduceMotion(true)
