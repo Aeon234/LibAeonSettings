@@ -29,6 +29,7 @@
 	<Script file="Source\Scroll.lua" />
 	<Script file="Source\Sidebar.lua" />
 	<Script file="Source\Model.lua" />
+	<Script file="Source\RowLook.lua" />
 	<Script file="Source\Controls.lua" />
 	<Script file="Source\Toggle.lua" />
 	<Script file="Source\Checkbox.lua" />

@@ -669,19 +669,6 @@ function lib.Setting:Activity()
 	return true
 end
 
----@return boolean off a setting up this one's `depends` chain, in its own section, is off
-function lib.ParentOffInSection(setting)
-	local parent, depth = setting:Parent(), 0
-	while parent and depth < 16 do
-		if parent.section == setting.section and not parent:GetValue() then
-			return true
-		end
-		parent, depth = parent:Parent(), depth + 1
-	end
-
-	return false
-end
-
 ---Puts each row (anything with a `setting`) that depends on another row of its section directly under it, after any
 ---earlier ones, keeping the declared order otherwise. Rows in a dependency loop keep their place.
 ---@param rows table[] reordered in place

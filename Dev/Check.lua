@@ -102,7 +102,7 @@ function strlenutf8(text)
 
 	return count
 end
-for _, file in ipairs({ "Model", "Details", "Search", "Undo", "TextInput", "Dropdown" }) do
+for _, file in ipairs({ "Model", "RowLook", "Details", "Search", "Undo", "TextInput", "Dropdown" }) do
 	dofile(root .. "/Source/" .. file .. ".lua")
 end
 
@@ -475,6 +475,14 @@ do
 	lib.windows = savedWindows
 end
 
+-- Whether a row not yet drawn belongs on the page.
+local function Wanted(setting)
+	local look = {}
+	lib.RowLook(setting, look)
+
+	return look.wanted
+end
+
 -- Cards: rows under their parents, choice cards
 
 do
@@ -507,9 +515,9 @@ do
 	Check("cards: rows in a dependency loop keep their place", #loop == 3)
 
 	page.settings.show:SetValue(false)
-	Check("cards: a row whose parent in its section is off leaves", lib.ParentOffInSection(page.settings.child)
-		and lib.ParentOffInSection(page.settings.grandchild))
-	Check("cards: a row whose parent is in another section stays, dimmed", not lib.ParentOffInSection(outside)
+	Check("cards: a row whose parent in its section is off leaves", not Wanted(page.settings.child)
+		and not Wanted(page.settings.grandchild))
+	Check("cards: a row whose parent is in another section stays, dimmed", Wanted(outside)
 		and select(3, outside:Activity()) == "depends")
 
 	local before = #errors
@@ -580,7 +588,7 @@ do
 	local hover = more:Checkbox({ id = "hover", label = "Hover Class Color", path = "hover", depends = "class",
 		details = "text" })
 	Check("details: closed at first, holding its settings away", text:GetValue() == false
-		and lib.ParentOffInSection(font) and lib.ParentOffInSection(hover))
+		and not Wanted(font) and not Wanted(hover))
 	local rows = {}
 	for _, setting in ipairs({ font, more.lines[1][1], classColor, text, hover }) do
 		rows[#rows + 1] = { setting = setting }
@@ -590,7 +598,7 @@ do
 		and rows[4].setting == classColor and rows[5].setting == hover)
 	text:SetValue(true)
 	Check("details: opened, its settings are there; one depending on another inside follows that one",
-		not lib.ParentOffInSection(font) and lib.ParentOffInSection(hover))
+		Wanted(font) and not Wanted(hover))
 	Check("details: open or closed lives in the window for the session, not in the store",
 		detailsWindow.openDetails["clock/text"] == true and store.text == nil and next(store) == nil)
 	Check("details: a row sits in one step for each details row it is inside, whatever it depends on",
@@ -605,6 +613,154 @@ do
 	Check("details: rows naming each other still give an indent", type(lib.DetailsIndent(loopA)) == "number")
 	Check("details: only the details row heads what is under it", lib.controls.Details.heads == true
 		and not lib.controls.Checkbox.heads)
+end
+
+-- Row looks
+
+do
+	local store = { useClass = true, gate = true, flip = true }
+	local window = NewWindow(store)
+	local page = NewPage(window, "looks", "Looks")
+	local section = page:Section("rows", "Rows")
+	local other = page:Section("other", "Other")
+	local function Look(setting, inGrid, revealed)
+		local look = {}
+		local changed = lib.RowLook(setting, look, inGrid, revealed)
+
+		return look, changed
+	end
+	section:Toggle({ id = "parent", label = "Parent", path = "parent", default = false })
+
+	local look = Look(section:Toggle({ id = "plain", label = "Plain", path = "plain", default = true }))
+	Check("row look: a plain row is active and wanted, with nothing marked or under its label", look.active
+		and look.wanted and not look.labelDimmed and not look.controlDimmed and not look.pageOff and look.marker == nil
+		and look.inheritedLine == nil and look.secondLine == nil and look.lines == 0 and look.reason == nil
+		and look.tooltipReason == nil)
+
+	local offPage = NewPage(window, "off", "Off", { switch = { path = "offPage", default = false } })
+	local offSection = offPage:Section("rows", "Rows")
+	look = Look(offSection:Toggle({ id = "row", label = "Row", path = "offRow" }))
+	Check("row look: under a page switch that is off, a row loses its color only, with no reason", not look.active
+		and look.wanted and look.pageOff and not look.labelDimmed and not look.controlDimmed and look.reason == nil
+		and look.secondLine == nil and look.tooltipReason == nil)
+
+	look = Look(section:Toggle({ id = "inside", label = "Inside", path = "inside", depends = "parent" }))
+	Check("row look: a row whose parent in its section is off is not wanted", not look.active and not look.wanted)
+
+	look = Look(other:Toggle({ id = "across", label = "Across", path = "across", depends = "looks/parent" }))
+	Check("row look: a row whose parent is in another section stays, dimmed with the reason", not look.active
+		and look.wanted and look.labelDimmed and look.controlDimmed and not look.pageOff and look.secondLine == "reason"
+		and look.reason ~= nil and look.tooltipReason == look.reason and look.lines == 1)
+
+	local swatch = section:Color({ id = "swatch", label = "Swatch", path = "swatch" })
+	swatch.classSetting = section:Checkbox({ id = "useClass", label = "Use Class Color", path = "useClass" })
+	look = Look(swatch)
+	Check("row look: a swatch following the class color dims only its control, with no reason", not look.active
+		and look.wanted and look.controlDimmed and not look.labelDimmed and not look.pageOff and look.reason == nil
+		and look.secondLine == nil and look.tooltipReason == nil)
+
+	look = Look(section:Toggle({ id = "blocked", label = "Blocked", path = "blocked",
+		blocked = function() return true end }))
+	Check("row look: blocked with no sentence dims with no reason", not look.active and look.labelDimmed
+		and look.reason == nil and look.secondLine == nil and look.lines == 0)
+	look = Look(section:Toggle({ id = "blockedWhy", label = "Blocked", path = "blockedWhy",
+		blocked = function() return "In combat." end }))
+	Check("row look: blocked with a sentence shows it", look.labelDimmed and look.reason == "In combat."
+		and look.secondLine == "reason" and look.tooltipReason == "In combat." and look.lines == 1)
+	look = Look(section:Toggle({ id = "blockedSaid", label = "Blocked", path = "blockedSaid", description = "Words.",
+		blocked = function() return true end }))
+	Check("row look: blocked with no sentence keeps its description", look.labelDimmed
+		and look.secondLine == "description" and look.lines == 1)
+
+	section:Toggle({ id = "gate", label = "Gate", path = "gate" })
+	local leaver = section:Toggle({ id = "leaver", label = "Leaver", path = "leaver", depends = "gate" })
+	look = Look(leaver)
+	store.gate = false
+	lib.RowLook(leaver, look, false, 0.5)
+	Check("row look: a row leaving keeps its undimmed look while its control stops answering", not look.wanted
+		and not look.active and not look.labelDimmed and not look.controlDimmed and look.reason == nil
+		and look.secondLine == nil and not look.pageOff)
+	Check("row look: and a choice card's tooltip still reads why now", look.tooltipReason ~= nil)
+	look = Look(leaver, false, 0)
+	Check("row look: a row already gone takes the look of its state", not look.wanted and look.labelDimmed
+		and look.reason ~= nil and look.secondLine == "reason")
+
+	local sentence, shown = "In combat.", true
+	local fading = section:Toggle({ id = "fading", label = "Fading", path = "fading",
+		show = function() return shown end, blocked = function() return sentence end })
+	look = Look(fading)
+	shown, sentence = false, "Later."
+	lib.RowLook(fading, look, false, 1)
+	Check("row look: a dimmed row leaving keeps its dimming and its reason", look.labelDimmed and look.controlDimmed
+		and look.reason == "In combat." and look.secondLine == "reason" and look.tooltipReason == "Later.")
+
+	local offShown = true
+	local offLeaver = offSection:Toggle({ id = "leaver", label = "Leaver", path = "offLeaver",
+		show = function() return offShown end })
+	look = Look(offLeaver)
+	offShown = false
+	lib.RowLook(offLeaver, look, false, 1)
+	Check("row look: under a switch that is off, a row leaving keeps its color", not look.wanted and not look.active
+		and not look.pageOff)
+	look = Look(offLeaver, false, 0)
+	Check("row look: and one already gone has lost it", look.pageOff)
+
+	local following = section:Toggle({ id = "following", label = "Following", path = "own", inherits = "base" })
+	look = Look(following)
+	Check("row look: a row following a shared value names it and reserves its line", look.marker == nil
+		and look.inheritedLine == "follows" and look.lines == 1)
+	store.own = true
+	look = Look(following)
+	Check("row look: overridden, it is marked and takes the same room", look.marker == "overridden"
+		and look.inheritedLine == "overridden" and look.lines == 1)
+	local resettable = section:Toggle({ id = "resettable", label = "Resettable", path = "resettable", default = true,
+		resettable = true })
+	Check("row look: a resettable row at its default has no marker", Look(resettable).marker == nil)
+	store.resettable = false
+	look = Look(resettable)
+	Check("row look: changed from its default, it is marked with no inherited line", look.marker == "changed"
+		and look.inheritedLine == nil and look.lines == 0)
+	store.resettable = true
+	Check("row look: picked back to its default, the mark goes", Look(resettable).marker == nil)
+
+	look = Look(section:Toggle({ id = "said", label = "Said", path = "said", description = "Words." }))
+	Check("row look: a description takes a line", look.secondLine == "description" and look.lines == 1)
+	look = Look(section:Toggle({ id = "both", label = "Both", path = "both", description = "Words.", inherits = "base" }))
+	Check("row look: a description and a shared value take two", look.secondLine == "description"
+		and look.inheritedLine == "follows" and look.lines == 2)
+	look = Look(other:Toggle({ id = "replaced", label = "Replaced", path = "replaced", description = "Words.",
+		depends = "looks/parent" }))
+	Check("row look: a reason takes the description's place", look.secondLine == "reason" and look.lines == 1)
+
+	store.overriddenChoice = true
+	look = Look(other:Checkbox({ id = "choice", label = "Choice", path = "overriddenChoice", inherits = "base",
+		depends = "looks/parent" }), true)
+	Check("row look: a choice card's row has no lines, keeps its marker and leaves its reason to the tooltip",
+		look.lines == 0 and look.secondLine == nil and look.inheritedLine == nil and look.marker == "overridden"
+		and look.labelDimmed and look.tooltipReason ~= nil)
+
+	local changer = section:Toggle({ id = "changer", label = "Changer", path = "changer", depends = "flip",
+		blocked = function() return store.changerWhy end })
+	section:Toggle({ id = "flip", label = "Flip", path = "flip" })
+	local changed
+	look, changed = Look(changer)
+	Check("row look: a row's first look lays the page out", changed)
+	Check("row look: the same look again does not", not lib.RowLook(changer, look))
+	store.changerWhy = "No."
+	Check("row look: a line more lays the page out", lib.RowLook(changer, look))
+	Check("row look: and the same again does not", not lib.RowLook(changer, look))
+	store.flip = false
+	Check("row look: a row no longer wanted lays the page out", lib.RowLook(changer, look))
+
+	wipe(look)
+	Check("row look: a wiped look counts as a first look", lib.RowLook(changer, look))
+	store.flip, store.changerWhy = true, nil
+	lib.RowLook(changer, look)
+	store.flip = false
+	wipe(look)
+	lib.RowLook(changer, look, false, 0.5)
+	Check("row look: a wiped look keeps no old dimming or reason from before", not look.labelDimmed
+		and look.reason == nil and look.secondLine == nil)
 end
 
 -- Media pickers

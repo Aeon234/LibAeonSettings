@@ -156,8 +156,10 @@ local function ResetHalf(half)
 	if half.reveal then
 		half.reveal:Stop()
 	end
-	half.setting, half.view, half.want, half.revealed, half.grid, half.reason = nil, nil, nil, nil, nil, nil
-	half.looksInactive, half.looksReason = nil, nil
+	if half.look then
+		wipe(half.look)
+	end
+	half.setting, half.view, half.revealed, half.grid = nil, nil, nil, nil
 	half:SetAlpha(1)
 	half:SetClipsChildren(false)
 end
@@ -489,25 +491,12 @@ end
 ---Redraws one row's state. Returns true when its visibility or height changed, so the page needs laying out again.
 local function RefreshHalf(half)
 	local setting, control = half.setting, half.view
-	local wasWant, wasLines = half.want, half.lines
-	local active, reason, cause = setting:Activity()
-	-- A row whose parent in its own card is off leaves.
-	half.want = setting:IsShown() and not (cause == "depends" and lib.ParentOffInSection(setting))
-	local rowInactive = not active and cause ~= "page" and cause ~= "class"
-	-- A row on its way out keeps the look it had, so its exit shows no dimming or inactive reason; its control still
-	-- stops answering at once.
-	local leaving = not half.want and (half.revealed or 0) > 0
-	local looksInactive, looksReason = rowInactive, reason
-	if leaving then
-		looksInactive, looksReason = half.looksInactive, half.looksReason
-	else
-		half.looksInactive, half.looksReason = rowInactive, reason
-	end
-	-- A swatch following the class color dims only its control: the label stays and needs no reason.
-	local controlDimmed = looksInactive or cause == "class"
+	local look = half.look or {}
+	half.look = look
+	local layoutChanged = lib.RowLook(setting, look, half.grid, half.revealed)
+	local active = look.active
 	-- Desaturate before SetActive, which may set its own (Blizzard's slider dims a step arrow at the range's end).
-	local desaturation = controlDimmed and INACTIVE_DESATURATION or not active and not leaving and PAGE_OFF_DESATURATION
-		or 0
+	local desaturation = look.controlDimmed and INACTIVE_DESATURATION or look.pageOff and PAGE_OFF_DESATURATION or 0
 	if control.desaturation ~= desaturation then
 		control.desaturation = desaturation
 		if control.Desaturate then
@@ -518,45 +507,32 @@ local function RefreshHalf(half)
 	end
 	control:SetActive(active)
 	half.blocker:SetShown(not active)
-	half.label:SetAlpha(looksInactive and INACTIVE_ALPHA or 1)
-	-- A row following the shared value names its source; changing it overrides it (◆, ↺, the inherited value).
-	-- A resettable row changed from its default shows ↺ alone, in the same place.
-	local overridden = setting:IsOverridden()
-	local changed = not overridden and setting:IsChangedFromDefault()
-	control.frame:SetAlpha(controlDimmed and INACTIVE_ALPHA or 1)
-	half.gutter:SetShown(overridden or changed)
-	half.diamond:SetShown(overridden)
-	half.gutter:SetAlpha(looksInactive and INACTIVE_ALPHA or 1)
+	half.label:SetAlpha(look.labelDimmed and INACTIVE_ALPHA or 1)
+	control.frame:SetAlpha(look.controlDimmed and INACTIVE_ALPHA or 1)
+	half.gutter:SetShown(look.marker ~= nil)
+	half.diamond:SetShown(look.marker == "overridden")
+	half.gutter:SetAlpha(look.labelDimmed and INACTIVE_ALPHA or 1)
 	half.undo:SetEnabled(active)
-	if overridden then
+	if look.inheritedLine == "overridden" then
 		half.inherited:SetFormattedText("%s: %s", setting.inherits.from, setting:FormatValue(setting:InheritedValue()))
 		half.inherited:Show()
-	elseif setting.inherits then
+	elseif look.inheritedLine == "follows" then
 		half.inherited:SetFormattedText(L.FOLLOWS, setting.inherits.from)
 		half.inherited:Show()
 	else
 		half.inherited:Hide()
 	end
-	-- A choice-card row has no second line: its reason shows in its tooltip.
-	half.reason = rowInactive and reason or nil
-	if half.grid then
-		half.small:Hide()
-		half.inherited:Hide()
-	elseif looksInactive and looksReason then
-		half.small:SetText(looksReason)
+	if look.secondLine == "reason" then
+		half.small:SetText(look.reason)
 		half.small:SetTextColor(lib:GetColor("destructive"))
 		half.small:Show()
-	elseif setting.description then
+	elseif look.secondLine == "description" then
 		half.small:SetText(setting.description)
 		half.small:SetTextColor(lib:GetColor("secondary"))
 		half.small:Show()
 	else
 		half.small:Hide()
 	end
-	-- A row that can be overridden always keeps room for the inherited line, so overriding never resizes it or
-	-- moves its label.
-	half.lines = half.grid and 0 or (half.small:IsShown() and 1 or 0) + (setting.inherits and 1 or 0)
-	half.tall = half.lines > 0
 	half.inherited:ClearAllPoints()
 	half.inherited:SetPoint("TOPLEFT", half.small:IsShown() and half.small or half.label, "BOTTOMLEFT")
 
@@ -567,13 +543,13 @@ local function RefreshHalf(half)
 
 	Handlers.Reveal(half)
 
-	return half.want ~= wasWant or half.lines ~= wasLines
+	return layoutChanged
 end
 
 -- Moves a row toward its wanted visibility: at once while the page settles or the window is hidden, else on a
 -- spring that lays the page out again on every step. `revealed` runs 0 (gone) to 1 (full height).
 function Handlers.Reveal(half)
-	local target = half.want and 1 or 0
+	local target = half.look.wanted and 1 or 0
 	local view = half.pageView
 	if not half.reveal then
 		half.reveal = lib:CreateSpring(target, function(value)
@@ -628,6 +604,13 @@ function lib.Window:RefreshStates()
 	return layoutChanged
 end
 
+-- How many lines sit under a row's label. A row an older copy built has no look until it is next refreshed.
+local function LinesOf(half)
+	local look = half.look
+
+	return look and look.lines or 0
+end
+
 local function PlaceHalf(half, child, left, y, width, height)
 	half:ClearAllPoints()
 	half:SetPoint("TOPLEFT", child, "TOPLEFT", left, -y)
@@ -641,8 +624,9 @@ local function PlaceHalf(half, child, left, y, width, height)
 	half.small:SetWidth(labelWidth)
 	half.inherited:SetWidth(labelWidth)
 	half.label:ClearAllPoints()
-	if half.tall then
-		half.label:SetPoint("TOPLEFT", half, "LEFT", labelLeft, (LABEL_HEIGHT + SMALL_HEIGHT * half.lines) / 2)
+	local lines = LinesOf(half)
+	if lines > 0 then
+		half.label:SetPoint("TOPLEFT", half, "LEFT", labelLeft, (LABEL_HEIGHT + SMALL_HEIGHT * lines) / 2)
 	else
 		half.label:SetPoint("LEFT", half, "LEFT", labelLeft, 0)
 	end
@@ -709,7 +693,7 @@ function lib.Window:LayoutPage()
 							Rule(view, lib.COLOR.separator, ruleLeft, y, width - ruleLeft, 1, share)
 							y = y + share
 						end
-						local height = half.tall and TALL_HEIGHT or ROW_HEIGHT
+						local height = LinesOf(half) > 0 and TALL_HEIGHT or ROW_HEIGHT
 						if half.setting.height then
 							height = math.max(height, half.setting.height + 16)
 						end
@@ -930,8 +914,9 @@ function Handlers.LabelEnter(half)
 		local red = reason and half.small:GetText() == reason
 		lines[#lines + 1] = { half.small:GetText(), lib:GetColor(red and "destructive" or "text") }
 	end
-	if half.grid and half.reason then
-		lines[#lines + 1] = { half.reason, lib:GetColor("destructive") }
+	local tooltipReason = half.grid and half.look and half.look.tooltipReason
+	if tooltipReason then
+		lines[#lines + 1] = { tooltipReason, lib:GetColor("destructive") }
 	end
 	if half.inherited:IsShown() and half.inherited:IsTruncated() then
 		lines[#lines + 1] = { half.inherited:GetText(), 1, 1, 1 }
