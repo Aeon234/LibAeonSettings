@@ -142,7 +142,7 @@ function Harness:Register()
 		title = "LibAeonSettings Harness",
 		version = "dev",
 		store = function() return Harness:Profile() end,
-		write = function(path, value) Harness:Write(path, value) end,
+		write = function(path, value) return Harness:Write(path, value) end,
 		account = function() return LibAeonSettingsDevDB end,
 	})
 	self:DeclarePages()
@@ -1284,8 +1284,11 @@ function COMMANDS.media()
 end
 
 -- Writes a setting's value into the profile by its path, as an adopter's own store would (Levelbound's Profile:Set),
--- and tells anyone listening: `/lasdev writes` echoes each one to chat.
+-- and tells anyone listening: `/lasdev writes` echoes each one to chat. `/lasdev refuse` turns every write down instead.
 function Harness:Write(path, value)
+	if self.refuseWrites then
+		return false, "the harness is refusing writes"
+	end
 	local node = self:Profile()
 	local keys = { strsplit(".", path) }
 	for index = 1, #keys - 1 do
@@ -1327,6 +1330,11 @@ function COMMANDS.writes()
 	Print("Echoing writes %s (%d so far).", Harness.echoWrites and "on" or "off", Harness.writeCount or 0)
 end
 
+function COMMANDS.refuse()
+	Harness.refuseWrites = not Harness.refuseWrites
+	Print("Refusing writes %s.", Harness.refuseWrites and "on" or "off")
+end
+
 -- Prints the library's adopter events as they fire: OnOpen, OnClose and OnPageShown.
 function COMMANDS.callbacks()
 	Harness.watching = not Harness.watching
@@ -1349,7 +1357,7 @@ function COMMANDS.motion()
 end
 
 function COMMANDS.help()
-	Print("/lasdev edit [second] | hide <key> | pend <key> <dx> <dy> | move | show | set <key> <POINT> <x> <y> | reset [key] | profile <name> | off <key> | scale <key> <n> | bad | media | tip | combat [key] [dx] [dy] | settings | status [text] | block | lock | shadow [on|off|size n|red|below|probe] | sound <kit> | icons | tint <percent> | writes | motion | callbacks | pin | strip | places")
+	Print("/lasdev edit [second] | hide <key> | pend <key> <dx> <dy> | move | show | set <key> <POINT> <x> <y> | reset [key] | profile <name> | off <key> | scale <key> <n> | bad | media | tip | combat [key] [dx] [dy] | settings | status [text] | block | lock | shadow [on|off|size n|red|below|probe] | sound <kit> | icons | tint <percent> | writes | refuse | motion | callbacks | pin | strip | places")
 end
 
 SLASH_LIBAEONSETTINGSDEV1 = "/lasdev"

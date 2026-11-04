@@ -1186,6 +1186,40 @@ do
 	window:Undo()
 	Check("change: Undo writes each path back", store.order[2] == "b" and next(store.gaps) == nil
 		and #window.undoHistory == 0)
+
+	local written, refused = {}, {}
+	window.declaration.write = function(path, value)
+		written[#written + 1] = path
+		if refused[path] ~= nil then
+			return false, refused[path] or nil
+		end
+		store[path] = value
+	end
+	local shown = #errors
+	window:RecordChange({ path = "order", before = { "a" } })
+	window:Undo()
+	Check("change: a path put back shows no refusal", #errors == shown and store.order[1] == "a")
+	refused.order = "Locked."
+	store.order = { "kept" }
+	window:RecordChange({ path = "order", before = { "a" } })
+	window:Undo()
+	Check("change: a refused path shows the reason", #errors == shown + 1 and errors[#errors]:find("Locked") ~= nil)
+	Check("change: without a doubled period", errors[#errors]:find("%.%.") == nil)
+	Check("change: a refused path keeps its value and leaves the history", store.order[1] == "kept"
+		and #window.undoHistory == 0)
+	refused.order = false
+	window:RecordChange({ path = "order", before = { "a" } })
+	window:Undo()
+	Check("change: a path refused with no reason still says so", #errors == shown + 2
+		and errors[#errors]:find("Undo", 1, true) ~= nil and store.order[1] == "kept")
+	refused.order, refused.gaps = "Locked.", nil
+	store.gaps = { x = 1 }
+	wipe(written)
+	window:RecordChange({ paths = { { path = "gaps", before = {} }, { path = "order", before = { "a" } } } })
+	window:Undo()
+	Check("change: one refused path of several shows, and the rest are still put back, last first",
+		#errors == shown + 3 and next(store.gaps) == nil and store.order[1] == "kept" and written[1] == "order"
+		and written[2] == "gaps" and #window.undoHistory == 0)
 end
 
 -- Search

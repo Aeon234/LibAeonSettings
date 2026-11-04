@@ -160,8 +160,15 @@ function lib.Window:CanUndo()
 	return self.undoHistory ~= nil and #self.undoHistory > 0
 end
 
----Puts back the values of the latest step and lands on its (first) row. A value the adopter's `set` refuses keeps
----its current value and shows the refusal.
+-- Shows "Couldn't undo: <reason>." (or without a reason) at the top of the screen, in Title Case: a change made outside
+-- a setting has no label to name.
+local function ShowPathRefusal(reason)
+	local message = reason and L.COULDNT_UNDO_REASON:format((reason:gsub("%.$", ""))) or L.COULDNT_UNDO
+	UIErrorsFrame:AddExternalErrorMessage(lib.TitleCase(message))
+end
+
+---Puts back the values of the latest step and lands on its (first) row. A value the adopter refuses keeps its current
+---value and shows the refusal.
 function lib.Window:Undo()
 	local history = self.undoHistory
 	local step = history and table.remove(history)
@@ -172,8 +179,11 @@ function lib.Window:Undo()
 		local changes = step.paths or { step }
 		for index = #changes, 1, -1 do
 			local change = changes[index]
-			lib.WriteSetting({ window = self, path = change.path, keys = { strsplit(".", change.path) } },
+			local ok, reason = lib.WriteSetting({ window = self, path = change.path, keys = { strsplit(".", change.path) } },
 				Copy(change.before))
+			if not ok then
+				ShowPathRefusal(reason)
+			end
 		end
 		self:RefreshUndo()
 		self:Refresh()
