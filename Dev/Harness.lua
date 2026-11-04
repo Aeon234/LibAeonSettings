@@ -1003,7 +1003,7 @@ end
 local ICON_ATLASES = {
 	"checkbox-minimal", "common-button-list-small-selected", "common-icon-undo", "common-radiobutton-circle",
 	"common-radiobutton-dot", "common-search-magnifyingglass", "common-sidetab", "Options_HorizontalDivider",
-	"Options_InnerFrame",
+	"Options_InnerFrame", "common-search-clearbutton", "voicechat-icon-speaker",
 }
 for _, prefix in ipairs({ "Options_Tab_", "Options_Tab_Active_" }) do
 	for _, part in ipairs({ "Left", "Middle", "Right" }) do
@@ -1033,9 +1033,14 @@ local ICON_MEDIA = {
 	{ "icon-snap-on" }, { "icon-snap-off" }, { "icon-coordinates-on" }, { "icon-coordinates-off" },
 	{ "icon-hover-top-bar-on" }, { "icon-hover-top-bar-off" }, { "icon-addons-on" }, { "icon-addons-off" },
 	{ "icon-cog-on" }, { "chevron" }, { "override-diamond" }, { "nav-row" }, { "nav-row-edge" },
-	{ "swatch-checker" }, { "toggle-track" }, { "search-field" }, { "search-field-edge" }, { "search-field-ring" }, { "mover-fill" },
+	{ "swatch-checker" }, { "search-field" }, { "search-field-edge" }, { "search-field-ring" }, { "mover-fill" },
 	{ "mover-frame" }, { "anchor-line" }, { "pulse" }, { "shadow-glow" }, { "shadow-round" },
 }
+for _, client in ipairs({ "retail", "forever" }) do
+	for _, piece in ipairs({ "body-off", "body-on", "knob", "knob-on", "knob-hover", "knob-on-hover", "knob-disabled" }) do
+		table.insert(ICON_MEDIA, { ("toggle-%s-%s"):format(client, piece) })
+	end
+end
 for _, size in ipairs({ 2, 4, 6, 8, 10 }) do
 	for _, piece in ipairs({ "cornertopleft", "portraitcornertopleft", "portraitcornertopleftsmall", "cornertopright",
 		"cornertoprightdouble", "cornerbottomleft", "cornerbottomright", "edgetop", "edgebottom", "edgeleft", "edgeright" }) do
