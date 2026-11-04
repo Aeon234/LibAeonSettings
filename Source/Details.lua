@@ -11,7 +11,7 @@ end
 local SUMMARY_WIDTH = 160 -- room kept beside the label for the summary
 local CHEVRON_SIZE, CHEVRON_GAP = 12, 8
 local REST_ALPHA, HOVER_ALPHA, PRESSED_ALPHA = 0.03, 0.05, 0.08
-local MAX_DEPTH = 16 -- how many details rows up a chain is followed, in case they name each other
+local MAX_CHAIN = lib.MAX_CHAIN
 local OPEN_SOUND = SOUNDKIT and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON
 local CLOSE_SOUND = SOUNDKIT and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_OFF
 
@@ -28,7 +28,7 @@ lib.DETAILS_STEP = CHEVRON_SIZE + CHEVRON_GAP
 function lib.DetailsIndent(setting)
 	local indent, depth = 0, 0
 	local inside = setting.details and setting.page.settings[setting.details]
-	while inside and depth < MAX_DEPTH do
+	while inside and depth < MAX_CHAIN do
 		indent, depth = indent + lib.DETAILS_STEP, depth + 1
 		inside = inside.details and inside.page.settings[inside.details]
 	end

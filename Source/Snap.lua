@@ -6,7 +6,7 @@ if not lib.loading then
 end
 
 local SNAP_DISTANCE = 6     -- virtual pixels (UI units times UIParent's effective scale)
-local GRID_SPACING = 32
+local GRID_SPACING = lib.GRID_SPACING
 local GUIDE_ALPHA = 0.55
 local GUIDE_FADE = 0.1 -- the guides' spring response: they fade in and out instead of popping
 

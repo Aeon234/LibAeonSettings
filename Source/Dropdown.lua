@@ -43,6 +43,13 @@ local function Choices(setting)
 	return options
 end
 
+-- A choice's name: as written for a picker or with `titleCase = false`, otherwise in Title Case.
+local function ChoiceLabel(setting, choice)
+	local asWritten = setting.picker ~= nil or setting.titleCase == false
+
+	return asWritten and choice.text or lib.TitleCase(tostring(choice.text or choice.value))
+end
+
 -- The saved choice, or nil when the list no longer has it.
 local function SavedChoice(setting)
 	local value = setting:GetValue()
@@ -152,10 +159,9 @@ function Handlers.Generate(view, root)
 		root:SetMaximumWidth(width)
 	end
 	local share = width - MENU_INSETS - ENTRY_PADDING - RADIO_MARK - (scrolls and SCROLL_BAR or 0)
-	local isPicker = setting.picker ~= nil or setting.titleCase == false
 	view.selectedIndex = nil
 	for index, choice in ipairs(choices) do
-		local text = isPicker and choice.text or lib.TitleCase(tostring(choice.text or choice.value))
+		local text = ChoiceLabel(setting, choice)
 		if choice.title then
 			root:CreateTitle(text)
 		elseif setting.multiple then
@@ -267,8 +273,7 @@ local function ChosenText(setting, states)
 				end
 			end
 			if on then
-				names[#names + 1] = setting.titleCase == false and choice.text
-					or lib.TitleCase(tostring(choice.text or choice.value))
+				names[#names + 1] = ChoiceLabel(setting, choice)
 			end
 		end
 	end
@@ -290,8 +295,7 @@ local function ChoiceText(setting, value)
 	end
 	for _, choice in ipairs(Choices(setting)) do
 		if not choice.title and choice.value == value then
-			return (setting.picker or setting.titleCase == false) and choice.text
-				or lib.TitleCase(tostring(choice.text or choice.value))
+			return ChoiceLabel(setting, choice)
 		end
 	end
 
@@ -322,9 +326,8 @@ local function FitWidth(view, setting)
 	local measure = view.measure
 	local widest = 0
 	local choices = Choices(setting)
-	local isPicker = setting.picker ~= nil or setting.titleCase == false
 	for _, choice in ipairs(choices) do
-		local text = isPicker and choice.text or lib.TitleCase(tostring(choice.text or choice.value))
+		local text = ChoiceLabel(setting, choice)
 		measure:SetFontObject(choice.font and lib:PickerFont(choice.font) or "GameFontHighlight")
 		measure:SetText(text or "")
 		widest = math.max(widest, measure:GetUnboundedStringWidth())

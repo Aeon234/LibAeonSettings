@@ -1109,6 +1109,24 @@ do
 		picked == "other" and #(window.undoSteps or {}) == 0)
 end
 
+-- A dropdown's choice names
+
+do
+	local window = NewWindow({})
+	local section = NewPage(window, "names", "Names"):Section("one", "One")
+	local options = { { value = "a", text = "first choice" }, { value = "b" } }
+	local plain = section:Dropdown({ id = "plain", label = "Plain", path = "plain", options = options })
+	local written = section:Dropdown({ id = "written", label = "Written", path = "written", titleCase = false,
+		options = options })
+	local sound = section:Dropdown({ id = "sound", label = "Sound", path = "sound", picker = "sound", options = options })
+	Check("choice name: in Title Case by default", plain:FormatValue("a") == "First Choice")
+	Check("choice name: as written with titleCase = false", written:FormatValue("a") == "first choice")
+	Check("choice name: as written in a picker", sound:FormatValue("a") == "first choice")
+	Check("choice name: a choice with no text takes its value", plain:FormatValue("b") == "B"
+		and written:FormatValue("b") == "B")
+	Check("choice name: a value no longer listed shows as it is", plain:FormatValue("gone") == "gone")
+end
+
 -- Dropdowns with several choices
 
 do

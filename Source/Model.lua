@@ -23,7 +23,8 @@ local SETTING_FIELDS = { id = true, label = true, description = true, path = tru
 	set = true, depends = true, blocked = true, show = true, wide = true, inherits = true, keywords = true,
 	tooltip = true, redraws = true, resettable = true, details = true }
 local SECTION_FIELDS = { show = true, reveal = true, columns = true }
-local MAX_CHAIN = 16
+local MAX_CHAIN = 16 -- how far up a `depends` or `details` chain is followed, in case settings name each other
+lib.MAX_CHAIN = MAX_CHAIN
 
 ---Registers a control kind: `section:<Kind>(info)` declares a setting drawn with it. `info.fields` lists the fields
 ---the kind adds; `info.Create(half)` makes its view (see Page.lua for the view contract); `info.Init(setting)`, if
@@ -235,7 +236,7 @@ end
 -- Whether `ancestor` is up `setting`'s `depends` chain.
 local function DependsOn(setting, ancestor)
 	local parent, depth = setting:Parent(), 0
-	while parent and depth < 16 do
+	while parent and depth < MAX_CHAIN do
 		if parent == ancestor then
 			return true
 		end
@@ -250,7 +251,7 @@ end
 local function OrderProblem(section, rows)
 	for index, setting in ipairs(rows) do
 		local parent, depth = setting:Parent(), 0
-		while parent and depth < 16 do
+		while parent and depth < MAX_CHAIN do
 			if parent.section == section then
 				for other = index + 1, #rows do
 					if rows[other] == parent then

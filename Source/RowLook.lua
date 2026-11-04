@@ -6,7 +6,7 @@ if not lib.loading then
 	return
 end
 
-local MAX_CHAIN = 16
+local MAX_CHAIN = lib.MAX_CHAIN
 
 ---@class LibAeonSettingsRowLook
 ---@field active boolean? the control answers the player

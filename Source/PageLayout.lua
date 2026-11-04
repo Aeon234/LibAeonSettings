@@ -12,6 +12,7 @@ local HEIGHT_MARGIN = 16 -- a row sized by its setting's height keeps this much 
 
 lib.ROW_HEIGHT, lib.TALL_ROW_HEIGHT = 44, 52
 lib.SECTION_TITLE_HEIGHT = 30 -- the heading's line also holds a section's menu and link
+lib.HEADING_INSET, lib.HEADING_BOTTOM = 14, 6 -- the heading's text: in from the card's edge, above the card
 
 ---@class LibAeonSettingsPageSink
 ---@field Hidden fun(self, block: table) a hidden section: its header, rows and notes leave

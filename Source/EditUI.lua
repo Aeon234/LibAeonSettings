@@ -8,6 +8,7 @@ end
 local L = lib.L
 
 local GRID_SPACING = 32
+lib.GRID_SPACING = GRID_SPACING -- snapping's lines fall on the grid's
 local TOOLBAR_HEIGHT = 52
 local TOOLBAR_PADDING = 16  -- left and right, around the centered row of controls
 local TOOLBAR_GAP = 8       -- between any two controls, the separator included

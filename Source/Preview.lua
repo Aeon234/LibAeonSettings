@@ -14,10 +14,10 @@ local L = lib.L
 
 -- Kit values (Bronze Hearth).
 local PREVIEW_GAP, PREVIEW_HEIGHT, CAPTION_HEIGHT = 18, 84, 16
-local SECTION_TITLE_HEIGHT = 30
+local SECTION_TITLE_HEIGHT = lib.SECTION_TITLE_HEIGHT
 local ROOM_X, ROOM_Y = 24, 8 -- the canvas keeps this much of the stage free when it shrinks
 local LOOK_LEAST, EDITOR_LEAST = 0.5, 0.85 -- the smallest a sample shrinks to before it scrolls sideways instead
-local HEADING_INSET, HEADING_BOTTOM = 14, 6 -- the Preview heading, placed as a section's
+local HEADING_INSET, HEADING_BOTTOM = lib.HEADING_INSET, lib.HEADING_BOTTOM -- the Preview heading, placed as a section's
 local WHEEL_STEP, EDGE_WIDTH = 60, 24 -- sideways scrolling: per wheel notch, and the faded edge over hidden sample
 local PILL_PAD, PILL_HEIGHT, PILL_GAP, PILL_TOP = 12, 24, 2, 1
 local PILL_ART = "common-button-tertiary-%s-small" -- Blizzard's filter buttons: normal, hover, pressed, selected

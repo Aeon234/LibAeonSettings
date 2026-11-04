@@ -6,6 +6,7 @@ if not lib.loading then
 	return
 end
 
+local MAX_CHAIN = lib.MAX_CHAIN
 local SETTING_MARGIN, SECTION_MARGIN = 80, 8 -- a row and a section land this far below the list's top
 local FLASH_SECONDS, FLASH_HOLD, FLASH_EDGE = 2.4, 0.6, 2
 
@@ -26,7 +27,7 @@ function lib.Window:LandOn(setting)
 	end
 	-- A setting inside closed details opens them (and any they sit in) first.
 	local inside, depth = setting.details and page.settings[setting.details], 0
-	while inside and depth < 16 do
+	while inside and depth < MAX_CHAIN do
 		if not inside:GetValue() then
 			inside:SetValue(true)
 		end
@@ -39,7 +40,7 @@ function lib.Window:LandOn(setting)
 	local half = self:RowOf(setting)
 	-- A row away under a parent that is off: land on the parent, whose turning on brings it in.
 	local parent, depth = setting:Parent(), 0
-	while half and not half:IsShown() and parent and depth < 16 do
+	while half and not half:IsShown() and parent and depth < MAX_CHAIN do
 		half = self:RowOf(parent) or half
 		parent, depth = parent:Parent(), depth + 1
 	end
