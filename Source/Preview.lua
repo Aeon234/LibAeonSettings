@@ -35,8 +35,6 @@ local HINT_GAP = 12
 
 lib.PreviewHandlers = lib.PreviewHandlers or {}
 local Handlers = lib.PreviewHandlers
-lib.Tab = {}
-local tabMeta = { __index = function(_, name) return lib.Tab[name] end }
 lib.PreviewModel = {}
 local previewMeta = { __index = function(_, name) return lib.PreviewModel[name] end }
 
@@ -103,53 +101,38 @@ function lib.PreviewModel:Chosen()
 	return self.page.previewChosen
 end
 
----Adds a tab to the page; its sections are declared with `tab:Section(id, title, info?)`. `info.countOverrides` shows
----how many of the tab's settings are overridden.
-function lib.PageModel:Tab(id, title, info)
-	self.tabs = self.tabs or {}
-	local tab = setmetatable({ id = id, title = title, page = self, sections = {},
-		countOverrides = info and info.countOverrides }, tabMeta)
-	table.insert(self.tabs, tab)
+-- Fit --------------------------------------------------------------------------------------------------------
 
-	return tab
+---The stage's height: its declared height, or the default, at most what a third of the page leaves once the heading
+---and caption have theirs.
+---@param declared any the preview's `height`
+---@param pageHeight number 1 or less before the page has a height, which then counts as 700
+---@return number
+function lib.PreviewStageHeight(declared, pageHeight)
+	local most = math.floor((pageHeight > 1 and pageHeight or 700) / 3)
+		- (PREVIEW_GAP + SECTION_TITLE_HEIGHT + 1 + CAPTION_HEIGHT)
+
+	return math.min(tonumber(declared) or PREVIEW_HEIGHT, most)
 end
 
-function lib.Tab:Section(id, title, info)
-	local section = self.page:Section(id, title, info)
-	section.tab = self
-	table.insert(self.sections, section)
+---How a sample fits its room: shrunk to fit, but not past its least scale across; a sample still wider scrolls sideways.
+---Its height always fits.
+---@param editor boolean? its parts are clicked and dragged, so it shrinks less
+---@return number scale
+---@return number overflow how far it scrolls sideways
+function lib.PreviewFit(width, height, roomWidth, roomHeight, editor)
+	local least = editor and EDITOR_LEAST or LOOK_LEAST
+	local scale = math.max(0.05, math.min(1, roomHeight / height, math.max(least, roomWidth / width)))
 
-	return section
+	return scale, math.max(0, width * scale - roomWidth)
 end
 
----@return integer count overridden settings in the tab's sections
-function lib.Tab:CountOverrides()
-	local count = 0
-	for _, section in ipairs(self.sections) do
-		for _, setting in ipairs(section.settings) do
-			if setting:IsOverridden() then
-				count = count + 1
-			end
-		end
-	end
+---The caption under a stage whose preview gives none: how far the sample shrank and whether it scrolls, or nil.
+---@return string?
+function lib.PreviewCaption(scale, sideways)
+	local shrunk = scale < 0.999 and L.PREVIEW_SHRUNK:format(math.floor(scale * 100 + 0.5)) or nil
 
-	return count
-end
-
----The sections the page view shows: the selected tab's, or all of the page's.
-function lib.PageModel:ShownSections()
-	if not self.tabs then
-		return self.sections
-	end
-	local selected = self.tabs[1]
-	for _, tab in ipairs(self.tabs) do
-		if tab.id == self.tab then
-			selected = tab
-		end
-	end
-	self.tab = selected.id
-
-	return selected.sections
+	return sideways and (shrunk and shrunk .. " " or "") .. L.PREVIEW_SIDEWAYS or shrunk
 end
 
 -- Building ---------------------------------------------------------------------------------------------------
@@ -377,15 +360,11 @@ function lib.Window:ShowFixedArea(page)
 
 	preview:SetShown(page.preview ~= nil)
 	if page.preview then
-		-- The preview takes at most a third of the page, heading and caption included.
-		local pageHeight = view.content:GetHeight()
-		local most = math.floor((pageHeight > 1 and pageHeight or 700) / 3)
-			- (PREVIEW_GAP + SECTION_TITLE_HEIGHT + 1 + CAPTION_HEIGHT)
 		local stageHeight = page.preview.height
 		if type(stageHeight) == "function" then
 			stageHeight = lib.CallAdopter(stageHeight, page.preview)
 		end
-		stageHeight = math.min(tonumber(stageHeight) or PREVIEW_HEIGHT, most)
+		stageHeight = lib.PreviewStageHeight(stageHeight, view.content:GetHeight())
 		preview.stage:SetHeight(stageHeight)
 		local previewHeight = PREVIEW_GAP + SECTION_TITLE_HEIGHT + 1 + stageHeight + CAPTION_HEIGHT
 		preview:SetHeight(previewHeight)
@@ -470,13 +449,10 @@ function lib.Window:RefreshFixedArea()
 		end
 		width, height = tonumber(width) or 1, tonumber(height) or 1
 		canvas:SetSize(width, height)
-		-- Shrinks to fit, but not past its least scale across; a sample still wider scrolls sideways. Its height
-		-- always fits.
-		local least = page.preview.editor and EDITOR_LEAST or LOOK_LEAST
-		local scale = math.max(0.05, math.min(1, roomHeight / height, math.max(least, roomWidth / width)))
+		local scale, overflow = lib.PreviewFit(width, height, roomWidth, roomHeight, page.preview.editor)
 		canvas:SetScale(scale)
 		preview.canvas, preview.scale = canvas, scale
-		preview.overflow = math.max(0, width * scale - roomWidth)
+		preview.overflow = overflow
 		preview.offset = math.min(preview.offset or 0, preview.overflow)
 		Handlers.PlaceCanvas(preview)
 		-- While the page is switched off the sample is faded and still; its parts still find their settings.
@@ -494,8 +470,7 @@ function lib.Window:RefreshFixedArea()
 			caption = lib.CallAdopter(page.preview.caption, current, scale, sideways)
 		end
 		if not caption then
-			local shrunk = scale < 0.999 and L.PREVIEW_SHRUNK:format(math.floor(scale * 100 + 0.5)) or nil
-			caption = sideways and (shrunk and shrunk .. " " or "") .. L.PREVIEW_SIDEWAYS or shrunk
+			caption = lib.PreviewCaption(scale, sideways)
 		end
 		preview.caption:SetText(caption or "")
 	end

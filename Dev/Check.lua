@@ -104,7 +104,7 @@ function strlenutf8(text)
 	return count
 end
 for _, file in ipairs({ "Model", "RowLook", "PageLayout", "Controls", "Toggle", "Checkbox", "Slider", "Color",
-	"OrderedList", "Button", "Details", "Search", "Landing", "Undo", "TextInput", "Dropdown" }) do
+	"OrderedList", "Button", "Preview", "Details", "Search", "Landing", "Undo", "TextInput", "Dropdown" }) do
 	dofile(root .. "/Source/" .. file .. ".lua")
 end
 
@@ -1855,6 +1855,91 @@ do
 		end
 	end
 	Check("search: a kind without its own search text adds nothing extra", count == 1)
+end
+
+-- Tabs
+
+do
+	local store = {}
+	local window = NewWindow(store)
+	local plainPage = NewPage(window, "plain", "Plain")
+	local plainSection = plainPage:Section("one", "One")
+	Check("tabs: a page without tabs shows all its sections", plainPage:ShownSections() == plainPage.sections
+		and plainPage:ShownSections()[1] == plainSection)
+
+	local page = NewPage(window, "tabbed", "Tabbed")
+	local shared = page:Tab("shared", "Shared")
+	local left = page:Tab("left", "Left", { countOverrides = true })
+	local sharedSection = shared:Section("sharedLook", "Shared Look")
+	local leftSection = left:Section("leftLook", "Left Look")
+	Check("tabs: a tab's section belongs to its tab and its page", sharedSection.tab == shared
+		and sharedSection.page == page and shared.sections[1] == sharedSection and page.sections[2] == leftSection)
+	Check("tabs: the first tab is shown at first, and remembered", page:ShownSections()[1] == sharedSection
+		and page.tab == "shared")
+	page.tab = "left"
+	Check("tabs: the selected tab's sections show", page:ShownSections()[1] == leftSection and #page:ShownSections() == 1)
+	page.tab = "gone"
+	Check("tabs: a tab no longer there gives way to the first", page:ShownSections()[1] == sharedSection
+		and page.tab == "shared")
+
+	local own = leftSection:Slider({ id = "own", label = "Own", path = "own", inherits = "base" })
+	leftSection:Slider({ id = "following", label = "Following", path = "following", inherits = "base" })
+	leftSection:Slider({ id = "plainSlider", label = "Plain", path = "plainSlider", default = 1 })
+	sharedSection:Slider({ id = "elsewhere", label = "Elsewhere", path = "elsewhere", inherits = "base" })
+	store.elsewhere = 3
+	Check("tabs: nothing overridden on the tab counts none", left:CountOverrides() == 0)
+	own:Request(2)
+	Check("tabs: only the tab's overridden settings count", left:CountOverrides() == 1 and shared:CountOverrides() == 1)
+end
+
+-- Preview: its numbers and its declaration
+
+do
+	local Stage, Fit, Caption = lib.PreviewStageHeight, lib.PreviewFit, lib.PreviewCaption
+	Check("preview stage: a declared height is kept", Stage(100, 800) == 100)
+	Check("preview stage: with none, or not a number, the default", Stage(nil, 800) == 84 and Stage("tall", 800) == 84)
+	Check("preview stage: a declared height given as text counts", Stage("100", 800) == 100)
+	Check("preview stage: at most a third of the page, less heading and caption", Stage(500, 800) == 201)
+	Check("preview stage: a page with no height yet counts as 700", Stage(500, 0) == 168 and Stage(500, 1) == 168)
+
+	local scale, overflow = Fit(100, 50, 200, 100)
+	Check("preview fit: a sample that fits is at full size", scale == 1 and overflow == 0)
+	scale, overflow = Fit(100, 200, 200, 100)
+	Check("preview fit: too tall, it shrinks to fit", Near(scale, 0.5) and overflow == 0)
+	scale, overflow = Fit(300, 50, 200, 100)
+	Check("preview fit: too wide, it shrinks to fit while it can", Near(scale, 2 / 3) and Near(overflow, 0))
+	scale, overflow = Fit(800, 50, 200, 100)
+	Check("preview fit: past half size it scrolls sideways", Near(scale, 0.5) and Near(overflow, 200))
+	scale, overflow = Fit(800, 50, 200, 100, true)
+	Check("preview fit: an editor stops shrinking sooner", Near(scale, 0.85) and Near(overflow, 480))
+	scale, overflow = Fit(800, 1000, 200, 100)
+	Check("preview fit: its height always fits, even past its least across", Near(scale, 0.1) and overflow == 0)
+	scale = Fit(10, 100000, 200, 100)
+	Check("preview fit: never below its floor", Near(scale, 0.05))
+	scale, overflow = Fit(0, 0, 200, 100)
+	Check("preview fit: an empty sample is at full size", scale == 1 and overflow == 0)
+
+	local L = lib.L
+	local shrunk = L.PREVIEW_SHRUNK:format(50)
+	Check("preview caption: none at full size", Caption(1, false) == nil and Caption(0.9995, false) == nil)
+	Check("preview caption: says how far it shrank", Caption(0.5, false) == shrunk)
+	Check("preview caption: says it scrolls", Caption(1, true) == L.PREVIEW_SIDEWAYS)
+	Check("preview caption: says both", Caption(0.5, true) == shrunk .. " " .. L.PREVIEW_SIDEWAYS)
+
+	local window = NewWindow({})
+	local page = NewPage(window, "shown", "Shown")
+	local before = #errors
+	local preview = page:Preview({ height = 84, odd = true })
+	Check("preview: an unknown field is reported", #errors == before + 1 and page.preview == preview)
+	local region = NewFrame()
+	before = #errors
+	preview:Part(region, "target")
+	Check("preview part: outside refresh is reported", #errors == before + 1)
+	page.declaredParts = {}
+	before = #errors
+	preview:Part(region, "target", { odd = true, key = "k" })
+	Check("preview part: an unknown option is reported, and the part kept", #errors == before + 1
+		and #page.declaredParts == 1 and page.declaredParts[1].key == "k")
 end
 
 -- Translations: every locale file names only keys Locale.lua has, keeps their format specifiers in order, and

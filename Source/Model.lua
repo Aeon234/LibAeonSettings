@@ -13,10 +13,12 @@ local L = lib.L
 -- Methods are looked up on the library at call time, so objects made through an older copy use the newest code.
 lib.PageModel = {}
 lib.Section = {}
+lib.Tab = {}
 lib.Setting = {}
 lib.controls = lib.controls or {}
 local pageMeta = { __index = function(_, name) return lib.PageModel[name] end }
 local sectionMeta = { __index = function(_, name) return lib.Section[name] end }
+local tabMeta = { __index = function(_, name) return lib.Tab[name] end }
 local settingMeta = { __index = function(_, name) return lib.Setting[name] end }
 
 local SETTING_FIELDS = { id = true, label = true, description = true, path = true, default = true, get = true,
@@ -330,6 +332,57 @@ function lib.Window:AddWindowSection()
 		set = function(value) lib:SetReduceMotion(value) end,
 	})
 	first.windowSection = section
+end
+
+-- Tabs --------------------------------------------------------------------------------------------------------
+
+---Adds a tab to the page; its sections are declared with `tab:Section(id, title, info?)`. `info.countOverrides` shows
+---how many of the tab's settings are overridden.
+function lib.PageModel:Tab(id, title, info)
+	self.tabs = self.tabs or {}
+	local tab = setmetatable({ id = id, title = title, page = self, sections = {},
+		countOverrides = info and info.countOverrides }, tabMeta)
+	table.insert(self.tabs, tab)
+
+	return tab
+end
+
+function lib.Tab:Section(id, title, info)
+	local section = self.page:Section(id, title, info)
+	section.tab = self
+	table.insert(self.sections, section)
+
+	return section
+end
+
+---@return integer count overridden settings in the tab's sections
+function lib.Tab:CountOverrides()
+	local count = 0
+	for _, section in ipairs(self.sections) do
+		for _, setting in ipairs(section.settings) do
+			if setting:IsOverridden() then
+				count = count + 1
+			end
+		end
+	end
+
+	return count
+end
+
+---The sections the page view shows: the selected tab's, or all of the page's.
+function lib.PageModel:ShownSections()
+	if not self.tabs then
+		return self.sections
+	end
+	local selected = self.tabs[1]
+	for _, tab in ipairs(self.tabs) do
+		if tab.id == self.tab then
+			selected = tab
+		end
+	end
+	self.tab = selected.id
+
+	return selected.sections
 end
 
 -- Settings ----------------------------------------------------------------------------------------------------
