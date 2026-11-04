@@ -13,7 +13,6 @@ local L = lib.L
 local LINK_HEIGHT, LINK_PADDING, LINK_MIN = 26, 40, 120 -- C-14's button, fitted to its text
 local LINK_TEXT_SIZE = 14
 local TITLE_CENTER = 15 -- the section title's center line, from the header's top
-local SECTION_LANDING = 8 -- a section lands this far below the list's top
 local LINK_GAP = 8
 local CLICK_SOUND = SOUNDKIT and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON
 
@@ -234,20 +233,4 @@ function lib.Window:OpenAt(link, target)
 	else
 		self:SelectPage(page.id)
 	end
-end
-
----Opens a section's page (and tab), glides the section to the top and pulses the whole section gold.
-function lib.Window:LandOnSection(section)
-	local page = section.page
-	if section.tab then
-		page.tab = section.tab.id
-	end
-	self:SelectPage(page.id)
-	local header = self:HeaderOf(section)
-	local view = self.pageView
-	if not view or not header or header.section ~= section or not header:IsShown() or not header.top then
-		return
-	end
-	view.scroll:GlideTo(math.max(0, header.top - SECTION_LANDING))
-	self:Flash(header, header.top, (header.bottom or header.top) - header.top)
 end

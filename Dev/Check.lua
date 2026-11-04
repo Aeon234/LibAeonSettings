@@ -102,7 +102,7 @@ function strlenutf8(text)
 
 	return count
 end
-for _, file in ipairs({ "Model", "RowLook", "PageLayout", "Details", "Search", "Undo", "TextInput", "Dropdown" }) do
+for _, file in ipairs({ "Model", "RowLook", "PageLayout", "Details", "Search", "Landing", "Undo", "TextInput", "Dropdown" }) do
 	dofile(root .. "/Source/" .. file .. ".lua")
 end
 
@@ -1487,6 +1487,195 @@ do
 	window.RowOf = function() end
 	lib.Window.LandOn(window, panelGap)
 	Check("section reveal: landing reveals the section first", chosen == "left" and panelGap:IsShown())
+end
+
+-- Landing
+
+do
+	local window = NewWindow({})
+	local Land = lib.Window.LandOn
+	local steps, glides, flashed, rows, headers = {}, {}, {}, {}, {}
+	local page = NewPage(window, "main", "Main")
+	window.SelectPage = function(_, id) steps[#steps + 1] = "select " .. id .. " " .. tostring(window.pages[id].tab) end
+	window.Refresh = function() steps[#steps + 1] = "refresh" end
+	window.RowOf = function(_, setting) return rows[setting] end
+	window.HeaderOf = function(_, section) return headers[section] end
+	window.Flash = function(_, region, top, height) flashed[#flashed + 1] = { region, top, height } end
+	window.pageView = { scroll = { GlideTo = function(_, offset) glides[#glides + 1] = offset end } }
+	local function Clear()
+		wipe(steps)
+		wipe(glides)
+		wipe(flashed)
+	end
+	local function Row(top, shown)
+		return { top = top, IsShown = function() return shown ~= false end }
+	end
+	local function Steps()
+		return table.concat(steps, ", ")
+	end
+
+	local section = page:Section("rows", "Rows")
+	local plain = section:Toggle({ id = "plain", label = "Plain", path = "plain" })
+	Land(window, plain)
+	Check("landing: a shown section's setting selects its page, with no refresh", Steps() == "select main nil")
+	Check("landing: with no row there is nothing to glide to or flash", #glides == 0 and #flashed == 0)
+
+	Clear()
+	local row = Row(300)
+	rows[plain] = row
+	Land(window, plain)
+	Check("landing: a found row glides below the list's top", glides[1] == 220)
+	Check("landing: and flashes", flashed[1][1] == row and flashed[1][2] == nil)
+
+	Clear()
+	local tabbed = page:Section("tabbed", "Tabbed")
+	tabbed.tab = { id = "left" }
+	Land(window, tabbed:Toggle({ id = "onTab", label = "On Tab", path = "onTab" }))
+	Check("landing: a setting on a tab selects the tab before the page", Steps() == "select main left")
+	page.tab = nil
+
+	Clear()
+	local chosen
+	local hidden = page:Section("hidden", "Hidden", { show = function() return chosen ~= nil end,
+		reveal = function()
+			chosen = true
+			steps[#steps + 1] = "reveal"
+		end })
+	Land(window, hidden:Toggle({ id = "inHidden", label = "In Hidden", path = "inHidden" }))
+	Check("landing: a hidden section is revealed first, then the page shows and redraws",
+		Steps() == "reveal, select main nil, refresh")
+
+	Clear()
+	local more = page:Section("more", "More")
+	local outer = more:Details({ id = "outer", label = "Outer" })
+	local inner = more:Details({ id = "inner", label = "Inner", details = "outer" })
+	local nested = more:Toggle({ id = "nested", label = "Nested", path = "nested", details = "inner" })
+	Land(window, nested)
+	Check("landing: closed details open, those it sits in too", outer:GetValue() and inner:GetValue())
+	local writes = 0
+	local set = outer.set
+	outer.set = function(...)
+		writes = writes + 1
+		return set(...)
+	end
+	Land(window, nested)
+	Check("landing: details already open are not written", writes == 0)
+
+	Clear()
+	local top = section:Toggle({ id = "top", label = "Top", path = "top" })
+	local middle = section:Toggle({ id = "middle", label = "Middle", path = "middle", depends = "top" })
+	local bottom = section:Toggle({ id = "bottom", label = "Bottom", path = "bottom", depends = "middle" })
+	rows[bottom], rows[middle], rows[top] = Row(10, false), Row(20, false), Row(500)
+	Land(window, bottom)
+	Check("landing: a row away under a parent lands on the nearest shown one up the chain",
+		flashed[1][1] == rows[top] and glides[1] == 420)
+	Clear()
+	rows[top] = Row(500, false)
+	Land(window, bottom)
+	Check("landing: a hidden row with no shown parent glides and flashes nothing", #glides == 0 and #flashed == 0)
+
+	Clear()
+	local band = page:Section("band", "Band")
+	band.tab = { id = "right" }
+	local function Header(fields, target)
+		fields.section = target or band
+		fields.IsShown = fields.IsShown or function() return true end
+
+		return fields
+	end
+	headers[band] = Header({ top = 300, bottom = 400 })
+	window:LandOnSection(band)
+	Check("landing a section: selects its tab and page", Steps() == "select main right")
+	Check("landing a section: glides it below the list's top", glides[1] == 292)
+	Check("landing a section: flashes its band", flashed[1][1] == headers[band] and flashed[1][2] == 300
+		and flashed[1][3] == 100)
+	Clear()
+	headers[band] = Header({ top = 4, bottom = 10 })
+	window:LandOnSection(band)
+	Check("landing a section: never glides above the list", glides[1] == 0)
+	Clear()
+	headers[band] = Header({ top = 50 })
+	window:LandOnSection(band)
+	Check("landing a section: with no bottom its band has no height", flashed[1][3] == 0)
+	Clear()
+	for _, header in ipairs({ Header({ top = 50, IsShown = function() return false end }), Header({ top = 50 }, section),
+		Header({}) }) do
+		headers[band] = header
+		window:LandOnSection(band)
+	end
+	headers[band] = nil
+	window:LandOnSection(band)
+	Check("landing a section: a hidden, reused, unplaced or missing header glides and flashes nothing", #glides == 0
+		and #flashed == 0)
+
+	-- The flash pool, through frames that keep only what it reads.
+	local made = 0
+	local function Frame()
+		local frame = setmetatable({ shown = false }, { __index = function() return function() end end })
+		function frame:Show() self.shown = true end
+		function frame:Hide() self.shown = false end
+		function frame:IsShown() return self.shown end
+		function frame:SetAlpha(alpha) self.alpha = alpha end
+		function frame:GetFrameLevel() return 1 end
+		function frame:GetWidth() return 100 end
+		function frame:CreateTexture() return Frame() end
+
+		return frame
+	end
+	local savedCreateFrame = CreateFrame
+	CreateFrame = function()
+		made = made + 1
+
+		return Frame()
+	end
+	local flashWindow = NewWindow({})
+	flashWindow.pageView = { scroll = { child = Frame() } }
+	flashWindow:StopFlash()
+	Check("flash: stopping before any flash is safe", flashWindow.pageView.flashes == nil)
+	local rowA, rowB, rowGone = Frame(), Frame(), Frame()
+	rowA:Show()
+	rowB:Show()
+	local settingA, settingB, settingGone, settingNone = {}, {}, {}, {}
+	local rowOf = { [settingA] = rowA, [settingB] = rowB, [settingGone] = rowGone }
+	flashWindow.RowOf = function(_, setting) return rowOf[setting] end
+	local view = flashWindow.pageView
+	flashWindow:Flash(rowA)
+	Check("flash: a row's flash shows, opaque", view.flashes[1].shown and view.flashes[1].alpha == 1
+		and view.flashes[1].half == rowA and made == 1)
+	Check("flash: several flash together, the rest skipped, and report how many",
+		flashWindow:FlashSettings({ settingA, settingGone, settingNone, settingB }) == 2)
+	Check("flash: each on its own flash, the pool reused", view.flashes[1].half == rowA and view.flashes[2].half == rowB
+		and view.flashes[2].shown and made == 2)
+	flashWindow:Flash(rowB, 10, 20)
+	Check("flash: one flash hides the others and uses no new frame", view.flashes[1].half == rowB
+		and view.flashes[1].shown and not view.flashes[2].shown and made == 2)
+	flashWindow:FlashSettings({ settingA, settingB })
+	Check("flash: fewer rows hide the spare flashes", flashWindow:FlashSettings({ settingA }) == 1
+		and view.flashes[1].shown and not view.flashes[2].shown)
+	Check("flash: no rows at all flash nothing", flashWindow:FlashSettings({}) == 0 and not view.flashes[1].shown)
+	flashWindow:FlashSettings({ settingA, settingB })
+	flashWindow:StopFlash()
+	Check("flash: stopping hides every flash", not view.flashes[1].shown and not view.flashes[2].shown)
+	Check("flash: with no page view nothing flashes", NewWindow({}):FlashSettings({ settingA }) == 0)
+
+	local flash = view.flashes[1]
+	local Update = lib.LandingHandlers.FlashUpdate
+	flashWindow:Flash(rowA)
+	Update(flash, 0.01)
+	Check("flash: it holds at first", flash.shown and flash.alpha == 1)
+	while flash.shown and flash.alpha == 1 do
+		Update(flash, 0.05)
+	end
+	Check("flash: then fades", flash.shown and flash.alpha > 0 and flash.alpha < 1)
+	while flash.shown do
+		Update(flash, 0.05)
+	end
+	Check("flash: and hides at its end", not flash.shown)
+	flashWindow:Flash(rowA)
+	rowA:Hide()
+	Update(flash, 0.01)
+	Check("flash: it stops at once when its row goes", not flash.shown)
+	CreateFrame = savedCreateFrame
 end
 
 -- Translations: every locale file names only keys Locale.lua has, keeps their format specifiers in order, and

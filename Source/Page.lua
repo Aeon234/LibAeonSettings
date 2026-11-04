@@ -346,9 +346,7 @@ function lib.Window:ShowPage(growIn)
 	if view.shownKey then
 		self.offsets[view.shownKey] = view.scroll.target
 	end
-	if view.flash then
-		view.flash:Hide()
-	end
+	self:StopFlash()
 	ReleaseAll(view.halves)
 	ReleaseAll(view.sectionHeaders)
 	ReleaseAll(view.notes)

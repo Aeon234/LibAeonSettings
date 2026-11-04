@@ -37,8 +37,6 @@ local RESULT_ON_ALPHA = 0.1
 local ROW_SLICE = 12 -- texels; the row art is drawn at half scale
 local BACKING = { 0.043, 0.043, 0.063, 1 }
 local TOOLTIP_CENTER = { 0.090, 0.090, 0.188 }
-local LANDING_MARGIN = 80 -- the found row lands this far below the list's top
-local FLASH_SECONDS, FLASH_HOLD, FLASH_EDGE = 2.4, 0.6, 2
 local CLOSE_DELAY = 0.1
 local MAX_RESULTS = 50 -- the list draws at most this many matches, best first
 
@@ -737,7 +735,7 @@ function Handlers.FocusLost(window)
 	end)
 end
 
--- Landing ----------------------------------------------------------------------------------------------------
+-- Choosing ---------------------------------------------------------------------------------------------------
 
 function Handlers.Choose(window, entry)
 	window:CloseSearch()
@@ -747,137 +745,4 @@ function Handlers.Choose(window, entry)
 		return
 	end
 	window:LandOn(entry.setting)
-end
-
----Opens a setting's page (and tab), reveals its section when search found it hidden, glides its row into view and
----flashes it gold. A row away under a parent that is off lands on that parent.
-function lib.Window:LandOn(setting)
-	local page = setting.page
-	local tab = setting.section and setting.section.tab
-	if tab then
-		page.tab = tab.id
-	end
-	local reveal = not setting:IsShown() and setting:Revealable()
-	if reveal then
-		lib.CallAdopter(setting.section.reveal, setting.section)
-	end
-	-- A setting inside closed details opens them (and any they sit in) first.
-	local inside, depth = setting.details and page.settings[setting.details], 0
-	while inside and depth < 16 do
-		if not inside:GetValue() then
-			inside:SetValue(true)
-		end
-		inside, depth = inside.details and page.settings[inside.details], depth + 1
-	end
-	self:SelectPage(page.id)
-	if reveal then
-		self:Refresh()
-	end
-	local half = self:RowOf(setting)
-	-- A row away under a parent that is off: land on the parent, whose turning on brings it in.
-	local parent, depth = setting:Parent(), 0
-	while half and not half:IsShown() and parent and depth < 16 do
-		half = self:RowOf(parent) or half
-		parent, depth = parent:Parent(), depth + 1
-	end
-	local view = self.pageView
-	if not half or not view or not half:IsShown() then
-		return
-	end
-	view.scroll:GlideTo(half.top - LANDING_MARGIN)
-	self:Flash(half)
-end
-
-local function FlashEdge(flash, first, second, horizontal)
-	local edge = flash:CreateTexture(nil, "OVERLAY")
-	edge:SetColorTexture(lib:GetColor("accent"))
-	edge:SetPoint(first)
-	edge:SetPoint(second)
-	if horizontal then
-		edge:SetHeight(FLASH_EDGE)
-	else
-		edge:SetWidth(FLASH_EDGE)
-	end
-end
-
--- The view's flash at a place in its pool, made the first time it is needed.
-local function FlashAt(view, index)
-	view.flashes = view.flashes or {}
-	if index == 1 and view.flash then
-		view.flashes[1] = view.flash
-	end
-	local flash = view.flashes[index]
-	if not flash then
-		flash = CreateFrame("Frame", nil, view.scroll.child)
-		FlashEdge(flash, "TOPLEFT", "TOPRIGHT", true)
-		FlashEdge(flash, "BOTTOMLEFT", "BOTTOMRIGHT", true)
-		FlashEdge(flash, "TOPLEFT", "BOTTOMLEFT", false)
-		FlashEdge(flash, "TOPRIGHT", "BOTTOMRIGHT", false)
-		flash:SetScript("OnUpdate", Handlers.FlashUpdate)
-		view.flashes[index] = flash
-	end
-	view.flash = view.flashes[1]
-
-	return flash
-end
-
----Flashes a row half (or, with `top` and `height`, a band of the page from `top`, such as a section): a gold outline,
----held, then fading out. The flash stops if `region` leaves the page.
-function lib.Window:Flash(half, top, height)
-	local view = self.pageView
-	local flash = FlashAt(view, 1)
-	for index = 2, #view.flashes do
-		view.flashes[index]:Hide()
-	end
-	flash:ClearAllPoints()
-	if top then
-		flash:SetPoint("TOPLEFT", view.scroll.child, "TOPLEFT", 0, -top)
-		flash:SetSize(half:GetWidth(), height)
-	else
-		flash:SetAllPoints(half)
-	end
-	flash:SetFrameLevel(half:GetFrameLevel() + 20)
-	flash.half, flash.elapsed = half, 0
-	flash:SetAlpha(1)
-	flash:Show()
-end
-
----Flashes the rows of several settings together, without moving the page. A setting with no row showing is skipped.
----@param settings table[]
----@return integer flashed how many rows flashed
-function lib.Window:FlashSettings(settings)
-	local view = self.pageView
-	local count = 0
-	if not view then
-		return count
-	end
-	for _, setting in ipairs(settings) do
-		local half = self:RowOf(setting)
-		if half and half:IsShown() then
-			count = count + 1
-			local flash = FlashAt(view, count)
-			flash:ClearAllPoints()
-			flash:SetAllPoints(half)
-			flash:SetFrameLevel(half:GetFrameLevel() + 20)
-			flash.half, flash.elapsed = half, 0
-			flash:SetAlpha(1)
-			flash:Show()
-		end
-	end
-	for index = count + 1, view.flashes and #view.flashes or 0 do
-		view.flashes[index]:Hide()
-	end
-
-	return count
-end
-
-function Handlers.FlashUpdate(flash, elapsed)
-	flash.elapsed = flash.elapsed + elapsed
-	local t = flash.elapsed / FLASH_SECONDS
-	-- The row moved on (a page change released it): stop.
-	if t >= 1 or not flash.half:IsShown() then
-		flash:Hide()
-		return
-	end
-	flash:SetAlpha(t <= FLASH_HOLD and 1 or 1 - (t - FLASH_HOLD) / (1 - FLASH_HOLD))
 end
