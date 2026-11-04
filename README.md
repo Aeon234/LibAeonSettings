@@ -19,4 +19,4 @@ externals:
     tag: 1.2.0
 ```
 
-The interface is still evolving; each tag that changes the code raises the LibStub `MINOR`.
+The interface is still evolving. The LibStub `MINOR` stays 1 until an addon embedding the library has a public release; after that, each tag that changes the code raises it.

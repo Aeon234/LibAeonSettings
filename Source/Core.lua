@@ -1,8 +1,8 @@
 -- LibAeonSettings-1.0: library object, upgrade guard and shared state.
 
--- MINOR goes up by one with every tag that changes the library's code (AGENTS.md, Release): LibStub keeps the copy
--- with the highest MINOR, whatever its tag.
-local MAJOR, MINOR = "LibAeonSettings-1.0", 6
+-- LibStub keeps the copy with the highest MINOR, whatever its tag. MINOR stays 1 until an addon embedding the library
+-- has a public release, then goes up by one with every tag that changes the library's code (AGENTS.md, Release).
+local MAJOR, MINOR = "LibAeonSettings-1.0", 1
 
 local lib = LibStub:NewLibrary(MAJOR, MINOR)
 if not lib then
